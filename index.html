@@ -6317,6 +6317,14 @@ function analyzerFetchGamesByUser(username) {
     });
 }
 
+function analyzerFormatDateTime(epochSeconds) {
+  if (!epochSeconds) return '';
+  var d = new Date(epochSeconds * 1000);
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear()
+       + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+}
+
 function analyzerRenderGameList(games) {
   var box = document.getElementById('analyzer-gamelist');
   if (!box) return;
@@ -6325,11 +6333,19 @@ function analyzerRenderGameList(games) {
     var g = games[i];
     var w = (g.white && g.white.username) ? g.white.username : '?';
     var b = (g.black && g.black.username) ? g.black.username : '?';
-    var end = g.end_time ? new Date(g.end_time * 1000).toLocaleString('vi-VN') : '';
+    var wElo = (g.white && g.white.rating != null) ? ' (' + g.white.rating + ')' : '';
+    var bElo = (g.black && g.black.rating != null) ? ' (' + g.black.rating + ')' : '';
+    var whiteWon = !!(g.white && g.white.result === 'win');
+    var blackWon = !!(g.black && g.black.result === 'win');
+    var whiteHtml = w + wElo;
+    var blackHtml = b + bElo;
+    if (whiteWon) whiteHtml = '<b>' + whiteHtml + '</b>';
+    if (blackWon) blackHtml = '<b>' + blackHtml + '</b>';
+    var dt = analyzerFormatDateTime(g.end_time);
     html += '<div class="analyzer-game-card" onclick="analyzerPickGame(' + i + ')" '
       + 'style="border:1px solid #ccc;border-radius:4px;padding:6px 8px;margin-bottom:5px;cursor:pointer;background:#fff;font-size:.7rem;line-height:1.4">'
-      + '<b>' + w + '</b> vs <b>' + b + '</b><br>'
-      + '<span style="color:#888">' + (g.time_class || '') + ' \u00b7 ' + end + '</span>'
+      + whiteHtml + ' vs ' + blackHtml + '<br>'
+      + '<span style="color:#888">' + dt + (g.time_class ? (' | ' + g.time_class) : '') + '</span>'
       + '</div>';
   }
   box.innerHTML = html;
