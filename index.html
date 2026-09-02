@@ -4180,28 +4180,30 @@ function _finishAnalysisRender(){
 
   /* ── Accuracy block ── */
   var isPW=(gPC===W);
-  var aP=isPW?accWhite:accBlack, aO=isPW?accBlack:accWhite;
-  /* Khi phân tích PGN import có tên người chơi thật (vd "ChessFun9"/"wukong"),
-     dùng tên đó thay vì "Bạn"/"Máy" mặc định của chế độ tự chơi */
-  var labelP, labelO;
+  /* Luôn hiển thị Trắng bên trái, Đen bên phải — đồng nhất với bảng thống
+     kê nước đi ngay bên dưới (không đổi chỗ theo góc nhìn người chơi nữa). */
+  var labelWhite, labelBlack;
   if (gPgnPlayerNames && (gPgnPlayerNames.white || gPgnPlayerNames.black)) {
-    labelP = isPW ? (gPgnPlayerNames.white || 'Trắng') : (gPgnPlayerNames.black || 'Đen');
-    labelO = isPW ? (gPgnPlayerNames.black || 'Đen') : (gPgnPlayerNames.white || 'Trắng');
+    /* Khi phân tích PGN import có tên người chơi thật (vd "ChessFun9"/"wukong"),
+       dùng tên đó thay vì "Bạn"/"Máy" mặc định của chế độ tự chơi */
+    labelWhite = gPgnPlayerNames.white || 'Trắng';
+    labelBlack = gPgnPlayerNames.black || 'Đen';
   } else {
-    labelP = 'Bạn'; labelO = 'Máy';
+    labelWhite = isPW ? 'Bạn' : 'Máy';
+    labelBlack = isPW ? 'Máy' : 'Bạn';
   }
   var accRow=document.getElementById('an-accuracy-row');
   if(accRow){
     accRow.innerHTML=
       '<div class="an-acc-block">'
-        +'<div class="an-acc-label">&#9812; '+labelP+' ('+(isPW?'Trắng':'Đen')+')</div>'
-        +'<div class="an-acc-pct '+accCls(aP)+'">'+aP+'%</div>'
+        +'<div class="an-acc-label">&#9812; '+labelWhite+' (Trắng)</div>'
+        +'<div class="an-acc-pct '+accCls(accWhite)+'">'+accWhite+'%</div>'
         +'<div class="an-acc-sub">Accuracy</div>'
       +'</div>'
       +'<div class="an-acc-divider"></div>'
       +'<div class="an-acc-block">'
-        +'<div class="an-acc-label">&#9818; '+labelO+' ('+(isPW?'Đen':'Trắng')+')</div>'
-        +'<div class="an-acc-pct '+accCls(aO)+'">'+aO+'%</div>'
+        +'<div class="an-acc-label">&#9818; '+labelBlack+' (Đen)</div>'
+        +'<div class="an-acc-pct '+accCls(accBlack)+'">'+accBlack+'%</div>'
         +'<div class="an-acc-sub">Accuracy</div>'
       +'</div>';
   }
@@ -5794,6 +5796,17 @@ function updateBranchBtn(){
     btn.style.visibility = 'visible';
     return;
   }
+  /* Đang xem phân tích 1 trận vừa chọn từ danh sách Analyzer (tra theo
+     username) → hiện "Quay lại" ở đúng vị trí nút "Ván mới", bấm vào sẽ
+     quay lại hiển thị danh sách trận đấu đã tìm được. */
+  if (typeof gAnalyzerViewingPickedGame !== 'undefined' && gAnalyzerViewingPickedGame
+      && (typeof gAppTab === 'undefined' || gAppTab === 'analysis')) {
+    btn.innerHTML = '\u21a9\ufe0f Quay l\u1ea1i';
+    btn.onclick = analyzerBackToList;
+    btn.disabled = false;
+    btn.style.visibility = 'visible';
+    return;
+  }
   if (typeof gAppTab!=='undefined' && gAppTab==='analysis'){
     /* Đã ở sẵn trong tab Phân tích — nút này (vốn dùng để CHUYỂN sang tab
        Phân tích) không còn ý nghĩa gì, nên ẩn đi thay vì hiện lại chính nó. */
@@ -5870,6 +5883,13 @@ function switchAppTab(tab) {
     gPC = (Math.random() < 0.5) ? W : B;
     gFlip = (gPC === B);
     newGame();
+
+    /* Rời tab Phân tích → dọn sạch trạng thái Analyzer (danh sách trận đấu
+       tra theo username, nếu đang hiện) để tránh sót nút "Quay lại". */
+    if (typeof analyzerHideGameList === 'function') analyzerHideGameList();
+    if (typeof analyzerSetStatus === 'function') analyzerSetStatus('');
+    gAnalyzerHasGameList = false;
+    gAnalyzerViewingPickedGame = false;
 
     /* Hàng nút trên: khôi phục ELO + Đổi bên */
     if (eloSel) eloSel.style.display = '';
@@ -6170,9 +6190,41 @@ function analyzerSetStatus(msg, color) {
   s.innerHTML = msg;
 }
 
+/* Trạng thái Analyzer: đang hiện danh sách trận đấu / đang xem 1 trận vừa
+   chọn từ danh sách đó (để hiện nút "Quay lại" đúng chỗ nút "Ván mới"). */
+var gAnalyzerHasGameList = false;
+var gAnalyzerViewingPickedGame = false;
+
 function analyzerHideGameList() {
   var g = document.getElementById('analyzer-gamelist');
-  if (g) { g.style.display = 'none'; g.innerHTML = ''; }
+  if (g) {
+    g.style.display = 'none';
+    g.innerHTML = '';
+    g.style.flex = '';
+    g.style.maxHeight = '';
+    g.style.overflowY = '';
+  }
+}
+
+/* Cho danh sách trận đấu chiếm ưu tiên toàn bộ phần còn lại của cột trái:
+   nằm ngay dưới ô PGN, đáy sát dãy nút mũi tên (lc-bot-row) — bằng cách
+   giãn nó flex:1 trong #lc-scroll-wrap và ẩn tạm các khối chart/report. */
+function analyzerShowGameListPriority() {
+  var box = document.getElementById('analyzer-gamelist');
+  if (box) {
+    box.style.display = 'block';
+    box.style.flex = '1 1 auto';
+    box.style.maxHeight = 'none';
+    box.style.overflowY = 'auto';
+  }
+  var chart = document.getElementById('lc-eval-chart');
+  var hi = document.getElementById('lc-report-highlights');
+  var top = document.getElementById('lc-report-top');
+  var sum = document.getElementById('lc-report-summary');
+  if (chart) chart.style.display = 'none';
+  if (hi) hi.style.display = 'none';
+  if (top) top.style.display = 'none';
+  if (sum) sum.style.display = 'none';
 }
 
 /* Nhận diện: có phải username hoặc ID trận đấu chess.com hay không (tức
@@ -6192,6 +6244,9 @@ function analyzerClassifyAndRoute(txt) {
   txt = (txt || '').trim();
   if (!txt) return;
   analyzerHideGameList();
+  gAnalyzerHasGameList = false;
+  gAnalyzerViewingPickedGame = false;
+  if (typeof updateBranchBtn === 'function') updateBranchBtn();
   if (/^\d{9,15}$/.test(txt)) {
     analyzerFetchGameById(txt);
   } else if (/\[Event/i.test(txt) || /1\.\s*[A-Za-zO]/.test(txt)) {
@@ -6241,6 +6296,7 @@ function analyzerIsBotGame(game, targetUser) {
 
 function analyzerFetchGamesByUser(username) {
   analyzerSetStatus('\u0110ang t\u00ecm tr\u1eadn \u0111\u1ea5u g\u1ea7n nh\u1ea5t c\u1ee7a "' + username + '"...', '#2196F3');
+  window._analyzerLastUsername = username;
   var archivesUrl = 'https://api.chess.com/pub/player/' + username + '/games/archives';
   fetch(archivesUrl).then(function (res) {
     if (!res.ok) throw new Error('Kh\u00f4ng t\u00ecm th\u1ea5y ng\u01b0\u1eddi ch\u01a1i ho\u1eb7c API t\u1eeb ch\u1ed1i.');
@@ -6277,8 +6333,11 @@ function analyzerRenderGameList(games) {
       + '</div>';
   }
   box.innerHTML = html;
-  box.style.display = 'block';
   window._analyzerGamesCache = games;
+  analyzerShowGameListPriority();
+  gAnalyzerHasGameList = true;
+  gAnalyzerViewingPickedGame = false;
+  if (typeof updateBranchBtn === 'function') updateBranchBtn();
 }
 
 function analyzerPickGame(idx) {
@@ -6287,6 +6346,8 @@ function analyzerPickGame(idx) {
   if (!g) return;
   if (!g.pgn) { analyzerSetStatus('Tr\u1eadn n\u00e0y kh\u00f4ng c\u00f3 d\u1eef li\u1ec7u PGN.', '#c00'); return; }
   analyzerHideGameList();
+  gAnalyzerViewingPickedGame = true;
+  if (typeof updateBranchBtn === 'function') updateBranchBtn();
   analyzerSetStatus('\u0110ang ph\u00e2n t\u00edch tr\u1eadn \u0111\u00e3 ch\u1ecdn...', '#4CAF50');
   var hel = document.getElementById('history');
   if (hel) hel.textContent = g.pgn;
@@ -6294,6 +6355,22 @@ function analyzerPickGame(idx) {
     if (typeof analyzeTabRun === 'function') analyzeTabRun();
     analyzerSetStatus('');
   }, 0);
+}
+
+/* Nút "Quay lại" (hiện ở vị trí nút "Ván mới") sau khi đã bấm vào 1 trận
+   trong danh sách — quay lại hiển thị danh sách trận đấu đã tìm được, mà
+   không cần tra cứu username lại từ đầu. */
+function analyzerBackToList() {
+  var games = window._analyzerGamesCache || [];
+  if (!games.length) {
+    analyzerSetStatus('Kh\u00f4ng c\u00f2n danh s\u00e1ch tr\u1eadn \u0111\u1ea5u \u0111\u1ec3 quay l\u1ea1i.', '#c00');
+    return;
+  }
+  var uname = window._analyzerLastUsername || '';
+  analyzerRenderGameList(games);
+  analyzerSetStatus(uname
+    ? ('T\u00ecm th\u1ea5y ' + games.length + ' tr\u1eadn g\u1ea7n nh\u1ea5t c\u1ee7a "' + uname + '". Ch\u1ecdn 1 tr\u1eadn \u0111\u1ec3 ph\u00e2n t\u00edch:')
+    : ('T\u00ecm th\u1ea5y ' + games.length + ' tr\u1eadn \u0111\u1ea5u. Ch\u1ecdn 1 tr\u1eadn \u0111\u1ec3 ph\u00e2n t\u00edch:'), '#4CAF50');
 }
 
 /* Replay 1 chuỗi UCI (giải mã từ TCN của trận live chess.com) vào bàn cờ,
