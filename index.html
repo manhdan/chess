@@ -6464,6 +6464,28 @@ function extractPgnPlayerNames(pgn){
   };
 }
 
+/* Loại bỏ comment {...} và biến thể (variation) trong ngoặc đơn (...) khỏi
+   thân PGN, hỗ trợ NGOẶC LỒNG NHAU nhiều cấp (PGN thật từ chess.com/lichess
+   hay có kiểu "(23. Nxf6+ gxf6 24. e4 {ghi chú} ({hoặc} 24. h5))"). Quét
+   tuyến tính từng ký tự, đếm độ sâu ngoặc {} và () riêng biệt — khi đang ở
+   trong 1 trong 2 loại ngoặc đó (độ sâu > 0) thì bỏ qua ký tự, không copy
+   ra kết quả. */
+function stripPgnCommentsAndVariations(s) {
+  var out = '';
+  var braceDepth = 0, parenDepth = 0;
+  for (var i = 0; i < s.length; i++) {
+    var ch = s.charAt(i);
+    if (ch === '{') { braceDepth++; continue; }
+    if (ch === '}') { if (braceDepth > 0) braceDepth--; continue; }
+    if (braceDepth > 0) continue;
+    if (ch === '(') { parenDepth++; continue; }
+    if (ch === ')') { if (parenDepth > 0) parenDepth--; continue; }
+    if (parenDepth > 0) continue;
+    out += ch;
+  }
+  return out;
+}
+
 function parsePgnToUcis(pgn) {
   /* Bước 1: loại bỏ TOÀN BỘ phần header — tìm vị trí "1." đầu tiên được theo sau
      bởi một nước đi (chữ cái hoặc "O" của nhập thành). Không phụ thuộc vào việc
@@ -6479,8 +6501,11 @@ function parsePgnToUcis(pgn) {
   body = body.replace(/[\u2010-\u2015\u2212]/g, '-');
   body = body.replace(/[\u00A0\u2000-\u200B\u202F\u205F\u3000]/g, ' ');
 
-  /* Bước 2: dọn comment {}, NAG $N, kết quả ván, số thứ tự nước */
-  body = body.replace(/\{[^}]*\}/g, '').replace(/\$\d+/g, '');
+  /* Bước 2: dọn comment {}, các biến thể (variation) trong ngoặc đơn — kể cả
+     LỒNG NHAU nhiều cấp như "(23. Nxf6+ gxf6 24. e4 {...} ({or} 24. h5))" —
+     rồi mới dọn tiếp NAG $N, kết quả ván, số thứ tự nước. */
+  body = stripPgnCommentsAndVariations(body);
+  body = body.replace(/\$\d+/g, '');
   body = body.replace(/1-0|0-1|1\/2-1\/2|½-½|\*/g, '').replace(/\d+\.\.\./g, '').replace(/\d+\./g, '');
 
   var tokens = body.trim().split(/\s+/).filter(function(t){ return t && t.length >= 2 && !/^\d+$/.test(t); });
