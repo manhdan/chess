@@ -4925,7 +4925,7 @@ function newGame(){
     var _hel=document.getElementById('history');
     if(_hel){
       if(typeof gAppTab!=='undefined' && gAppTab==='analysis'){
-        _hel.setAttribute('data-placeholder','D\u00e1n PGN v\u00e0o \u0111\u00e2y r\u1ed3i b\u1ea5m Ph\u00e2n t\u00edch');
+        _hel.setAttribute('data-placeholder','D\u00e1n User name ho\u1eb7c PGN ho\u1eb7c ID tr\u1eadn \u0111\u1ea5u v\u00e0o \u0111\u00e2y r\u1ed3i b\u1ea5m Ph\u00e2n t\u00edch');
       } else {
         _hel.setAttribute('data-placeholder','Vui l\u00f2ng \u0111i qu\u00e2n');
       }
@@ -5575,7 +5575,7 @@ function takeBack(){
     } else {
       hel.textContent='';
       if(typeof gAppTab!=='undefined' && gAppTab==='analysis'){
-        hel.setAttribute('data-placeholder','D\u00e1n PGN v\u00e0o \u0111\u00e2y r\u1ed3i b\u1ea5m Ph\u00e2n t\u00edch');
+        hel.setAttribute('data-placeholder','D\u00e1n User name ho\u1eb7c PGN ho\u1eb7c ID tr\u1eadn \u0111\u1ea5u v\u00e0o \u0111\u00e2y r\u1ed3i b\u1ea5m Ph\u00e2n t\u00edch');
       } else {
         hel.setAttribute('data-placeholder','Vui l\u00f2ng \u0111i qu\u00e2n');
       }
@@ -5854,7 +5854,7 @@ function switchAppTab(tab) {
       hel.style.background = '#fffde7';
       hel.style.cursor = 'text';
       if (hel.textContent === '\u2014') hel.textContent = '';
-      hel.setAttribute('data-placeholder', 'D\u00e1n PGN v\u00e0o \u0111\u00e2y r\u1ed3i b\u1ea5m Ph\u00e2n t\u00edch');
+      hel.setAttribute('data-placeholder', 'D\u00e1n User name ho\u1eb7c PGN ho\u1eb7c ID tr\u1eadn \u0111\u1ea5u v\u00e0o \u0111\u00e2y r\u1ed3i b\u1ea5m Ph\u00e2n t\u00edch');
       if (!hel.textContent) hel.classList.add('pgn-empty-hint'); else hel.classList.remove('pgn-empty-hint');
     }
 
@@ -5954,7 +5954,7 @@ function ensureReviewLayerVisible() {
     if (moves) {
       moves.innerHTML = '<div style="padding:0 10px;text-align:left;color:#999;font-size:.8rem;line-height:1.6">'
         + 'H&#432;&#7899;ng d&#7851;n:<br>'
-        + '+ D&#225;n PGN v&#224;o &#244; b&#234;n tr&#225;i r&#7891;i b&#7845;m n&#250;t Ph&#226;n t&#237;ch &#273;&#7875; ph&#226;n t&#237;ch tr&#7853;n &#273;&#7845;u<br>'
+        + '+ D&#225;n T&#234;n t&#224;i kho&#7843;n ho&#7863;c ID tr&#7853;n &#273;&#7845;u ho&#7863;c PGN v&#224;o &#244; b&#234;n tr&#225;i r&#7891;i b&#7845;m n&#250;t Ph&#226;n t&#237;ch &#273;&#7875; ph&#226;n t&#237;ch tr&#7853;n &#273;&#7845;u<br>'
         + '+ B&#7845;m n&#250;t Luy&#7879;n t&#7853;p n&#7871;u mu&#7889;n ch&#417;i c&#7901; v&#7899;i Bot'
         + '</div>';
     }
@@ -6002,11 +6002,24 @@ function analyzeTabRun() {
   var raw = hel ? (hel.textContent || hel.innerText || '').trim() : '';
   if (raw === '\u2014') raw = ''; /* dấu — mặc định khi chưa có PGN */
 
+  /* Nếu nội dung đang gõ/dán trong ô là tên user hoặc ID trận đấu chess.com
+     (không phải PGN) → điều hướng qua Analyzer thay vì phân tích trực tiếp,
+     để nút "Phân tích" hoạt động giống hệt khi gõ xong rồi bấm Enter. */
+  if (raw && typeof analyzerIsUsernameOrId === 'function' && analyzerIsUsernameOrId(raw)) {
+    analyzerClassifyAndRoute(raw);
+    return;
+  }
+
   if (!raw) {
     if (navigator.clipboard && navigator.clipboard.readText) {
       navigator.clipboard.readText().then(function (txt) {
         txt = (txt || '').trim();
         if (txt) {
+          if (typeof analyzerIsUsernameOrId === 'function' && analyzerIsUsernameOrId(txt)) {
+            if (hel) hel.textContent = txt;
+            analyzerClassifyAndRoute(txt);
+            return;
+          }
           if (hel) hel.textContent = txt;
           _analyzeTabRunWithText(txt);
         } else if (gMoveTexts.length) {
@@ -6162,6 +6175,17 @@ function analyzerHideGameList() {
   if (g) { g.style.display = 'none'; g.innerHTML = ''; }
 }
 
+/* Nhận diện: có phải username hoặc ID trận đấu chess.com hay không (tức
+   KHÔNG phải PGN). Dùng chung cho cả Enter và nút "Phân tích". */
+function analyzerIsUsernameOrId(txt) {
+  txt = (txt || '').trim();
+  if (!txt) return false;
+  if (/^\d{9,15}$/.test(txt)) return true;
+  if (/\[Event/i.test(txt) || /1\.\s*[A-Za-zO]/.test(txt)) return false; /* trông giống PGN */
+  if (/^[A-Za-z0-9_\-]{2,30}$/.test(txt)) return true;
+  return false;
+}
+
 /* Nhận diện nội dung ô PGN: ID trận đấu (chỉ số, 9-15 ký tự) / PGN (có
    [Event hoặc bắt đầu "1.xx") / còn lại coi là tên user chess.com. */
 function analyzerClassifyAndRoute(txt) {
@@ -6217,7 +6241,7 @@ function analyzerIsBotGame(game, targetUser) {
 
 function analyzerFetchGamesByUser(username) {
   analyzerSetStatus('\u0110ang t\u00ecm tr\u1eadn \u0111\u1ea5u g\u1ea7n nh\u1ea5t c\u1ee7a "' + username + '"...', '#2196F3');
-  var archivesUrl = 'https://api.chess.com/pub/player/' + encodeURIComponent(username) + '/games/archives';
+  var archivesUrl = 'https://api.chess.com/pub/player/' + username + '/games/archives';
   fetch(archivesUrl).then(function (res) {
     if (!res.ok) throw new Error('Kh\u00f4ng t\u00ecm th\u1ea5y ng\u01b0\u1eddi ch\u01a1i ho\u1eb7c API t\u1eeb ch\u1ed1i.');
     return res.json();
