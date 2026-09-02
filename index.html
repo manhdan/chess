@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Chess Coach 7</title>
+<title>Chess Coach 8</title>
 <style>
 * { -webkit-box-sizing: border-box; box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; width: 100%; overflow: hidden; }
@@ -357,6 +357,27 @@ body {
 .lc-status.check    { background: #666; color: #fff; }
 .lc-status.gameover { background: #000; color: #fff; }
 .lc-status.thinking { background: #ddd; }
+
+/* ── Cầu hòa / Xin thua ── */
+.draw-offer-bar {
+  display: none;
+  -webkit-flex-shrink: 0; flex-shrink: 0;
+  background: #666; color: #fff;
+  padding: 6px 8px;
+  font-size: 0.74rem; font-weight: bold;
+  -webkit-align-items: center; align-items: center;
+  gap: 6px;
+}
+.draw-offer-bar.show { display: -webkit-flex; display: flex; }
+.draw-offer-bar span { -webkit-flex: 1; flex: 1; }
+.draw-offer-btn {
+  border: none; border-radius: 999px;
+  background: #eee; color: #333;
+  font-family: Georgia, serif; font-size: 0.7rem; font-weight: bold;
+  padding: 4px 10px; cursor: pointer; white-space: nowrap;
+}
+.draw-offer-btn:hover { background: #fff; }
+
 /* history fills remaining space between status and bottom row */
 .left-col .history {
   display: block;
@@ -519,7 +540,7 @@ body {
 
 /* ── EVAL BAR vertical ── */
 .evalbar-vert {
-  width: 12px;
+  width: 30px;
   -webkit-flex-shrink: 0; flex-shrink: 0;
   border-left: 1px solid #999;
   border-right: none;
@@ -527,6 +548,16 @@ body {
   -webkit-flex-direction: column; flex-direction: column;
   overflow: hidden;
   background: #000;
+  position: relative;
+}
+.evbar-pct {
+  display: none;
+  position: absolute; left: 0; width: 100%;
+  text-align: center;
+  font-family: Georgia, serif; font-size: 10px; font-weight: bold;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 3;
 }
 .evbar-black {
   background: #000;
@@ -823,7 +854,12 @@ body {
   <div id="lc-scroll-wrap" style="-webkit-flex:1 1 auto;flex:1 1 auto;min-height:0;overflow-y:auto;display:-webkit-flex;display:flex;-webkit-flex-direction:column;flex-direction:column">
 
     <!-- History (PGN), cao 18.75vh (75% của 25vh trước) -->
-    <div class="history" id="history" onclick="onHistoryClick(event)" onpaste="onHistoryPaste(event)" spellcheck="false">&#8212;</div>
+    <div class="history" id="history" onclick="onHistoryClick(event)" onpaste="onHistoryPaste(event)" onkeydown="onHistoryKeydown(event)" spellcheck="false">&#8212;</div>
+
+    <!-- Trạng thái tra cứu Analyzer (user/ID trận đấu chess.com) -->
+    <div id="analyzer-status" style="display:none;font-size:.68rem;color:#666;padding:4px 8px;border-top:1px solid #ddd"></div>
+    <!-- Danh sách trận đấu gần nhất khi gõ tên user chess.com -->
+    <div id="analyzer-gamelist" style="display:none;max-height:26vh;overflow-y:auto;padding:4px 6px;border-top:1px solid #ddd"></div>
 
     <!-- Eval chart: top-align ngay dưới history, cao 135px (75% của 180px trước) -->
     <div id="lc-eval-chart" style="display:none;padding:6px 6px 4px;-webkit-flex-shrink:0;flex-shrink:0;display:-webkit-flex;display:flex;-webkit-flex-direction:column;flex-direction:column;-webkit-align-items:stretch;align-items:stretch">
@@ -846,7 +882,10 @@ body {
 
   <!-- Row last: Phân tích + tua nước (◀ ▶) — CỐ ĐỊNH, dùng chung cho cả 2 tab -->
   <div class="lc-bot-row" style="-webkit-flex-shrink:0;flex-shrink:0">
-    <button class="lc-bot-btn" id="btn-pgn" style="-webkit-flex:2;flex:2" onclick="switchAppTab('analysis')">&#128203; Ph&#226;n t&#237;ch</button>
+    <div class="lc-bot-btn-group" id="lc-bot-pgn-group" style="-webkit-flex:2;flex:2;display:-webkit-flex;display:flex">
+      <button class="lc-bot-btn" id="btn-pgn" style="-webkit-flex:1;flex:1" onclick="switchAppTab('analysis')">&#128203; Ph&#226;n t&#237;ch</button>
+      <button class="lc-bot-btn" id="btn-resign" style="-webkit-flex:1;flex:1;display:none" onclick="playerResign()">&#9873; Xin thua</button>
+    </div>
     <button class="lc-bot-btn" id="btn-step-back" onclick="stepReview(-1)" disabled title="N&#432;&#7899;c tr&#432;&#7899;c (&#8592;/&#8593;)">&#9664;</button>
     <button class="lc-bot-btn" id="btn-step-fwd" onclick="stepReview(1)" disabled title="N&#432;&#7899;c ti&#7871;p (&#8594;/&#8595;)">&#9654;</button>
   </div>
@@ -861,6 +900,11 @@ body {
     <span class="lc-status-center" id="status-center">Lượt của bạn &#8212; Trắng</span>
     <span class="lc-status-right" id="status-right"></span>
   </div>
+</div>
+<div class="draw-offer-bar" id="draw-offer-bar">
+  <span id="draw-offer-text"></span>
+  <button class="draw-offer-btn" onclick="acceptDrawOffer()">Đồng ý hòa</button>
+  <button class="draw-offer-btn" onclick="declineDrawOffer()">Từ chối</button>
 </div>
 <div class="board-and-eval">
 
@@ -900,6 +944,7 @@ body {
   <div class="evbar-black"></div>
   <div class="evbar-fill" id="evalbar-fill"></div>
   <div class="evbar-white"></div>
+  <div class="evbar-pct" id="evbar-pct"></div>
 </div>
 
 </div><!-- end .board-and-eval -->
@@ -1150,24 +1195,30 @@ var ELO_CFG={
 
 /* ── HỆ THỐNG "NOISE" KHI CHỌN NƯỚC (mô phỏng người chơi yếu thật) ──
    Cổng theo gRank (0-9, xem RANK_TIERS ở trên — cùng chỉ số vị trí).
-   Ý tưởng: dùng lại MultiPV top-4 mà engine đã tính (không tốn thêm lần
-   gọi nào) — với xác suất `chance` mỗi lượt, CHỌN NGẪU NHIÊN CÓ TRỌNG SỐ
-   trong các ứng viên có cpLoss ≤ noiseCp so với bestmove, thay vì luôn đi
-   đúng nước #1. gRank càng thấp, noiseCp/chance càng lớn. gRank 8-9
-   (1650/1850) không có entry → chơi chuẩn tuyệt đối, không áp dụng gì.
-   [Hiệu chỉnh lần 3 — sau test thực tế lần 2] Sau khi sửa xung đột với
-   lưới an toàn cũ (isClearBlunder), đỡ nhiều nhưng vẫn hơi mạnh — cụ thể
-   Cấp ~550-650 (900) vẫn chơi cỡ ~700-800. Tăng thêm noiseCp/chance 1 nấc
-   nữa (khoảng +30-40%) toàn dải, đồng thời hạ thêm GUARD_ACTIVE_PCT. */
+   [Hiệu chỉnh lần 4 — đổi hẳn cơ chế] Bản cũ dùng random CÓ TRỌNG SỐ trong
+   1 dải noiseCp rất rộng — hệ quả: có ván tình cờ random trúng toàn ứng
+   viên gần-tốt-nhất (chơi hay bất thường), có ván trúng toàn ứng viên tệ
+   nhất trong 4 (chơi rất dở) — cùng 1 cấp mà độ mạnh/yếu DAO ĐỘNG quá lớn
+   giữa các ván, không ổn định. Giờ đổi sang: mỗi cấp có 1 "mức mất điểm
+   MỤC TIÊU" (targetCpLoss) ổn định, mỗi lượt roll trúng noise sẽ CHỌN
+   ỨNG VIÊN CÓ cpLoss GẦN TARGET NHẤT (chỉ dao động nhẹ ±40% quanh target,
+   không random rộng trong dải) — nhờ vậy độ yếu/mạnh mỗi cấp ổn định qua
+   nhiều ván, không còn kiểu "may thì ELO 800, rủi thì ELO 200". gRank
+   càng thấp, targetCpLoss/chance càng lớn. gRank 8-9 (1650/1850) không có
+   entry → chơi chuẩn tuyệt đối, không áp dụng gì. */
+/* gAiGameCpLossSum/gAiGameMoveCount: theo dõi ACPL THỰC TẾ của ván đang
+   chơi — dùng cho cơ chế "tự bù trừ" trong pickAiCandidateMove() (xem
+   comment ở đó). Reset mỗi ván mới trong newGame(). */
+var gAiGameCpLossSum = 0, gAiGameMoveCount = 0;
 var AI_MOVE_NOISE_CFG = [
-  {noiseCp:1000, chance:1.00},  /* gRank 0 (600)  */
-  {noiseCp:850,  chance:1.00},  /* gRank 1 (700)  */
-  {noiseCp:650,  chance:1.00},  /* gRank 2 (800)  */
-  {noiseCp:480,  chance:0.95},  /* gRank 3 (900)  */
-  {noiseCp:320,  chance:0.85},  /* gRank 4 (1000) */
-  {noiseCp:150,  chance:0.60},  /* gRank 5 (1100) */
-  {noiseCp:85,   chance:0.40},  /* gRank 6 (1250) */
-  {noiseCp:45,   chance:0.20}   /* gRank 7 (1450) */
+  {targetCpLoss:280, chance:1.00},  /* gRank 0 (600)  */
+  {targetCpLoss:250, chance:1.00},  /* gRank 1 (700)  */
+  {targetCpLoss:140, chance:0.95},  /* gRank 2 (800)  */
+  {targetCpLoss:100, chance:0.85},  /* gRank 3 (900)  */
+  {targetCpLoss:70,  chance:0.70},  /* gRank 4 (1000) */
+  {targetCpLoss:40,  chance:0.50},  /* gRank 5 (1100) */
+  {targetCpLoss:22,  chance:0.30},  /* gRank 6 (1250) */
+  {targetCpLoss:10,  chance:0.15}   /* gRank 7 (1450) */
   /* gRank 8-9 (1650/1850): không có entry -> luôn đi bestUci nguyên vẹn */
 ];
 /* GUARD_ACTIVE_PCT: xác suất 2 "lưới an toàn" (bestMoveIsRescue/
@@ -1177,7 +1228,7 @@ var AI_MOVE_NOISE_CFG = [
    ELO thấp thật) — nếu lưới luôn bật 100% thì noise sẽ không bao giờ tạo
    ra đúng 2 kiểu lỗi tự nhiên đó. [Hiệu chỉnh lần 3] hạ thêm 1 nấc toàn
    dải thấp-trung. Tăng dần theo cấp, full (100%) từ gRank 6 trở lên. */
-var GUARD_ACTIVE_PCT = [0, 0.10, 0.25, 0.40, 0.55, 0.75, 1, 1, 1, 1];
+var GUARD_ACTIVE_PCT = [0, 0, 0.25, 0.40, 0.55, 0.75, 1, 1, 1, 1];
 
 /* HOME_SQ: ô xuất phát nguyên bản theo LOẠI quân — dùng để lọc "lùi vô
    nghĩa" (Nf6->Ng8...) khỏi vùng nước noise được phép chọn. */
@@ -1263,20 +1314,64 @@ function styleWeight(uci, persona){
   return w;
 }
 /* pickAiCandidateMove: chọn nước AI THỰC SỰ sẽ đi — có thể khác bestUci
-   nếu roll trúng "nhiễu" và có ứng viên đủ gần điểm trong best4 (MultiPV
-   top 4 vừa tính). best4: [{move:uci, score:cp}, ...] theo AI-to-move
-   perspective (dương = AI lợi), gB/gTurn/gEP/gCas ở đây PHẢI là board
-   TRƯỚC khi AI đi (đúng thời điểm gọi trong aiMove(), applyMv() chưa chạy). */
+   nếu roll trúng "nhiễu".
+   [Hiệu chỉnh lần 6] Bản lần 5 bù trừ ACPL cả ván bằng cách khuếch đại
+   TARGET (mức độ tệ) khi ván đang "chơi mạnh hơn dự kiến" — rủi ro rubber-
+   banding thật sự: đúng lúc người chơi tạo áp lực, ép máy phải tìm nước
+   phòng thủ DUY NHẤT để sống sót, cơ chế đó có thể vẫn ép chọn nước tệ
+   hơn chỉ để kéo thống kê, "phạt" người chơi vì họ chơi hay. Giờ tách
+   riêng: chỉ bù trừ TẦN SUẤT roll trúng nhiễu (chance, biên độ nhỏ ±20%),
+   còn MỨC ĐỘ TỆ khi đã trúng (targetCpLoss) LUÔN giữ nguyên đúng gốc của
+   cấp, không bao giờ bị khuếch đại theo thống kê ván. Nhờ vậy: khi máy
+   thực sự cần tìm nước phòng thủ tốt nhất (các ứng viên còn lại đều rất
+   tệ, cách xa targetCpLoss gốc), cơ chế "chọn ứng viên gần target nhất"
+   tự nhiên vẫn chọn đúng nước tốt bất kể bù trừ tần suất đang cao hay
+   thấp lúc đó — bù trừ chỉ quyết định VÁN NÀY có roll trúng nhiễu nhiều/
+   ít hơn dự kiến hay không, không bao giờ quyết định mức độ tệ của 1 lần
+   trúng cụ thể. Đánh đổi lại: độ ổn định ACPL giữa các ván sẽ khiêm tốn
+   hơn bản lần 5 (vì thiếu đòn bẩy mạnh), nhưng an toàn hơn nhiều, không
+   còn nguy cơ máy "tự sát ngớ ngẩn" đúng lúc cần phòng thủ.
+   best4: [{move:uci, score:cp}, ...] theo AI-to-move perspective (dương =
+   AI lợi), gB/gTurn/gEP/gCas ở đây PHẢI là board TRƯỚC khi AI đi (đúng
+   thời điểm gọi trong aiMove(), applyMv() chưa chạy). */
 function pickAiCandidateMove(bestUci, infoScoreAI, best4, persona, tiltBoost){
   if(gRank>7) return bestUci;
   var noiseCfg=AI_MOVE_NOISE_CFG[gRank];
   if(!noiseCfg) return bestUci;
   tiltBoost = tiltBoost||0;
-  var effChance = Math.min(1.0, noiseCfg.chance + tiltBoost);
-  var effNoiseCp = tiltBoost>0 ? Math.round(noiseCfg.noiseCp*1.5) : noiseCfg.noiseCp;
-  if(Math.random()>=effChance) return bestUci;   /* roll trượt -> giữ best (bình thường) */
 
-  if(!best4 || best4.length<2) return bestUci;
+  /* [Hiệu chỉnh lần 6 — bỏ "bù trừ vào MỨC ĐỘ TỆ", chỉ bù trừ TẦN SUẤT]
+     Bản trước bù trừ bằng cách đẩy targetCpLoss lên cao khi ván đang chơi
+     "quá hay" — đúng như lo ngại rubber-banding: đúng lúc người chơi tạo
+     áp lực, ép máy PHẢI phòng thủ tốt, cơ chế có thể vẫn ép máy chọn nước
+     tệ hơn chỉ để kéo thống kê, kể cả khi đó là tình huống "chỉ có 1 nước
+     sống sót". Giờ đổi hẳn: KHÔNG bao giờ đụng vào độ tệ của nước đi khi
+     đã roll trúng nhiễu (targetCpLoss luôn giữ nguyên đúng mức gốc của
+     cấp, không khuếch đại) — chỉ bù trừ TẦN SUẤT roll trúng nhiễu (chance)
+     trong biên độ nhỏ (±20%). Nhờ vậy: khi máy THỰC SỰ cần tìm nước phòng
+     thủ tốt nhất (các ứng viên còn lại đều rất tệ, cách xa targetCpLoss
+     gốc), cơ chế "gần target nhất" tự nhiên vẫn chọn đúng nước tốt bất kể
+     bù trừ đang đẩy chance lên hay xuống — bù trừ chỉ quyết định CÓ roll
+     trúng nhiễu ván này nhiều/ít hơn dự kiến hay không, không quyết định
+     mức độ tệ khi đã trúng. */
+  var _base = noiseCfg.targetCpLoss;
+  var _curAvg = gAiGameMoveCount>0 ? (gAiGameCpLossSum/gAiGameMoveCount) : _base;
+  var _deficitRatio = _base>0 ? (_base - _curAvg)/_base : 0; /* dương = đang chơi mạnh hơn dự kiến */
+  var _chanceAdjust = Math.max(-0.2, Math.min(0.2, _deficitRatio*0.25)); /* bù trừ NHẸ, giới hạn ±20% */
+  var effChance = Math.min(1.0, Math.max(0, noiseCfg.chance + tiltBoost + _chanceAdjust));
+
+  if(Math.random()>=effChance){
+    /* Roll trượt -> đi bestUci (cpLoss=0) nhưng VẪN tính vào thống kê ACPL
+       cả ván, để phần bù trừ tần suất ở trên biết cả những lượt "chơi
+       chuẩn" này, không chỉ riêng những lượt có noise. */
+    gAiGameCpLossSum += 0; gAiGameMoveCount++;
+    return bestUci;
+  }
+
+  if(!best4 || best4.length<2){
+    gAiGameCpLossSum += 0; gAiGameMoveCount++;
+    return bestUci;
+  }
 
   var rescueInfo=bestMoveIsRescue(bestUci);
   var captureInfo=bestMoveIsGoodCapture(bestUci);
@@ -1284,13 +1379,19 @@ function pickAiCandidateMove(bestUci, infoScoreAI, best4, persona, tiltBoost){
   if(captureInfo && Math.random()>=_gaPct) captureInfo=null;
   if(rescueInfo  && Math.random()>=_gaPct) rescueInfo=null;
 
+  /* Target cpLoss cho lượt này: LUÔN đúng mức gốc của cấp (không bù trừ
+     theo ACPL nữa — xem giải thích ở trên), chỉ dao động nhẹ ±30% cho tự
+     nhiên, KHÔNG khuếch đại bởi thống kê ván. */
+  var _severity = _base * (tiltBoost>0 ? 1.4 : 1);
+  var jitterMul = 0.7 + Math.random()*0.6; /* 0.7x - 1.3x */
+  var targetCpLoss = _severity * jitterMul;
+
   var cands=[], i, e, cpLoss, cmv;
   for(i=0;i<best4.length;i++){
     e=best4[i];
     if(!e||!e.move) continue;
     cpLoss=infoScoreAI-e.score;
     if(cpLoss<0) cpLoss=0;
-    if(cpLoss>effNoiseCp) continue;
     cmv=uciToMove(e.move);
     if(!cmv) continue;
     if(isPointlessRetreat(cmv)) continue;
@@ -1301,21 +1402,27 @@ function pickAiCandidateMove(bestUci, infoScoreAI, best4, persona, tiltBoost){
     if(captureInfo && (cmv[1]!==captureInfo.toSq || !cmv[2])) continue;
     cands.push({move:e.move, cpLoss:cpLoss});
   }
-  if(cands.length<2) return bestUci;
+  if(cands.length<1){
+    gAiGameCpLossSum += 0; gAiGameMoveCount++;
+    return bestUci;
+  }
 
-  var weights=[], total=0, w;
+  /* Chọn ứng viên có cpLoss GẦN targetCpLoss (mức gốc của cấp, KHÔNG bị
+     khuếch đại theo thống kê ván — xem giải thích ở trên) nhất — nếu 2 ứng
+     viên gần bằng nhau về khoảng cách, ưu tiên nhẹ ứng viên hợp phong
+     cách persona hơn (styleWeight>1 kéo khoảng cách xuống 1 chút). */
+  var bestPick=null, bestPickCpLoss=0, bestDist=Infinity;
   for(i=0;i<cands.length;i++){
-    w = 1 - (cands[i].cpLoss/(effNoiseCp+1))*0.8;
-    if(w<0.1) w=0.1;
-    w *= styleWeight(cands[i].move, persona);
-    weights.push(w); total+=w;
+    var dist=Math.abs(cands[i].cpLoss-targetCpLoss);
+    dist -= (styleWeight(cands[i].move,persona)-1)*40;
+    if(dist<bestDist){ bestDist=dist; bestPick=cands[i].move; bestPickCpLoss=cands[i].cpLoss; }
   }
-  var r=Math.random()*total, cum=0;
-  for(i=0;i<cands.length;i++){
-    cum+=weights[i];
-    if(r<cum) return cands[i].move;
+  if(!bestPick){
+    gAiGameCpLossSum += 0; gAiGameMoveCount++;
+    return bestUci;
   }
-  return bestUci;
+  gAiGameCpLossSum += bestPickCpLoss; gAiGameMoveCount++;
+  return bestPick;
 }
 
 /* ── AI PERSONA & PHONG CÁCH CHƠI — chỉ áp dụng Cấp 1-7 (gRank 0-6) ──
@@ -1501,6 +1608,110 @@ function findPersonaPlanMove(plan, idx){
     }
   }
   return null;
+}
+
+/* ── CẦU HÒA / XIN THUA ──
+   Máy tự đề nghị hòa khi thế cân bằng kéo dài (hoặc vật chất không đủ
+   chiếu hết), tự xin thua khi thua rõ ràng nhiều lượt liên tiếp. Người
+   chơi cũng có thể chủ động xin thua bất cứ lúc nào (link "Xin thua" dưới
+   thanh trạng thái, chỉ hiện khi ván đang diễn ra ở tab Luyện tập). */
+var RESIGN_SCORE = -700, RESIGN_STREAK = 3;
+var RESIGN_SCORE_LOW = -950, RESIGN_STREAK_LOW = 5; /* Cấp 1-7: search nông hơn, kém tin cậy hơn -> ngưỡng cao hơn + chuỗi dài hơn mới resign */
+var DRAW_SCORE = 25, DRAW_STREAK = 8;
+var gBadEvalStreak = 0, gEqualEvalStreak = 0;
+/* [Nút "Xin thua" người chơi] chỉ hiện khi người chơi thua nặng liên tục
+   nhiều nước — xem chỗ dùng trong onLozzaMessage() + _syncResignLink(). */
+var PLAYER_RESIGN_SCORE = 900, PLAYER_RESIGN_STREAK = 5;
+var gPlayerBadStreak = 0;
+var gDrawOffer = false, gDrawOfferDeclined = false;
+
+/* Chỉ tính hòa lý thuyết CHẮC CHẮN, cách xét bảo thủ (không xét màu ô
+   Tượng, không xét K+2N...): 2 Vua trần, hoặc thêm đúng 1 quân nhẹ
+   (Mã/Tượng) ở 1 trong 2 bên, không còn Tốt/Xe/Hậu nào trên bàn. */
+function isInsufficientMatingMaterial(){
+  var minorCount=0;
+  for(var s=0;s<64;s++){
+    var p=gB[s]; if(!p) continue;
+    var t=typ(p);
+    if(t===1||t===4||t===5) return false; /* Tốt/Xe/Hậu -> vẫn còn khả năng chiếu hết */
+    if(t===2||t===3) minorCount++;
+  }
+  return minorCount<=1;
+}
+
+function hideDrawOfferBar(){
+  var bar=document.getElementById('draw-offer-bar');
+  if(bar) bar.className='draw-offer-bar';
+}
+function showDrawOfferBar(){
+  var bar=document.getElementById('draw-offer-bar');
+  var txt=document.getElementById('draw-offer-text');
+  if(txt) txt.textContent='\u267E\uFE0F \u0110\u1ed1i th\u1ee7 \u0111\u1ec1 ngh\u1ecb h\u00f2a';
+  if(bar) bar.className='draw-offer-bar show';
+}
+function aiResign(){
+  if(!gActive) return;
+  gActive=false;
+  hideDrawOfferBar();
+  if(typeof _maybeUpdateRankOnGameEnd==='function') _maybeUpdateRankOnGameEnd(1); /* máy xin thua = bạn thắng */
+  if(typeof _renderStatusBar==='function') _renderStatusBar('', '\uD83C\uDFF3 M\u00e1y xin thua \u2014 B\u1ea1n th\u1eafng!', '', 'gameover');
+  if(typeof showAnalyzeBtn==='function') showAnalyzeBtn();
+  if(typeof updateBranchBtn==='function') updateBranchBtn();
+}
+function playerResign(){
+  if(!gActive) return;
+  gActive=false;
+  hideDrawOfferBar();
+  if(typeof _maybeUpdateRankOnGameEnd==='function') _maybeUpdateRankOnGameEnd(-1); /* bạn xin thua = bạn thua */
+  if(typeof _renderStatusBar==='function') _renderStatusBar('', '\uD83C\uDFF3 B\u1ea1n \u0111\u00e3 xin thua', '', 'gameover');
+  if(typeof showAnalyzeBtn==='function') showAnalyzeBtn();
+  if(typeof updateBranchBtn==='function') updateBranchBtn();
+}
+/* Chỉ hiện link "Xin thua" khi: đang ở tab Luyện tập, ván đang diễn ra
+   (gActive), và đã có ít nhất 1 nước đi (xin thua từ nước đầu không có ý
+   nghĩa gì). */
+/* Nút "Xin thua" giờ nằm chung slot với "Ván mới" (btn-pgn) ở góc dưới
+   trái, chia đôi độ rộng bằng nhau khi cả 2 cùng hiện — xem
+   #lc-bot-pgn-group. Khi ẩn, btn-pgn tự giãn full độ rộng vì là flex item
+   duy nhất còn hiện trong group (không cần đổi flex của btn-pgn). */
+function _syncResignLink(){
+  var btn = document.getElementById('btn-resign');
+  if(!btn) return;
+  var isPlay = (typeof gAppTab==='undefined' || gAppTab==='play');
+  var hasMoves = (typeof gStateHistory!=='undefined' && gStateHistory.length>0);
+  var losingBadly = (typeof gPlayerBadStreak!=='undefined' && gPlayerBadStreak>=PLAYER_RESIGN_STREAK);
+  var show = isPlay && gActive && hasMoves && losingBadly;
+  btn.style.display = show ? '' : 'none';
+}
+function acceptDrawOffer(){
+  if(!gDrawOffer||!gActive) return;
+  gActive=false;
+  hideDrawOfferBar();
+  if(typeof _maybeUpdateRankOnGameEnd==='function') _maybeUpdateRankOnGameEnd(0); /* hòa -> không đổi cấp */
+  if(typeof _renderStatusBar==='function') _renderStatusBar('', '\u00bd H\u00f2a c\u1edd \u2014 \u0110\u1ed3ng \u00fd \u0111\u1ec1 ngh\u1ecb h\u00f2a', '', 'gameover');
+  if(typeof showAnalyzeBtn==='function') showAnalyzeBtn();
+  if(typeof updateBranchBtn==='function') updateBranchBtn();
+}
+function declineDrawOffer(){
+  gDrawOffer=false;
+  gDrawOfferDeclined=true;
+  hideDrawOfferBar();
+}
+/* maybeOfferDraw: gọi ngay sau khi máy vừa đi xong 1 nước (lúc này đã là
+   lượt người chơi). evalForAI: eval GỐC (trước noise) từ chính nước AI
+   vừa tính, dương = AI đang lợi. */
+function maybeOfferDraw(evalForAI){
+  if(!gActive||gDrawOffer||gTurn!==gPC) return;
+  if(typeof gAppTab!=='undefined' && gAppTab==='analysis') return;
+  if(typeof gMoveNum==='undefined' || gMoveNum<18) return;
+  var bareKings=isInsufficientMatingMaterial();
+  if(bareKings) gDrawOfferDeclined=false;
+  if(gDrawOfferDeclined) return;
+  if(Math.abs(evalForAI)<=DRAW_SCORE) gEqualEvalStreak++;
+  else gEqualEvalStreak=0;
+  if(!bareKings && gEqualEvalStreak<DRAW_STREAK) return;
+  gDrawOffer=true;
+  showDrawOfferBar();
 }
 
 /* ── HỆ THỐNG RANK/ELO TỰ THĂNG-GIÁNG CẤP ──
@@ -1870,6 +2081,48 @@ function inCheck(board, side) {
   return true;
 }
 
+/* Khi engine trả bestmove NULL/(none) (0 nước hợp lệ): trước đây LUÔN coi
+   là bị chiếu hết (gán -9999, thua tuyệt đối) — SAI với thế bí (stalemate,
+   hòa, phải là 0). Nước cuối ván hòa do bế tắc vì vậy bị chấm sai thành
+   "thua nặng đột ngột", có thể kéo theo backfill/re-check sai lệch dây
+   chuyền ở các nước ngay trước đó (nghi vấn liên quan hiện tượng treo khi
+   phân tích các ván kết thúc bằng thế bí). */
+function _noMoveScoreFor(fen){
+  try{
+    var parts=fen.split(' ');
+    var parsed=boardArrayFromFen(fen); /* KHÔNG dùng boardFromFen() — hàm đó ghi đè gB/gTurn toàn cục, không an toàn để gọi giữa lúc đang phân tích */
+    var side=(parts[1]==='w')?W:B;
+    if(inCheck(parsed.board, side)) return -9999; /* chiếu hết thật sự */
+    return 0; /* thế bí -> hòa */
+  }catch(e){
+    return -9999; /* an toàn: giữ hành vi cũ nếu phân tích FEN lỗi */
+  }
+}
+
+/* [Chống treo khi phân tích các vị trí 0 nước hợp lệ — chiếu hết/thế bí]
+   Tự kiểm tra thẳng trong JS TRƯỚC khi hỏi engine — nếu xác định chắc
+   chắn 0 nước hợp lệ, bỏ qua hẳn việc gửi 'go' cho worker (xem
+   _anSlotAnalyzeNext()). Không cần biết CHÍNH XÁC vì sao gửi 'go' cho
+   1 vị trí như vậy từng gây treo (nghi vấn khác cách Worker/engine xử lý
+   so với test CLI Node độc lập) — cách chắc ăn nhất là tránh hỏi engine
+   hoàn toàn khi biết trước câu trả lời (0 nước = không có gì để tìm). */
+function _fenHasNoLegalMoves(fen){
+  try{
+    var parts=fen.split(' ');
+    var parsed=boardArrayFromFen(fen);
+    var side=(parts[1]==='w')?W:B;
+    var rights=parts[2]||'-';
+    var cas={WK:rights.indexOf('K')>=0, WQ:rights.indexOf('Q')>=0,
+             BK:rights.indexOf('k')>=0, BQ:rights.indexOf('q')>=0};
+    var epStr=parts[3]||'-';
+    var ep=(epStr==='-')?-1:sqFromAlg(epStr);
+    var mvs=legalMoves(parsed.board, side, ep, cas);
+    return mvs.length===0;
+  }catch(e){
+    return false; /* an toàn: lỗi phân tích thì để engine tự xử lý như cũ */
+  }
+}
+
 function applyMv(board, mv) {
   var nb=board.slice();
   var piece=nb[mv[0]];
@@ -2071,6 +2324,33 @@ function onLozzaMessage(e){
   /* Nếu quân nặng (Xe=500, Hậu=900) của bên đang đi đang bị tấn công,
      tin tưởng hoàn toàn vào engine — không áp dụng bất kỳ guard nào.
      Engine ở mọi depth đủ sâu để tự xử lý tình huống quân bị đe dọa. */
+  /* [Xin thua] Dùng eval GỐC (_aiBest4[0], trước khi noise có thể đổi
+     nước) — phản ánh đúng thế cờ thực sự, không bị noise làm nhiễu tín
+     hiệu. Cấp 1-7 (persona/noise mạnh, search nông) dùng ngưỡng RIÊNG cao
+     hơn + chuỗi dài hơn mới resign, vì search nông kém tin cậy hơn. */
+  var _infoScoreAI = (_aiBest4 && _aiBest4[0]) ? _aiBest4[0].score : null;
+  if(_infoScoreAI!==null && typeof gMoveNum!=='undefined'){
+    var _isLowTier = (typeof gRank!=='undefined' && gRank<=6);
+    var _resignScore = _isLowTier ? RESIGN_SCORE_LOW : RESIGN_SCORE;
+    var _resignStreak = _isLowTier ? RESIGN_STREAK_LOW : RESIGN_STREAK;
+    var _resignResetFloor = _resignScore - 200;
+    if(_infoScoreAI!==0){
+      if(gMoveNum>12 && _infoScoreAI<=_resignScore) gBadEvalStreak++;
+      else if(_infoScoreAI>_resignResetFloor) gBadEvalStreak=0;
+    }
+    if(gBadEvalStreak>=_resignStreak){ aiResign(); return; }
+
+    /* [Nút "Xin thua" của người chơi] Chỉ CHO PHÉP hiện nút này khi người
+       chơi đang thua nặng LIÊN TỤC nhiều nước liền — không phải cứ có
+       nước đi là hiện (tránh hiện cả lúc đang thắng lớn, vô nghĩa). Dùng
+       ngược dấu của _infoScoreAI (AI thắng đậm = người chơi thua đậm).
+       Ngưỡng ~900cp (gần chắc thua) x 5 lần liên tiếp (10 lượt đi, tính
+       cả 2 bên) mới cho hiện — xem _syncResignLink(). */
+    if(_infoScoreAI>=PLAYER_RESIGN_SCORE) gPlayerBadStreak++;
+    else if(_infoScoreAI<PLAYER_RESIGN_SCORE-200) gPlayerBadStreak=0;
+    if(typeof _syncResignLink==='function') _syncResignLink();
+  }
+
   var _heavyUnderAttack = false;
   for (var _s = 0; _s < 64; _s++) {
     var _p = gB[_s];
@@ -2125,6 +2405,11 @@ function onLozzaMessage(e){
 
   var _aiDoMove = function(finalMv){
     execMove(finalMv);
+    /* [Cầu hòa] Sau khi máy đã đi xong (gTurn giờ là lượt người chơi),
+       cân nhắc đề nghị hòa dựa trên eval GỐC vừa tính (_infoScoreAI). */
+    if(typeof maybeOfferDraw==='function' && typeof gMoveNum!=='undefined' && gMoveNum>=18 && _infoScoreAI!==null){
+      maybeOfferDraw(_infoScoreAI);
+    }
     /* Auto-trigger coach after AI move — poll until engine is free */
     if(typeof coachTrigger==='function'){
       var _pollCount = 0;
@@ -2832,6 +3117,7 @@ function startAnalysis(){
   gAnScores=[];
   gAnDoneCount=0;
   gAnTotalCount=gAnFens.length;
+  gAnBackfillCount=0;
 
   var cb=document.getElementById('clr-toggle');
   if(cb){cb.disabled=false;cb.innerHTML='\u{1F4CA} \u0110ang ph\u00e2n t\u00edch 0/'+gAnTotalCount+'...';cb.style.visibility='visible';}
@@ -2869,6 +3155,13 @@ function _anWatchdogMs(base){
 /* ── Pipeline phân tích cho 1 worker/slot (bản song song hoá của
    analyzeNext()/handleAnalysisMsg() 1-worker cũ, xem logic gốc bên dưới). ── */
 function _anSlotAnalyzeNext(slot){
+  var _curFen = (slot.phase==='mpv_backfill') ? gAnFens[slot.backfillIdx] : gAnFens[slot.pos];
+  if(_curFen && _fenHasNoLegalMoves(_curFen)){
+    /* 0 nước hợp lệ (chiếu hết/thế bí) — KHÔNG hỏi engine gì cả, tự chấm
+       điểm và đi tiếp luôn. Xem comment ở _fenHasNoLegalMoves(). */
+    _handleNoLegalMovesLocally(slot);
+    return;
+  }
   if(slot.phase==='shallow'){
     slot.shallowCur={d1:0,s1:0,m1:null};
     slot.worker.postMessage('setoption name MultiPV value 1');
@@ -2892,6 +3185,28 @@ function _anSlotAnalyzeNext(slot){
   slot.worker.postMessage('position fen '+gAnFens[slot.pos]);
   slot.worker.postMessage('go depth '+ANALYSIS_DEPTH);
   _armAnSlotWatchdog(slot, _anWatchdogMs(20000));
+}
+
+/* Xử lý 1 vị trí 0 nước hợp lệ HOÀN TOÀN Ở PHÍA CLIENT, không đụng gì tới
+   worker/engine — an toàn tuyệt đối trước mọi khả năng treo liên quan tới
+   giao tiếp Worker. Nhánh mpv_backfill: chỉ đơn giản đánh dấu đã "xử lý"
+   (không có gì để backfill thêm) rồi đi tiếp. Nhánh shallow/main: gán
+   điểm qua _noMoveScoreFor() (phân biệt chiếu hết/thế bí) rồi đi tiếp. */
+function _handleNoLegalMovesLocally(slot){
+  if(slot.phase==='mpv_backfill'){
+    var _bfEntry=gAnResultsMap[slot.backfillIdx];
+    if(_bfEntry) _bfEntry._backfillDone=true;
+    slot.backfillIdx=-1;
+    _anSlotAdvance(slot);
+    return;
+  }
+  var _score=_noMoveScoreFor(gAnFens[slot.pos]);
+  var _fnParts=(gAnFens[slot.pos]||'').split(' ');
+  var _side=(_fnParts[1]==='w')?W:B;
+  gAnResultsMap[slot.pos]={s1:_score, m1:null, s2:null, m2:null, s3:null, m3:null, s4:null, m4:null,
+    side:_side, bestUci:null, shallowS1:_score, shallowM1:null};
+  _anSlotPositionDone(slot);
+  _anSlotAdvance(slot);
 }
 
 function _handleAnSlotMsg(slot, msg){
@@ -2961,8 +3276,9 @@ function _handleAnSlotMsg(slot, msg){
       if(noMove){
         var _fnN=(gAnFens[slot.pos]||'').split(' ');
         var _sdN=(_fnN[1]==='w')?W:B;
-        gAnResultsMap[slot.pos]={s1:-9999, m1:null, s2:null, m2:null, s3:null, m3:null, s4:null, m4:null,
-          side:_sdN, bestUci:null, shallowS1:-9999, shallowM1:null};
+        var _nmScore=_noMoveScoreFor(gAnFens[slot.pos]);
+        gAnResultsMap[slot.pos]={s1:_nmScore, m1:null, s2:null, m2:null, s3:null, m3:null, s4:null, m4:null,
+          side:_sdN, bestUci:null, shallowS1:_nmScore, shallowM1:null};
         _anSlotPositionDone(slot);
         _anSlotAdvance(slot);
         return;
@@ -2984,7 +3300,7 @@ function _handleAnSlotMsg(slot, msg){
     }
 
     if(noMove){
-      gAnResultsMap[slot.pos]={s1:-9999, m1:null, s2:null, m2:null, s3:null, m3:null, s4:null, m4:null,
+      gAnResultsMap[slot.pos]={s1:_noMoveScoreFor(gAnFens[slot.pos]), m1:null, s2:null, m2:null, s3:null, m3:null, s4:null, m4:null,
         side:slot.cur.side, bestUci:null, shallowS1:null, shallowM1:null};
       _anSlotPositionDone(slot);
     } else if(slot.cur.d1===0 && !slot.cur._retried){
@@ -3036,8 +3352,17 @@ function _anSlotAdvance(slot){
      phân tích xong rồi (gAnResultsMap[_prevIdx] đã có), vẫn nên tận dụng
      để xét backfill bình thường, thay vì bỏ qua toàn bộ backfill ở ranh
      giới các đoạn. _needsMultiPVBackfill() tự an toàn khi dữ liệu láng
-     giềng CHƯA có (trả về false), nên không cần lo tranh chấp. */
-  if(_prevIdx >= 0 && _needsMultiPVBackfill(_prevIdx)){
+     giềng CHƯA có (trả về false), nên không cần lo tranh chấp.
+     [Lưới an toàn] Giới hạn TỔNG số lần backfill trong cả lượt phân tích
+     — phòng trường hợp 1 kiểu vị trí đặc biệt nào đó (chưa lường hết,
+     tương tự lỗi thế bí vừa sửa) khiến backfill bị kích hoạt dây chuyền
+     bất thường ở hàng loạt vị trí liền kề, gây treo/lag nặng trình duyệt.
+     Trần đặt khá rộng rãi (không giới hạn số backfill hợp lý bình thường
+     của 1 ván), chỉ chặn khi có gì đó THỰC SỰ bất thường xảy ra. */
+  if(_prevIdx >= 0
+     && gAnBackfillCount < AN_BACKFILL_MAX
+     && _needsMultiPVBackfill(_prevIdx)){
+    gAnBackfillCount++;
     slot.backfillIdx = _prevIdx;
     slot.phase = 'mpv_backfill';
     _anSlotAnalyzeNext(slot);
@@ -4065,6 +4390,27 @@ function updateEvalBarVert(whitePct){
   var blackH = Math.round((1 - whitePct / 100) * barH);
   var blackEl = ev.querySelector('.evbar-black');
   if(blackEl) blackEl.style.height = blackH + 'px';
+
+  /* % hiển thị sát ranh giới đen/trắng — chỉ hiện cho bên đang thắng
+     (>50%). Trắng thắng: chữ nằm NGAY DƯỚI ranh giới (rơi vào vùng nền
+     trắng). Đen thắng: chữ nằm NGAY TRÊN ranh giới (rơi vào vùng nền đen). */
+  var pctEl = document.getElementById('evbar-pct');
+  if(pctEl){
+    var _pctLineH = 12; /* ước lượng chiều cao 1 dòng chữ, dùng để đẩy lên khi đen thắng */
+    if(whitePct > 50){
+      pctEl.textContent = Math.round(whitePct) + '%';
+      pctEl.style.top = blackH + 'px';
+      pctEl.style.color = '#000';
+      pctEl.style.display = 'block';
+    } else if(whitePct < 50){
+      pctEl.textContent = Math.round(100 - whitePct) + '%';
+      pctEl.style.top = (blackH - _pctLineH) + 'px';
+      pctEl.style.color = '#fff';
+      pctEl.style.display = 'block';
+    } else {
+      pctEl.style.display = 'none';
+    }
+  }
 }
 
 function updateEvalBar(cp, mate, dep){
@@ -4535,6 +4881,8 @@ var gAnPool=[];          /* [{worker,id,ready,_active,phase,cur,shallowCur,shall
 var gAnResultsMap={};    /* idx (số) → kết quả 1 vị trí — nơi các worker ghi song song; gAnScores chỉ build từ đây SAU KHI xong toàn bộ */
 var gAnDoneCount=0;      /* số vị trí đã phân tích xong (không tính riêng backfill) */
 var gAnTotalCount=0;     /* tổng số vị trí cần phân tích của ván hiện tại */
+var gAnBackfillCount=0;  /* [Lưới an toàn] tổng số lần backfill đã kích hoạt trong lượt phân tích hiện tại */
+var AN_BACKFILL_MAX=200; /* trần rộng rãi — chỉ chặn khi có gì đó thực sự bất thường (xem _anSlotAdvance()) */
 
 function newGame(){
   lozzaReq++;
@@ -4545,6 +4893,13 @@ function newGame(){
      roll lại (thay vì giữ persona của ván trước). */
   gAiPersonaRolled=false; gAiPersona=null;
   gPersonaPlanIdx=0; gPersonaPlanExhausted=false;
+  /* [Cầu hòa/Xin thua] reset toàn bộ trạng thái cho ván mới */
+  gBadEvalStreak=0; gEqualEvalStreak=0;
+  gPlayerBadStreak=0;
+  gDrawOffer=false; gDrawOfferDeclined=false;
+  if(typeof hideDrawOfferBar==='function') hideDrawOfferBar();
+  /* [Noise — tự bù trừ ACPL] reset thống kê ACPL cho ván mới */
+  gAiGameCpLossSum=0; gAiGameMoveCount=0;
   /* Luôn đồng bộ lại ô chọn ELO đúng theo gRank hiện tại mỗi khi bắt đầu
      ván mới — phòng trường hợp giá trị hiển thị bị lệch khỏi gRank do đi
      qua các luồng khác (vd. bấm "Phân tích trận đấu" rồi quay lại Luyện
@@ -5430,6 +5785,7 @@ function exitBranch(){
 function updateBranchBtn(){
   var btn = document.getElementById('btn-pgn');
   if(typeof rankSyncSelectLock==='function') rankSyncSelectLock();
+  if(typeof _syncResignLink==='function') _syncResignLink();
   if(!btn) return;
   if(gBranchActive){
     btn.innerHTML = '\u21a9\ufe0f Quay l\u1ea1i';
@@ -5744,12 +6100,205 @@ function onHistoryPaste(e) {
      gốc (kể cả header [Event]/[White].../[Result]...) trong ô — chỉ phần
      lược trích nước đi phía trong analyzeTabRun()/parsePgnToUcis() mới bỏ
      header, còn ô hiển thị/lưu trữ vẫn nguyên bản 100%. */
-  if (/1\.\s*(?=[A-Za-zO])/.test(txt)) {
-    setTimeout(function(){ if(typeof analyzeTabRun==='function') analyzeTabRun(); }, 0);
-  }
+  setTimeout(function(){ if (typeof analyzerClassifyAndRoute === 'function') analyzerClassifyAndRoute(txt); }, 0);
 }
 
 function onHistoryClick(e) { if (gPgnImportMode) e.stopPropagation(); }
+
+/* Bắt Enter khi GÕ TAY (không paste) vào ô PGN, ở tab Phân tích — dùng để
+   nhập username hoặc ID trận đấu chess.com và tự động tra cứu. */
+function onHistoryKeydown(e) {
+  if (typeof gAppTab === 'undefined' || gAppTab !== 'analysis') return;
+  if (!gPgnImportMode) return;
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    var hel = document.getElementById('history');
+    var txt = hel ? (hel.textContent || hel.innerText || '').trim() : '';
+    if (txt === '\u2014') txt = '';
+    if (txt && typeof analyzerClassifyAndRoute === 'function') analyzerClassifyAndRoute(txt);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   ANALYZER INTEGRATION (từ chess_analyzer.html) — tra cứu chess.com:
+   - Username  → danh sách trận gần nhất (click để chọn) → phân tích
+   - ID trận   → tự tải PGN qua proxy (giải mã TCN) → phân tích
+   - PGN dán   → giữ nguyên luồng phân tích gốc của ChessCoach7
+   ════════════════════════════════════════════════════════════════════ */
+var ANALYZER_TCN_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?";
+
+function analyzerIndexToSquare(index) {
+  var file = String.fromCharCode(97 + (index % 8));
+  var rank = Math.floor(index / 8) + 1;
+  return file + rank;
+}
+
+function analyzerDecodeTCN(tcnString) {
+  var uciMoves = [];
+  if (!tcnString) return uciMoves;
+  for (var i = 0; i < tcnString.length; i += 2) {
+    var fromIndex = ANALYZER_TCN_ALPHABET.indexOf(tcnString[i]);
+    var toIndex = ANALYZER_TCN_ALPHABET.indexOf(tcnString[i + 1]);
+    if (fromIndex !== -1 && toIndex !== -1) {
+      uciMoves.push(analyzerIndexToSquare(fromIndex) + analyzerIndexToSquare(toIndex));
+    } else if (fromIndex !== -1) {
+      uciMoves.push(analyzerIndexToSquare(fromIndex) + analyzerIndexToSquare(toIndex < 0 ? 0 : toIndex) + 'q');
+    }
+  }
+  return uciMoves;
+}
+
+function analyzerSetStatus(msg, color) {
+  var s = document.getElementById('analyzer-status');
+  if (!s) return;
+  if (!msg) { s.style.display = 'none'; s.innerHTML = ''; return; }
+  s.style.display = 'block';
+  s.style.color = color || '#666';
+  s.innerHTML = msg;
+}
+
+function analyzerHideGameList() {
+  var g = document.getElementById('analyzer-gamelist');
+  if (g) { g.style.display = 'none'; g.innerHTML = ''; }
+}
+
+/* Nhận diện nội dung ô PGN: ID trận đấu (chỉ số, 9-15 ký tự) / PGN (có
+   [Event hoặc bắt đầu "1.xx") / còn lại coi là tên user chess.com. */
+function analyzerClassifyAndRoute(txt) {
+  txt = (txt || '').trim();
+  if (!txt) return;
+  analyzerHideGameList();
+  if (/^\d{9,15}$/.test(txt)) {
+    analyzerFetchGameById(txt);
+  } else if (/\[Event/i.test(txt) || /1\.\s*[A-Za-zO]/.test(txt)) {
+    analyzerSetStatus('');
+    var hel = document.getElementById('history');
+    if (hel) hel.textContent = txt;
+    setTimeout(function () { if (typeof analyzeTabRun === 'function') analyzeTabRun(); }, 0);
+  } else if (/^[A-Za-z0-9_\-]{2,30}$/.test(txt)) {
+    analyzerFetchGamesByUser(txt);
+  } else {
+    analyzerSetStatus('Kh\u00f4ng nh\u1eadn d\u1ea1ng \u0111\u01b0\u1ee3c n\u1ed9i dung (kh\u00f4ng ph\u1ea3i user / ID / PGN h\u1ee3p l\u1ec7).', '#c00');
+  }
+}
+
+function analyzerFetchGameById(gameId) {
+  analyzerSetStatus('\u0110ang truy xu\u1ea5t tr\u1eadn \u0111\u1ea5u ID ' + gameId + '...', '#2196F3');
+  var targetUrl = 'https://www.chess.com/callback/live/game/' + gameId;
+  var proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(targetUrl);
+  fetch(proxyUrl).then(function (r) {
+    if (!r.ok) throw new Error('Kh\u00f4ng t\u00ecm th\u1ea5y tr\u1eadn \u0111\u1ea5u ho\u1eb7c m\u00e1y ch\u1ee7 t\u1eeb ch\u1ed1i.');
+    return r.json();
+  }).then(function (data) {
+    var gameData = data.game;
+    if (!gameData) throw new Error('C\u1ea5u tr\u00fac d\u1eef li\u1ec7u tr\u1ea3 v\u1ec1 kh\u00f4ng h\u1ee3p l\u1ec7.');
+    var headers = gameData.pgnHeaders || {};
+    var whiteName = (gameData.players && gameData.players.bottom && gameData.players.bottom.username) || headers.White || 'Tr\u1eafng';
+    var blackName = (gameData.players && gameData.players.top && gameData.players.top.username) || headers.Black || '\u0110en';
+    var uciMoves = analyzerDecodeTCN(gameData.moveList);
+    if (!uciMoves.length) throw new Error('Kh\u00f4ng \u0111\u1ecdc \u0111\u01b0\u1ee3c n\u01b0\u1edbc \u0111i c\u1ee7a tr\u1eadn \u0111\u1ea5u.');
+    analyzerSetStatus('\u0110\u00e3 t\u1ea3i xong. \u0110ang ph\u00e2n t\u00edch...', '#4CAF50');
+    analyzerReplayUciAndAnalyze(uciMoves, { white: whiteName, black: blackName }, headers);
+  }).catch(function (err) {
+    analyzerSetStatus('L\u1ed7i: ' + err.message, '#c00');
+  });
+}
+
+function analyzerIsBotGame(game, targetUser) {
+  var lowerUser = (targetUser || '').toLowerCase();
+  if (game.url && game.url.indexOf('/computer/') !== -1) return true;
+  if (game.pgn && /vs\.?\s*computer/i.test(game.pgn)) return true;
+  var whiteUser = (game.white && game.white.username) ? game.white.username.toLowerCase() : '';
+  var blackUser = (game.black && game.black.username) ? game.black.username.toLowerCase() : '';
+  var opponent = (whiteUser === lowerUser) ? blackUser : whiteUser;
+  if (opponent.indexOf('coach-') === 0 || opponent.indexOf('bot') !== -1 || opponent.indexOf('computer') !== -1) return true;
+  return false;
+}
+
+function analyzerFetchGamesByUser(username) {
+  analyzerSetStatus('\u0110ang t\u00ecm tr\u1eadn \u0111\u1ea5u g\u1ea7n nh\u1ea5t c\u1ee7a "' + username + '"...', '#2196F3');
+  var archivesUrl = 'https://api.chess.com/pub/player/' + encodeURIComponent(username) + '/games/archives';
+  fetch(archivesUrl).then(function (res) {
+    if (!res.ok) throw new Error('Kh\u00f4ng t\u00ecm th\u1ea5y ng\u01b0\u1eddi ch\u01a1i ho\u1eb7c API t\u1eeb ch\u1ed1i.');
+    return res.json();
+  }).then(function (data) {
+    if (!data.archives || !data.archives.length) throw new Error('Ng\u01b0\u1eddi ch\u01a1i n\u00e0y ch\u01b0a c\u00f3 tr\u1eadn \u0111\u1ea5u n\u00e0o.');
+    return fetch(data.archives[data.archives.length - 1]);
+  }).then(function (res) { return res.json(); })
+    .then(function (data) {
+      var games = data.games || [];
+      games = games.filter(function (g) { return !analyzerIsBotGame(g, username); });
+      games.sort(function (a, b) { return (b.end_time || 0) - (a.end_time || 0); });
+      if (!games.length) throw new Error('Kh\u00f4ng t\u00ecm th\u1ea5y tr\u1eadn \u0111\u1ea5u th\u1ef1c n\u00e0o g\u1ea7n \u0111\u00e2y.');
+      analyzerSetStatus('T\u00ecm th\u1ea5y ' + games.length + ' tr\u1eadn g\u1ea7n nh\u1ea5t c\u1ee7a "' + username + '". Ch\u1ecdn 1 tr\u1eadn \u0111\u1ec3 ph\u00e2n t\u00edch:', '#4CAF50');
+      analyzerRenderGameList(games);
+    }).catch(function (err) {
+      analyzerSetStatus('L\u1ed7i: ' + err.message, '#c00');
+    });
+}
+
+function analyzerRenderGameList(games) {
+  var box = document.getElementById('analyzer-gamelist');
+  if (!box) return;
+  var html = '';
+  for (var i = 0; i < games.length; i++) {
+    var g = games[i];
+    var w = (g.white && g.white.username) ? g.white.username : '?';
+    var b = (g.black && g.black.username) ? g.black.username : '?';
+    var end = g.end_time ? new Date(g.end_time * 1000).toLocaleString('vi-VN') : '';
+    html += '<div class="analyzer-game-card" onclick="analyzerPickGame(' + i + ')" '
+      + 'style="border:1px solid #ccc;border-radius:4px;padding:6px 8px;margin-bottom:5px;cursor:pointer;background:#fff;font-size:.7rem;line-height:1.4">'
+      + '<b>' + w + '</b> vs <b>' + b + '</b><br>'
+      + '<span style="color:#888">' + (g.time_class || '') + ' \u00b7 ' + end + '</span>'
+      + '</div>';
+  }
+  box.innerHTML = html;
+  box.style.display = 'block';
+  window._analyzerGamesCache = games;
+}
+
+function analyzerPickGame(idx) {
+  var games = window._analyzerGamesCache || [];
+  var g = games[idx];
+  if (!g) return;
+  if (!g.pgn) { analyzerSetStatus('Tr\u1eadn n\u00e0y kh\u00f4ng c\u00f3 d\u1eef li\u1ec7u PGN.', '#c00'); return; }
+  analyzerHideGameList();
+  analyzerSetStatus('\u0110ang ph\u00e2n t\u00edch tr\u1eadn \u0111\u00e3 ch\u1ecdn...', '#4CAF50');
+  var hel = document.getElementById('history');
+  if (hel) hel.textContent = g.pgn;
+  setTimeout(function () {
+    if (typeof analyzeTabRun === 'function') analyzeTabRun();
+    analyzerSetStatus('');
+  }, 0);
+}
+
+/* Replay 1 chuỗi UCI (giải mã từ TCN của trận live chess.com) vào bàn cờ,
+   tái sử dụng engine thay thế/replay nước đi sẵn có của ChessCoach7 thay vì
+   dựng PGN SAN bằng tay (không cần thư viện chess.js). */
+function analyzerReplayUciAndAnalyze(ucis, names, headers) {
+  var pgnNames = { white: names.white, black: names.black };
+  newGame();
+  gPgnPlayerNames = pgnNames;
+  if (typeof applyAutoFlipForPgnNames === 'function') applyAutoFlipForPgnNames(pgnNames);
+  gIsReplayingPgn = true;
+  for (var j = 0; j < ucis.length; j++) {
+    var mv = uciToMove(ucis[j]);
+    if (!mv) { console.warn('Analyzer UCI replay stopped at', j, ucis[j]); break; }
+    execMove(mv);
+  }
+  gIsReplayingPgn = false;
+  /* Dựng lại chuỗi PGN kèm header để hiển thị trong ô (giống copyPGN()) */
+  var dd = new Date().toISOString().slice(0, 10).replace(/-/g, '.');
+  var pgnText = '[Event "' + ((headers && headers.Event) || 'Chess.com') + '"]\n'
+    + '[Date "' + ((headers && headers.Date) || dd) + '"]\n'
+    + '[White "' + (pgnNames.white || 'Tr\u1eafng') + '"]\n'
+    + '[Black "' + (pgnNames.black || '\u0110en') + '"]\n'
+    + '[Result "' + ((headers && headers.Result) || '*') + '"]\n\n'
+    + gHist.join(' ') + '\n';
+  var hel = document.getElementById('history');
+  if (hel) hel.textContent = pgnText;
+  setTimeout(function () { startAnalysis(); analyzerSetStatus(''); }, 150);
+}
 
 
 function exitPgnImportMode() {
