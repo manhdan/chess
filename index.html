@@ -10,7 +10,7 @@ html, body { height: 100%; width: 100%; overflow: hidden; }
 select, button, input { -webkit-box-sizing: border-box; box-sizing: border-box; }
 body {
   background: #f5f5f0; color: #000;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   display: -webkit-flex; display: flex;
   -webkit-flex-direction: column; flex-direction: column;
   -webkit-align-items: stretch; align-items: stretch;
@@ -23,7 +23,7 @@ body {
 .elo-sel {
   width: 100%; height: 32px;
   border: 1px solid #000; padding: 0 8px;
-  font-family: Georgia, serif; font-size: 0.82rem; font-weight: bold;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 0.82rem; font-weight: bold;
   background: #fff; cursor: pointer;
   -webkit-appearance: none; appearance: none;
 }
@@ -35,7 +35,7 @@ body {
   /* Giống lc-top-btn: full ô, nền trắng chữ đen */
   display: block; width: 100%; box-sizing: border-box;
   margin: 0; padding: 0; border: none; background: #fff; color: #000;
-  font-family: Georgia, serif; font-size: 0.72rem; font-weight: bold;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem; font-weight: bold;
   line-height: 30px; height: 30px;
   cursor: pointer; text-align: center; white-space: nowrap;
 }
@@ -111,7 +111,7 @@ body {
 /* ── ANALYSIS PANEL ── */
 /* .analysis-panel merged into coach-col layer */
 .an-header {
-  padding:6px 12px; font-weight:bold; font-size:0.9rem;
+  padding:6px 12px; font-weight:bold; font-size:0.90rem;
   text-transform:uppercase; letter-spacing:0.06em;
   border-bottom:1px solid #666; background:#666; color:#fff;
   display:-webkit-flex; display:flex;
@@ -119,7 +119,7 @@ body {
   -webkit-align-items:center; align-items:center;
 }
 .an-close {
-  cursor:pointer; font-size:1rem; opacity:0.7;
+  cursor:pointer; font-size:1.05rem; opacity:0.7;
 }
 .an-close:hover { opacity:1; }
 .an-body { padding:10px 12px; }
@@ -133,7 +133,7 @@ body {
 .an-stats th { background:#eee; font-weight:bold; }
 .an-stats td:first-child { text-align:left; }
 .an-moves-title {
-  font-weight:bold; font-size:0.8rem; text-transform:uppercase;
+  font-weight:bold; font-size:0.82rem; text-transform:uppercase;
   letter-spacing:0.04em; margin-bottom:6px; color:#333;
 }
 .an-moves {
@@ -168,11 +168,11 @@ body {
   -webkit-flex:1; flex:1;
 }
 .an-acc-label {
-  font-size:0.62rem; font-weight:bold; text-transform:uppercase;
+  font-size:0.68rem; font-weight:bold; text-transform:uppercase;
   letter-spacing:0.05em; color:#666; margin-bottom:2px;
 }
 .an-acc-pct {
-  font-size:1.15rem; font-weight:bold; font-family:Georgia,serif;
+  font-size:1.15rem; font-weight:bold; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   line-height:1;
 }
 .an-acc-pct.acc-great  { color:#1a7a1a; }
@@ -180,7 +180,7 @@ body {
 .an-acc-pct.acc-ok     { color:#d09000; }
 .an-acc-pct.acc-poor   { color:#b01010; }
 .an-acc-sub {
-  font-size:0.60rem; color:#888; margin-top:1px;
+  font-size:0.68rem; color:#888; margin-top:1px;
 }
 .an-acc-divider {
   width:1px; background:#ddd; height:30px;
@@ -198,12 +198,12 @@ body {
   display:-webkit-flex; display:flex;
   -webkit-align-items:center; align-items:center;
   padding:3px 0; border-bottom:1px solid #f0f0f0;
-  font-size:0.80rem; gap:6px;
+  font-size:0.82rem; gap:6px;
   cursor:default;
 }
 .an-move-row:last-child { border-bottom:none; }
 .an-move-num {
-  font-size:0.72rem; color:#999; min-width:22px;
+  font-size:0.75rem; color:#999; min-width:22px;
   text-align:right; -webkit-flex-shrink:0; flex-shrink:0;
 }
 .an-move-side {
@@ -219,13 +219,13 @@ body {
   -webkit-flex-shrink:0; flex-shrink:0;
 }
 .an-move-cp {
-  font-family:'Courier New',monospace; font-size:0.72rem;
+  font-family:'Courier New',monospace; font-size:0.75rem;
   color:#888; text-align:right; width:44px;
   -webkit-flex-shrink:0; flex-shrink:0;
 }
 .an-move-highlight-star {
   -webkit-flex:1; flex:1;
-  color:#f2a900; font-size:0.72rem; text-align:center;
+  color:#f2a900; font-size:0.75rem; text-align:center;
 }
 .an-hl-row { cursor:pointer; }
 .an-hl-row:hover { background:#f0f4ff; }
@@ -233,12 +233,12 @@ body {
 .ancp-black { color:#b01010; }
 .ancp-even  { color:#888; }
 .an-moves-new {
-  font-family:'Courier New',monospace; font-size:0.80rem;
+  font-family:'Courier New',monospace; font-size:0.82rem;
   overflow-y:auto; flex:1;
 }
 .an-move-row:hover { background:#f0f4ff; }
 .an-move-suggest {
-  font-size:0.80rem; color:#5c9cd6; background:transparent;
+  font-size:0.82rem; color:#5c9cd6; background:transparent;
   padding:0; margin-left:2px; min-width:70px;
   font-family:'Courier New',monospace; -webkit-flex-shrink:0; flex-shrink:0;
 }
@@ -255,7 +255,7 @@ body {
 }
 .promo-bg.show { display: -webkit-flex; display: flex; }
 .promo-box { background: #fff; border: 4px solid #000; padding: 18px; text-align: center; }
-.promo-box p { font-size: 1rem; font-weight: bold; margin-bottom: 12px; }
+.promo-box p { font-size: 1.05rem; font-weight: bold; margin-bottom: 12px; }
 .promo-row { display: -webkit-flex; display: flex; }
 .promo-btn {
   width: 74px; height: 74px; border: 3px solid #000;
@@ -311,7 +311,7 @@ body {
 .lc-btn {
   width: 100%; padding: 6px 4px;
   border: none; background: #fff;
-  font-family: Georgia, serif; font-size: 0.78rem; font-weight: bold;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 0.82rem; font-weight: bold;
   cursor: pointer; text-align: center;
   display: block;
 }
@@ -322,12 +322,12 @@ body {
 .elo-sel {
   width: 100%; padding: 5px 4px;
   border: none; border-bottom: 1px solid #ddd;
-  font-family: Georgia, serif; font-size: 0.74rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem;
   background: #fff; cursor: pointer;
   -webkit-appearance: none; appearance: none;
 }
 .lc-status {
-  font-size: 0.78rem; font-weight: bold; text-align: center;
+  font-size: 0.82rem; font-weight: bold; text-align: center;
   min-height: 22px; line-height: 1.4;
   word-break: break-word;
   -webkit-flex-shrink: 0; flex-shrink: 0;
@@ -339,7 +339,7 @@ body {
 .lc-status .lc-status-left,
 .lc-status .lc-status-right {
   -webkit-flex: 0 0 auto; flex: 0 0 auto;
-  font-size: 0.72rem; font-weight: bold; opacity: 0.9;
+  font-size: 0.75rem; font-weight: bold; opacity: 0.9;
   white-space: nowrap;
 }
 .lc-status .lc-status-left  { text-align: left; }
@@ -364,7 +364,7 @@ body {
   -webkit-flex-shrink: 0; flex-shrink: 0;
   background: #666; color: #fff;
   padding: 6px 8px;
-  font-size: 0.74rem; font-weight: bold;
+  font-size: 0.75rem; font-weight: bold;
   -webkit-align-items: center; align-items: center;
   gap: 6px;
 }
@@ -373,7 +373,7 @@ body {
 .draw-offer-btn {
   border: none; border-radius: 999px;
   background: #eee; color: #333;
-  font-family: Georgia, serif; font-size: 0.7rem; font-weight: bold;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 0.68rem; font-weight: bold;
   padding: 4px 10px; cursor: pointer; white-space: nowrap;
 }
 .draw-offer-btn:hover { background: #fff; }
@@ -383,7 +383,7 @@ body {
   display: block;
   width: 100%; border: none;
   border-top: 1px solid #ddd; border-bottom: 1px solid #ddd;
-  padding: 4px 6px; font-size: 0.72rem;
+  padding: 4px 6px; font-size: 0.75rem;
   font-family: 'Courier New', monospace;
   overflow-y: auto; color: #444; word-break: break-all;
   -webkit-flex: 0 0 auto; flex: 0 0 auto;
@@ -417,7 +417,7 @@ body {
 .nav-pill-seg {
   -webkit-flex: 1; flex: 1;
   border: none; background: transparent; color: #eee;
-  font-family: Georgia, serif; font-size: 0.72rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem;
   border-radius: 999px; cursor: pointer;
   padding: 0; margin: 0;
   pointer-events: none; /* click luôn rơi vào .nav-pill (cha) */
@@ -432,7 +432,7 @@ body {
   display: block; width: 100%; box-sizing: border-box;
   margin: 3px auto; padding: 0; border: none;
   background: #eee; color: #333;
-  font-family: Georgia, serif; font-size: 0.72rem; font-weight: bold;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem; font-weight: bold;
   line-height: 24px; height: 24px; max-width: 220px;
   border-radius: 999px;
   cursor: pointer; text-align: center; white-space: nowrap;
@@ -445,7 +445,7 @@ body {
 .lc-top-sel {
   display: block; box-sizing: border-box;
   margin: 3px auto; padding: 0 8px; border: none;
-  font-family: Georgia, serif; font-size: 0.72rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem;
   background: #eee; color: #333; cursor: pointer;
   -webkit-appearance: none; appearance: none;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -457,7 +457,7 @@ body {
   display: block; width: 100%; box-sizing: border-box;
   margin: 0; padding: 0;
   border: none; background: #fff;
-  font-family: Georgia, serif; font-size: 0.72rem; font-weight: bold;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem; font-weight: bold;
   line-height: 30px; height: 30px;
   cursor: pointer; text-align: center; white-space: nowrap;
   vertical-align: middle;
@@ -482,7 +482,7 @@ body {
   margin: 0 2px; padding: 0;
   border: none;
   background: #eee; color: #333;
-  font-family: Georgia, serif; font-size: 0.72rem; font-weight: bold;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem; font-weight: bold;
   height: 24px; line-height: 24px;
   cursor: pointer; text-align: center;
   border-radius: 999px; box-sizing: border-box;
@@ -505,7 +505,7 @@ body {
   border-bottom: none;
   text-align: center;
   padding: 4px 8px;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
 }
 
 /* ── CENTER col: board ── */
@@ -554,7 +554,7 @@ body {
   display: none;
   position: absolute; left: 0; width: 100%;
   text-align: center;
-  font-family: Georgia, serif; font-size: 10px; font-weight: bold;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 0.68rem; font-weight: bold;
   line-height: 1;
   pointer-events: none;
   z-index: 3;
@@ -650,8 +650,8 @@ body {
 .coach-header {
   background: #666; color: #fff;
   padding: 8px 12px;
-  font-family: Georgia, serif;
-  font-size: 0.88rem; font-weight: bold;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 0.90rem; font-weight: bold;
   letter-spacing: 0.05em;
   display: -webkit-flex; display: flex;
   -webkit-align-items: center; align-items: center;
@@ -682,7 +682,7 @@ body {
   margin: 0; padding: 0;
   border: none;
   background: transparent; color: #eee;
-  font-family: Georgia, serif; font-size: 0.72rem; font-weight: bold;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem; font-weight: bold;
   height: 100%; line-height: 18px;
   cursor: pointer; text-align: center;
   border-radius: 999px; box-sizing: border-box;
@@ -699,8 +699,8 @@ body {
 }
 .coach-section:last-child { border-bottom: none; }
 .c-sec-title {
-  font-family: Georgia, serif;
-  font-size: 0.72rem; font-weight: bold;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 0.75rem; font-weight: bold;
   text-transform: uppercase; letter-spacing: 0.07em;
   margin-bottom: 6px;
   display: -webkit-flex; display: flex;
@@ -720,18 +720,18 @@ body {
 .c-alert {
   background: #fff3f3; border-left: 4px solid #d01414;
   padding: 5px 8px; margin-bottom: 4px;
-  font-size: 0.79rem; line-height: 1.4; color: #900;
+  font-size: 0.82rem; line-height: 1.4; color: #900;
 }
 .c-warn {
   background: #fff7ee; border-left: 4px solid #d07000;
   padding: 5px 8px; margin-bottom: 4px;
-  font-size: 0.79rem; line-height: 1.4; color: #704000;
+  font-size: 0.82rem; line-height: 1.4; color: #704000;
 }
 .c-info {
-  font-size: 0.79rem; line-height: 1.5; color: #333; margin-bottom: 3px;
+  font-size: 0.82rem; line-height: 1.5; color: #333; margin-bottom: 3px;
 }
 .c-none {
-  font-size: 0.79rem; color: #aaa; font-style: italic;
+  font-size: 0.82rem; color: #aaa; font-style: italic;
 }
 
 /* candidate moves */
@@ -745,16 +745,16 @@ body {
 .cand-item:last-child { border-bottom: none; }
 .cand-item:hover { background: #f0f4ff; }
 .cand-badge {
-  font-family: Georgia, serif; font-size: 0.65rem; font-weight: bold;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 0.68rem; font-weight: bold;
   padding: 2px 4px; border: 1.5px solid;
   white-space: nowrap; min-width: 52px; text-align: center;
 }
 .cb-best  { border-color: #1a7a1a; color: #1a7a1a; }
 .cb-prac  { border-color: #1a5fa8; color: #1a5fa8; }
 .cb-safe  { border-color: #888;    color: #555;    }
-.cand-move  { font-family: 'Courier New', monospace; font-weight: bold; font-size: 0.85rem; }
-.cand-score { margin-left: auto; font-size: 0.74rem; color: #666; font-family: 'Courier New', monospace; }
-.cand-pv    { font-size: 0.70rem; color: #999; word-break: break-all; }
+.cand-move  { font-family: 'Courier New', monospace; font-weight: bold; font-size: 0.90rem; }
+.cand-score { margin-left: auto; font-size: 0.75rem; color: #666; font-family: 'Courier New', monospace; }
+.cand-pv    { font-size: 0.68rem; color: #999; word-break: break-all; }
 
 /* blunder eval badge */
 .c-eval-row {
@@ -763,7 +763,7 @@ body {
   gap: 8px; margin-top: 2px;
 }
 .eval-badge {
-  font-family: Georgia, serif; font-size: 0.82rem; font-weight: bold;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 0.82rem; font-weight: bold;
   padding: 3px 9px; border: 2px solid #000; white-space: nowrap;
 }
 .ev-best     { background: #1a7a1a; color: #fff; border-color: #1a7a1a; }
@@ -772,7 +772,7 @@ body {
 .ev-inac     { background: #d09000; color: #fff; border-color: #d09000; }
 .ev-mistake  { background: #c05500; color: #fff; border-color: #c05500; }
 .ev-blunder  { background: #b01010; color: #fff; border-color: #b01010; }
-.eval-text   { font-size: 0.78rem; line-height: 1.4; color: #333; }
+.eval-text   { font-size: 0.82rem; line-height: 1.4; color: #333; }
 
 /* coach body fills remaining space in panel */
 #coach-body {
@@ -783,7 +783,7 @@ body {
 /* coach thinking */
 .c-thinking {
   padding: 14px 12px; text-align: center;
-  color: #aaa; font-style: italic; font-size: 0.78rem;
+  color: #aaa; font-style: italic; font-size: 0.82rem;
 }
 
 /* centipawn loss colors inline */
@@ -791,6 +791,73 @@ body {
 .cp-loss-inac    { color: #c07000; font-weight: bold; }
 .cp-loss-mistake { color: #b05000; font-weight: bold; }
 .cp-loss-blunder { color: #a01010; font-weight: bold; }
+/* ═══════════════════════════════════════════════════════════════════
+   MOBILE PORTRAIT MODE (điện thoại, màn hình dọc) — CHỈ áp dụng khi JS
+   (applyMobileLayout(), phía dưới file) phát hiện đúng điều kiện và gắn
+   class "mp-mode" lên thẻ <html>. Trên PC/tablet/màn ngang, class này
+   KHÔNG BAO GIỜ được gắn → toàn bộ khối CSS dưới đây vô hiệu, giao diện
+   3 cột gốc giữ nguyên 100% như cũ.
+   Không dùng @media query ở đây — việc BẬT/TẮT do JS quyết định (đã có
+   logic debounce + ngưỡng orientation/kích thước riêng), CSS chỉ lo phần
+   hiển thị khi class đã được gắn. ═══════════════════════════════════ */
+html.mp-mode, html.mp-mode body {
+  height: auto; min-height: 100%; overflow-y: auto; overflow-x: hidden;
+}
+html.mp-mode .app-shell { height: auto; min-height: 100%; overflow: visible; }
+html.mp-mode .app-wrap-outer { overflow: visible; min-height: 0; }
+/* Ẩn hẳn layout 3 cột gốc — nội dung THẬT của nó đã được JS di chuyển
+   (không phải copy) sang #mobile-stack, nên ẩn ở đây không mất dữ liệu. */
+html.mp-mode .app-wrap { display: none !important; }
+html.mp-mode #mobile-stack {
+  display: -webkit-flex !important; display: flex !important;
+  -webkit-flex-direction: column; flex-direction: column;
+  width: 100%; padding-bottom: 10px;
+}
+/* PGN: thu gọn còn ~1 dòng theo yêu cầu (JS gán inline nên các rule dưới
+   đây chỉ là lưới an toàn thứ 2, phòng khi thiếu style nào đó) */
+html.mp-mode #mobile-stack #history {
+  max-height: 2.6em; min-height: 1.6em;
+}
+/* "Chi tiết từng nước" và Coach panel (Luyện tập) không tự cuộn riêng
+   nữa — để cả trang cuộn 1 lần cho tự nhiên trên điện thoại (JS đã gỡ
+   flex:1/overflow inline lúc di chuyển, đây là lưới an toàn) */
+html.mp-mode #mobile-stack #an-moves,
+html.mp-mode #mobile-stack #coach-layer-normal {
+  -webkit-flex: none !important; flex: none !important;
+  overflow: visible !important; height: auto !important; min-height: 0 !important;
+}
+/* Nút bấm to hơn cho ngón tay chạm (hàng Quay lại + mũi tên tiến/lùi) */
+html.mp-mode #mobile-stack .lc-bot-row { padding: 6px 6px; }
+html.mp-mode #mobile-stack .lc-bot-btn { height: 34px; line-height: 34px; font-size: 0.82rem; }
+html.mp-mode #mobile-stack .lc-top-table { font-size: 1.05rem; }
+/* Bảng phân loại nước đi — bản GỌN (badge tròn) thay bảng desktop */
+/* Bảng phân loại nước đi — bản GỌN (badge tròn) thay bảng desktop.
+   LƯU Ý: #an-stats-mobile có style="display:none" NGAY TRÊN THẺ (inline) —
+   rule thường trong <style> KHÔNG thể thắng được inline style, nên bắt
+   buộc phải có !important ở đây thì badge mới hiện ra được. */
+html.mp-mode #mobile-stack #an-stats { display: none !important; }
+html.mp-mode #mobile-stack #an-stats-mobile { display: block !important; }
+/* Bỏ dòng chữ "Eval (góc Trắng, ±600cp)" cho gọn trên mobile */
+html.mp-mode #mobile-stack #eval-chart-label { display: none !important; }
+/* Label % trên thanh eval dọc cạnh bàn cờ — bản thường 0.68rem bị tràn khi
+   bàn cờ (và evalbar-vert đi kèm) thu nhỏ theo bề ngang điện thoại, nên
+   thu còn 1 nửa (0.34rem) riêng cho mobile. */
+html.mp-mode #mobile-stack .evbar-pct { font-size: 0.34rem !important; }
+.an-badge-row {
+  display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap;
+  gap: 5px; margin-bottom: 6px;
+}
+.an-badge-pill {
+  display: inline-block;
+  border: 1.5px solid currentColor; border-radius: 999px;
+  padding: 3px 9px; font-size: 0.75rem; font-weight: bold;
+  background: #fff; white-space: nowrap; cursor: pointer;
+}
+.an-badge-pill:active { opacity: 0.65; }
+.an-badge-side-label {
+  font-size: 0.68rem; color: #888; font-weight: bold;
+  width: 100%; margin: 2px 0 1px;
+}
 </style>
 </head>
 <body>
@@ -857,13 +924,13 @@ body {
     <div class="history" id="history" onclick="onHistoryClick(event)" onpaste="onHistoryPaste(event)" onkeydown="onHistoryKeydown(event)" spellcheck="false">&#8212;</div>
 
     <!-- Trạng thái tra cứu Analyzer (user/ID trận đấu chess.com) -->
-    <div id="analyzer-status" style="display:none;font-size:.68rem;color:#666;padding:4px 8px;border-top:1px solid #ddd"></div>
+    <div id="analyzer-status" style="display:none;font-size:0.68rem;color:#666;padding:4px 8px;border-top:1px solid #ddd"></div>
     <!-- Danh sách trận đấu gần nhất khi gõ tên user chess.com -->
     <div id="analyzer-gamelist" style="display:none;max-height:26vh;overflow-y:auto;padding:4px 6px;border-top:1px solid #ddd"></div>
 
     <!-- Eval chart: top-align ngay dưới history, cao 135px (75% của 180px trước) -->
     <div id="lc-eval-chart" style="display:none;padding:6px 6px 4px;-webkit-flex-shrink:0;flex-shrink:0;display:-webkit-flex;display:flex;-webkit-flex-direction:column;flex-direction:column;-webkit-align-items:stretch;align-items:stretch">
-      <div style="font-size:.60rem;color:#888;margin-bottom:3px;-webkit-flex-shrink:0;flex-shrink:0">Eval (góc Trắng, ±600cp)</div>
+      <div id="eval-chart-label" style="font-size:0.68rem;color:#888;margin-bottom:3px;-webkit-flex-shrink:0;flex-shrink:0">Eval (góc Trắng, ±600cp)</div>
       <svg id="eval-chart-svg" viewBox="0 0 600 120" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"
         style="width:100%;height:135px;display:block;border:1px solid #ccc;border-radius:2px;background:#fafafa;cursor:crosshair;shape-rendering:geometricPrecision">
       </svg>
@@ -974,15 +1041,22 @@ body {
 
   <!-- LAYER B: Post-game review (replaces coach panel after analysis) -->
   <div id="coach-layer-review" style="display:none;-webkit-flex-direction:column;flex-direction:column;-webkit-flex:1;flex:1;overflow:hidden;min-height:0;">
-    <div class="an-header" style="background:#666;color:#fff;padding:8px 12px;font-family:Georgia,serif;font-size:0.85rem;font-weight:bold;text-transform:none;display:-webkit-flex;display:flex;-webkit-justify-content:space-between;justify-content:space-between;-webkit-align-items:center;align-items:center;-webkit-flex-shrink:0;flex-shrink:0;">
+    <div class="an-header" id="an-review-header" style="background:#666;color:#fff;padding:8px 12px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;font-size:0.90rem;font-weight:bold;text-transform:none;display:-webkit-flex;display:flex;-webkit-justify-content:space-between;justify-content:space-between;-webkit-align-items:center;align-items:center;-webkit-flex-shrink:0;flex-shrink:0;">
       <span>&#128202; K&#7871;t qu&#7843; ph&#226;n t&#237;ch v&#225;n c&#7901;</span>
-      <span id="review-back-link" style="cursor:pointer;font-size:1rem;opacity:0.7" onclick="closeReviewPanel()">&larr; Quay l&#7841;i</span>
+      <span id="review-back-link" style="cursor:pointer;font-size:1.05rem;opacity:0.7" onclick="closeReviewPanel()">&larr; Quay l&#7841;i</span>
     </div>
     <div class="an-body" style="-webkit-flex:1;flex:1;display:-webkit-flex;display:flex;-webkit-flex-direction:column;flex-direction:column;overflow:hidden;min-height:0;padding:10px 10px 0;">
       <div style="-webkit-flex-shrink:0;flex-shrink:0">
         <div class="an-accuracy-row" id="an-accuracy-row"></div>
         <div class="an-bar-row" id="an-bar-row"></div>
         <table class="an-stats" id="an-stats"></table>
+        <!-- Bản GỌN cho mobile: mỗi loại nước = 1 badge tròn, 1 hàng Trắng +
+             1 hàng Đen, tô màu theo đúng màu đang dùng ở bảng an-stats phía
+             trên. Ẩn mặc định (display:none) — CHỈ hiện khi bị JS di chuyển
+             sang #mobile-stack lúc ở chế độ điện thoại dọc (xem
+             applyMobileLayout()). Nội dung được đổ cùng lúc với bảng
+             #an-stats trong buildMoveReport(), luôn đồng bộ dữ liệu. -->
+        <div id="an-stats-mobile" style="display:none;margin-bottom:10px"></div>
         <div class="an-moves-title" id="an-moves-title" style="display:none">Chi ti&#7871;t t&#7915;ng n&#432;&#7899;c</div>
       </div>
       <div class="an-moves-new" id="an-moves" style="-webkit-flex:1;flex:1;overflow-y:auto;min-height:0;padding-bottom:8px"></div>
@@ -992,6 +1066,15 @@ body {
 </div><!-- end .coach-col -->
 
 </div><!-- end .app-wrap -->
+
+<!-- ═══ MOBILE PORTRAIT STACK (rỗng lúc load) ═══
+     Chỉ dùng khi applyMobileLayout() phát hiện điện thoại màn dọc: các phần
+     tử thật (không phải bản sao) được DI CHUYỂN (appendChild) từ 3 cột
+     .app-wrap vào đây theo đúng thứ tự yêu cầu, và .app-wrap bị ẩn đi. Khi
+     xoay lại ngang / mở trên PC, mọi phần tử được trả về ĐÚNG vị trí cũ và
+     mobile-stack bị ẩn lại. Xem applyMobileLayout()/exitMobileLayout(). -->
+<div id="mobile-stack" style="display:none;-webkit-flex-direction:column;flex-direction:column;width:100%"></div>
+
 </div><!-- end .app-wrap-outer -->
 </div><!-- end .app-shell -->
 
@@ -3837,7 +3920,7 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
   var html = '';   /* summary: Tóm tắt + Giai đoạn + Insights */
 
   /* ── Tóm tắt ── */
-  html += '<div style="font-size:.74rem;line-height:1.5;margin:8px 0;padding:8px 10px;background:#f7f7f7;border-radius:4px">';
+  html += '<div style="font-size:0.75rem;line-height:1.5;margin:8px 0;padding:8px 10px;background:#f7f7f7;border-radius:4px">';
   html += '<b>Tóm tắt:</b> ' + totalMoves + ' nước, ACPL trung bình <b>' + avgCpLoss.toFixed(1) + ' cp</b>.<br>';
 
   var totalBad = tacticalMisses + positionalErrors;
@@ -3868,7 +3951,7 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
     if (tot >= 3 && rate > worstRate) { worstRate = rate; worst = {ph:ph, tot:tot, bad:bad, rate:rate}; }
   });
 
-  html += '<table class="an-phase-table" style="width:100%;border-collapse:collapse;font-size:.66rem;margin-bottom:8px">';
+  html += '<table class="an-phase-table" style="width:100%;border-collapse:collapse;font-size:0.68rem;margin-bottom:8px">';
   html += '<thead><tr style="background:#000;color:#fff">'
         + '<th style="padding:3px 4px;text-align:left">Giai đoạn</th>'
         + '<th style="padding:3px 4px">OK</th><th style="padding:3px 4px">Thiếu c.xác</th>'
@@ -3890,7 +3973,7 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
   html += '</tbody></table>';
 
   if (worst && worst.rate > 0) {
-    html += '<div style="font-size:.68rem;color:#555;margin:-4px 0 10px">'
+    html += '<div style="font-size:0.68rem;color:#555;margin:-4px 0 10px">'
           + 'Giai đoạn nhiều sai lầm nhất: <b>' + phaseLabelMap[worst.ph] + '</b> ('
           + worst.bad + '/' + worst.tot + ' nước, ' + Math.round(worst.rate*100) + '%).</div>';
   }
@@ -3944,11 +4027,11 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
 
   if (insights.length) {
     html += '<div style="margin:8px 0;padding:6px 8px;background:#fafafa;border:1px solid #e0e0e0;border-radius:4px">';
-    html += '<div style="font-size:.70rem;font-weight:bold;margin-bottom:6px">🧭 Gợi ý từ pattern lỗi:</div>';
+    html += '<div style="font-size:0.68rem;font-weight:bold;margin-bottom:6px">🧭 Gợi ý từ pattern lỗi:</div>';
     insights.forEach(function(ins) {
       var bg = ins.sev==='high' ? '#fff3e0' : ins.sev==='medium' ? '#f3f4f6' : '#e8f5e9';
       var bd = ins.sev==='high' ? '#e65100' : ins.sev==='medium' ? '#999' : '#43a047';
-      html += '<div style="font-size:.67rem;margin-bottom:5px;padding:5px 7px;background:'+bg
+      html += '<div style="font-size:0.68rem;margin-bottom:5px;padding:5px 7px;background:'+bg
             + ';border-left:3px solid '+bd+';border-radius:2px;line-height:1.4">'
             + ins.icon + ' ' + ins.text + '</div>';
     });
@@ -4029,8 +4112,8 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
 
   var highlightHtml = '';
   if (mergedList.length) {
-    highlightHtml += '<div style="font-size:.70rem;font-weight:bold;margin:6px 0 5px">\u2b50 Highlight v\u00e1n \u0111\u1ea5u:</div>';
-    highlightHtml += '<table style="width:100%;border-collapse:collapse;font-size:.64rem">';
+    highlightHtml += '<div style="font-size:0.68rem;font-weight:bold;margin:6px 0 5px">\u2b50 Highlight v\u00e1n \u0111\u1ea5u:</div>';
+    highlightHtml += '<table style="width:100%;border-collapse:collapse;font-size:.68rem">';
     highlightHtml += '<thead><tr style="background:#000;color:#fff">'
           + '<th style="padding:2px 4px">N\u01b0\u1edbc</th><th style="padding:2px 4px">B\u00ean</th>'
           + '<th style="padding:2px 4px">\u0110\u00e3 \u0111i</th><th style="padding:2px 4px">cpLoss</th>'
@@ -4238,6 +4321,31 @@ function _finishAnalysisRender(){
         + '</tr>';
   });
   tbl.innerHTML=html;
+
+  /* ── Bản GỌN cho mobile: mỗi loại nước = 1 badge tròn, chia riêng
+     1 hàng Trắng + 1 hàng Đen, tô màu theo đúng màu của AN_CLS (cùng bộ
+     màu đang dùng ở bảng #an-stats phía trên) — bấm vào vẫn nhảy tới thế
+     cờ tương ứng qua scrollToClsGroup() y hệt bảng desktop. */
+  var mobStats = document.getElementById('an-stats-mobile');
+  if (mobStats) {
+    function _anBadgePill(rowKey, label, count, side) {
+      var colorCls = AN_CLS[rowKey] || 'an-ok';
+      return '<span class="an-badge-pill ' + colorCls + '" '
+        + 'onclick="scrollToClsGroup(\'' + rowKey + '\',\'' + side + '\')" '
+        + 'title="Cu\u1ed9n \u0111\u1ebfn n\u01b0\u1edbc lo\u1ea1i n\u00e0y c\u1ee7a ' + (side === 'w' ? 'Tr\u1eafng' : '\u0110en') + '">'
+        + label + ' ' + count + '</span>';
+    }
+    var whiteBadges = '', blackBadges = '';
+    AN_ROWS.forEach(function (r) {
+      var cw = counts.w[r[0]], cb = counts.b[r[0]];
+      if (cw > 0) whiteBadges += _anBadgePill(r[0], r[1], cw, 'w');
+      if (cb > 0) blackBadges += _anBadgePill(r[0], r[1], cb, 'b');
+    });
+    var mobHtml = '';
+    if (whiteBadges) mobHtml += '<div class="an-badge-side-label">&#9812; Tr\u1eafng</div><div class="an-badge-row">' + whiteBadges + '</div>';
+    if (blackBadges) mobHtml += '<div class="an-badge-side-label">&#9818; \u0110en</div><div class="an-badge-row">' + blackBadges + '</div>';
+    mobStats.innerHTML = mobHtml;
+  }
 
   /* ── Render báo cáo: Highlight ván đấu NGAY TRÊN Top mistakes, rồi tới Top mistakes NGAY DƯỚI chart, Tóm tắt/Giai đoạn/Insights XUỐNG DƯỚI ── */
   var reportHighlightDiv=document.getElementById('lc-report-highlights');
@@ -5963,7 +6071,7 @@ function ensureReviewLayerVisible() {
   var isBusy = (typeof gAnBusy !== 'undefined' && gAnBusy);
   var hasResult = (typeof gAnScores !== 'undefined' && gAnScores.length > 0);
   if (isBusy) {
-    if (moves) moves.innerHTML = '<div style="padding:0 10px;text-align:left;color:#999;font-size:.8rem">\u0110ang ph\u00e2n t\u00edch PGN tr\u1eadn \u0111\u1ea5u...</div>';
+    if (moves) moves.innerHTML = '<div style="padding:0 10px;text-align:left;color:#999;font-size:0.82rem">\u0110ang ph\u00e2n t\u00edch PGN tr\u1eadn \u0111\u1ea5u...</div>';
     if (title) title.style.display = 'none';
     /* Chưa có gì để hiện — ẩn các khối trống (accuracy/bar/table) để chữ
        thông báo nằm sát lên trên, gần tiêu đề, thay vì để trống 1 khoảng. */
@@ -5972,7 +6080,7 @@ function ensureReviewLayerVisible() {
     if (statsTbl) statsTbl.style.display = 'none';
   } else if (!hasResult) {
     if (moves) {
-      moves.innerHTML = '<div style="padding:0 10px;text-align:left;color:#999;font-size:.8rem;line-height:1.6">'
+      moves.innerHTML = '<div style="padding:0 10px;text-align:left;color:#999;font-size:0.82rem;line-height:1.6">'
         + 'H&#432;&#7899;ng d&#7851;n:<br>'
         + '+ D&#225;n T&#234;n t&#224;i kho&#7843;n ho&#7863;c ID tr&#7853;n &#273;&#7845;u ho&#7863;c PGN v&#224;o &#244; b&#234;n tr&#225;i r&#7891;i b&#7845;m n&#250;t Ph&#226;n t&#237;ch &#273;&#7875; ph&#226;n t&#237;ch tr&#7853;n &#273;&#7845;u<br>'
         + '+ B&#7845;m n&#250;t Luy&#7879;n t&#7853;p n&#7871;u mu&#7889;n ch&#417;i c&#7901; v&#7899;i Bot'
@@ -6343,7 +6451,7 @@ function analyzerRenderGameList(games) {
     if (blackWon) blackHtml = '<b>' + blackHtml + '</b>';
     var dt = analyzerFormatDateTime(g.end_time);
     html += '<div class="analyzer-game-card" onclick="analyzerPickGame(' + i + ')" '
-      + 'style="border:1px solid #ccc;border-radius:4px;padding:6px 8px;margin-bottom:5px;cursor:pointer;background:#fff;font-size:.7rem;line-height:1.4">'
+      + 'style="border:1px solid #ccc;border-radius:4px;padding:6px 8px;margin-bottom:5px;cursor:pointer;background:#fff;font-size:0.68rem;line-height:1.4">'
       + whiteHtml + ' vs ' + blackHtml + '<br>'
       + '<span style="color:#888">' + dt + (g.time_class ? (' | ' + g.time_class) : '') + '</span>'
       + '</div>';
@@ -6671,12 +6779,111 @@ if(window.addEventListener){
   if(document.addEventListener) document.addEventListener('keydown', _onKeyDown, false);
 })();
 
-rankLoad();
+/* ═══════════════════════════════════════════════════════════════════
+   MOBILE PORTRAIT LAYOUT — chỉ áp dụng cho ĐIỆN THOẠI, MÀN HÌNH DỌC.
+   Nguyên tắc: KHÔNG viết lại bất kỳ logic nào của app — chỉ DI CHUYỂN
+   (appendChild) các node DOM CÓ SẴN sang #mobile-stack theo đúng thứ tự
+   mong muốn, và ẩn khối 3 cột gốc (.app-wrap) đi. Mọi id/onclick/event
+   đã gắn sẵn trên các node đó vẫn nguyên vẹn dù đổi cha — tất cả hàm
+   hiện có (fixBoardSize, buildMoveReport, switchAppTab, reviewJumpTo...)
+   không cần sửa gì và tiếp tục hoạt động bình thường trên chính các node
+   đó, bất kể chúng đang nằm ở đâu trong cây DOM.
+   Khi rời điện thoại/xoay ngang → trả TOÀN BỘ node về ĐÚNG vị trí cũ
+   (lưu sẵn cha + node liền sau lúc khởi tạo) rồi hiện lại .app-wrap.
+   ═══════════════════════════════════════════════════════════════════ */
+var MOBILE_LAYOUT_ITEMS = null; /* [{el, anchor}] — build 1 lần */
+var gMobileLayoutActive = false;
+
+function _buildMobileLayoutItems() {
+  var selectors = [
+    '.lc-top-table',        /* 1. Luyện tập/Phân tích + Đổi bên + nút Phân tích */
+    '#history',             /* 2. Ô PGN (sẽ thu gọn còn ~1 dòng qua CSS) */
+    '#analyzer-status',
+    '#analyzer-gamelist',
+    '#lc-eval-chart',       /* 3. Đồ thị eval */
+    '.center-status-wrap',
+    '#draw-offer-bar',
+    '.board-and-eval',      /* 4. Bàn cờ */
+    '.lc-bot-row',          /* 5. Quay lại/Ván mới + mũi tên lùi/tiến */
+    '#an-review-header',
+    '#an-accuracy-row',
+    '#an-bar-row',
+    '#an-stats-mobile',     /* 6. Bảng phân loại nước đi — bản badge gọn */
+    '#coach-layer-normal',  /* (tab Luyện tập, chưa có kết quả phân tích) */
+    '#an-moves-title',
+    '#an-moves'             /* 7. Chi tiết từng nước */
+  ];
+  var items = [];
+  for (var i = 0; i < selectors.length; i++) {
+    var el = document.querySelector(selectors[i]);
+    if (!el || !el.parentNode) continue;
+    /* "Neo" bằng 1 comment-node đặt ĐÚNG vị trí gốc, KHÔNG BAO GIỜ tự di
+       chuyển — nhờ vậy insertBefore lúc khôi phục luôn hợp lệ (referenceNode
+       chắc chắn còn là con của đúng cha), bất kể thứ tự khôi phục các phần
+       tử khác trong danh sách, kể cả khi 2 phần tử vốn nằm cạnh nhau trong
+       DOM gốc (nếu chỉ lưu "nextSibling" thay vì neo riêng, trường hợp này
+       sẽ ném lỗi "node not found" vì sibling đó cũng đang tạm ở nơi khác). */
+    var anchor = document.createComment('mp-anchor-' + i);
+    el.parentNode.insertBefore(anchor, el);
+    items.push({ el: el, anchor: anchor });
+  }
+  return items;
+}
+
+function applyMobileLayout() {
+  if (gMobileLayoutActive) return;
+  if (!MOBILE_LAYOUT_ITEMS) MOBILE_LAYOUT_ITEMS = _buildMobileLayoutItems();
+  var stack = document.getElementById('mobile-stack');
+  if (!stack) return;
+  for (var i = 0; i < MOBILE_LAYOUT_ITEMS.length; i++) {
+    stack.appendChild(MOBILE_LAYOUT_ITEMS[i].el);
+  }
+  document.documentElement.classList.add('mp-mode');
+  gMobileLayoutActive = true;
+  if (typeof fixBoardSize === 'function') setTimeout(fixBoardSize, 0);
+}
+
+function exitMobileLayout() {
+  if (!gMobileLayoutActive) return;
+  if (MOBILE_LAYOUT_ITEMS) {
+    for (var i = 0; i < MOBILE_LAYOUT_ITEMS.length; i++) {
+      var it = MOBILE_LAYOUT_ITEMS[i];
+      if (it.anchor && it.anchor.parentNode) it.anchor.parentNode.insertBefore(it.el, it.anchor);
+    }
+  }
+  document.documentElement.classList.remove('mp-mode');
+  gMobileLayoutActive = false;
+  if (typeof fixBoardSize === 'function') setTimeout(fixBoardSize, 0);
+}
+
+/* Ngưỡng nhận diện "điện thoại, màn dọc": vừa portrait vừa màn hẹp — để
+   không ảnh hưởng iPad/tablet đang xoay dọc hay PC/Kindle (luôn ngang). */
+function _isMobilePortrait() {
+  return window.innerHeight > window.innerWidth && window.innerWidth <= 768;
+}
+
+function evaluateMobileLayout() {
+  if (_isMobilePortrait()) applyMobileLayout();
+  else exitMobileLayout();
+}
+
+(function () {
+  var _mlTimer = null;
+  function _debouncedEval() {
+    if (_mlTimer) clearTimeout(_mlTimer);
+    _mlTimer = setTimeout(evaluateMobileLayout, 120);
+  }
+  window.addEventListener('resize', _debouncedEval, false);
+  window.addEventListener('orientationchange', _debouncedEval, false);
+})();
+
+
 rankApplyToSelect();
 gPC = (Math.random() < 0.5) ? W : B;
 gFlip = (gPC === B);
 newGame();
 switchAppTab('analysis');
+evaluateMobileLayout();
 </script>
 <script>
 
@@ -8340,7 +8547,7 @@ function coachRender(scan, cands, evalFb, opening) {
     html += '<div class="c-sec-title"><span class="cdot cdot-purple"></span>NGUYÊN TẮC KHAI CUỘC</div>';
     for (var owi = 0; owi < scan._openingWarns.length; owi++) {
       var ow = scan._openingWarns[owi];
-      html += '<div class="' + (ow.level === 'alert' ? 'c-alert' : 'c-warn') + '" style="font-size:0.77rem">'
+      html += '<div class="' + (ow.level === 'alert' ? 'c-alert' : 'c-warn') + '" style="font-size:0.75rem">'
             + ow.msg + '</div>';
     }
     html += '</div>';
