@@ -35,7 +35,7 @@ body {
   /* Giống lc-top-btn: full ô, nền trắng chữ đen */
   display: block; width: 100%; box-sizing: border-box;
   margin: 0; padding: 0; border: none; background: #fff; color: #000;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem; font-weight: bold;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 0.90rem; font-weight: bold;
   line-height: 30px; height: 30px;
   cursor: pointer; text-align: center; white-space: nowrap;
 }
@@ -133,7 +133,7 @@ body {
 .an-stats th { background:#eee; font-weight:bold; }
 .an-stats td:first-child { text-align:left; }
 .an-moves-title {
-  font-weight:bold; font-size:0.82rem; text-transform:uppercase;
+  font-weight:bold; font-size:0.82rem;
   letter-spacing:0.04em; margin-bottom:6px; color:#333;
 }
 .an-moves {
@@ -172,7 +172,7 @@ body {
   letter-spacing:0.05em; color:#666; margin-bottom:2px;
 }
 .an-acc-pct {
-  font-size:1.15rem; font-weight:bold; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size:1.15rem; font-weight:bold; font-family:Georgia, 'Times New Roman', serif;
   line-height:1;
 }
 .an-acc-pct.acc-great  { color:#1a7a1a; }
@@ -181,6 +181,7 @@ body {
 .an-acc-pct.acc-poor   { color:#b01010; }
 .an-acc-sub {
   font-size:0.68rem; color:#888; margin-top:1px;
+  font-family:Georgia, 'Times New Roman', serif;
 }
 .an-acc-divider {
   width:1px; background:#ddd; height:30px;
@@ -398,11 +399,15 @@ body {
   -webkit-flex-shrink: 0; flex-shrink: 0;
 }
 .lc-top-td {
-  width: 33.33%; height: 30px;
-  border-right: 1px solid #ddd;
+  width: 33.33%; height: 33px;
   padding: 0; margin: 0; vertical-align: middle; overflow: hidden;
 }
-.lc-top-td-last { border-right: none; }
+.lc-top-td-last { }
+/* Đổi bên hẹp lại còn 80% bề rộng gốc (33.33% × 0.8 ≈ 26.67%), phần dư
+   chia đều cho 2 cột còn lại (Luyện tập/Phân tích + Phân tích), áp dụng
+   cả PC lẫn mobile. */
+#lc-top-td2 { width: 26.67%; }
+#lc-top-td1, #lc-top-td3 { width: 36.67%; }
 /* Nút chuyển đổi Luyện tập ⇄ Phân tích: dạng "pill" xám, hiện cả 2 chế độ
    cùng lúc, bên đang chọn có nền trắng nổi bật. Bấm vào BẤT KỲ đâu trên
    pill đều toggle qua lại (không cần bấm trúng đúng nửa bên) — xử lý bằng
@@ -411,13 +416,13 @@ body {
   display: -webkit-flex; display: flex;
   background: #666; border-radius: 999px;
   padding: 3px; box-sizing: border-box;
-  width: 100%; height: 24px; margin: 3px auto;
+  width: 100%; height: 26px; margin: 3px auto;
   max-width: 220px; cursor: pointer;
 }
 .nav-pill-seg {
   -webkit-flex: 1; flex: 1;
   border: none; background: transparent; color: #eee;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 0.90rem;
   border-radius: 999px; cursor: pointer;
   padding: 0; margin: 0;
   pointer-events: none; /* click luôn rơi vào .nav-pill (cha) */
@@ -432,8 +437,8 @@ body {
   display: block; width: 100%; box-sizing: border-box;
   margin: 3px auto; padding: 0; border: none;
   background: #eee; color: #333;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem; font-weight: bold;
-  line-height: 24px; height: 24px; max-width: 220px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 0.90rem; font-weight: bold;
+  line-height: 26px; height: 26px; max-width: 220px;
   border-radius: 999px;
   cursor: pointer; text-align: center; white-space: nowrap;
 }
@@ -445,11 +450,11 @@ body {
 .lc-top-sel {
   display: block; box-sizing: border-box;
   margin: 3px auto; padding: 0 8px; border: none;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 0.90rem;
   background: #eee; color: #333; cursor: pointer;
   -webkit-appearance: none; appearance: none;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  line-height: 24px; height: 24px; width: calc(100% - 6px); max-width: 220px;
+  line-height: 26px; height: 26px; width: calc(100% - 6px); max-width: 220px;
   border-radius: 999px;
   vertical-align: middle; text-align: center;
 }
@@ -815,8 +820,15 @@ html.mp-mode #mobile-stack {
 }
 /* PGN: thu gọn còn ~1 dòng theo yêu cầu (JS gán inline nên các rule dưới
    đây chỉ là lưới an toàn thứ 2, phòng khi thiếu style nào đó) */
+/* PGN: CỐ ĐỊNH đúng 1 dòng, không đổi theo trạng thái (đang gõ hay đã
+   phân tích xong) — dùng px tuyệt đối thay vì em để không phụ thuộc
+   font-size (nguyên nhân khiến trước đây ô này co giãn không nhất quán),
+   và !important vì #history không nằm trong .left-col nữa sau khi bị
+   JS di chuyển sang #mobile-stack (rule ".left-col .history" gốc không
+   còn khớp), nên phải thắng chắc chắn rule nền .history cũ. */
 html.mp-mode #mobile-stack #history {
-  max-height: 2.6em; min-height: 1.6em;
+  height: 28px !important; max-height: 28px !important; min-height: 28px !important;
+  line-height: 1.3 !important; overflow-y: auto !important;
 }
 /* "Chi tiết từng nước" và Coach panel (Luyện tập) không tự cuộn riêng
    nữa — để cả trang cuộn 1 lần cho tự nhiên trên điện thoại (JS đã gỡ
@@ -830,6 +842,14 @@ html.mp-mode #mobile-stack #coach-layer-normal {
 html.mp-mode #mobile-stack .lc-bot-row { padding: 6px 6px; }
 html.mp-mode #mobile-stack .lc-bot-btn { height: 34px; line-height: 34px; font-size: 0.82rem; }
 html.mp-mode #mobile-stack .lc-top-table { font-size: 1.05rem; }
+/* Tăng chiều cao hàng nút trên cùng thêm 10% cho dễ chạm tay trên điện
+   thoại: 30px→33px (ô), 24px→26px (pill/nút/dropdown bên trong). */
+html.mp-mode #mobile-stack .lc-top-td { height: 33px !important; }
+html.mp-mode #mobile-stack .nav-pill,
+html.mp-mode #mobile-stack .clr-btn,
+html.mp-mode #mobile-stack .lc-top-sel {
+  height: 26px !important; line-height: 26px !important;
+}
 /* Bảng phân loại nước đi — bản GỌN (badge tròn) thay bảng desktop */
 /* Bảng phân loại nước đi — bản GỌN (badge tròn) thay bảng desktop.
    LƯU Ý: #an-stats-mobile có style="display:none" NGAY TRÊN THẺ (inline) —
@@ -843,6 +863,26 @@ html.mp-mode #mobile-stack #eval-chart-label { display: none !important; }
    bàn cờ (và evalbar-vert đi kèm) thu nhỏ theo bề ngang điện thoại, nên
    thu còn 1 nửa (0.34rem) riêng cho mobile. */
 html.mp-mode #mobile-stack .evbar-pct { font-size: 0.34rem !important; }
+/* Giảm bề rộng thanh % chiến thắng (evalbar-vert) còn 1 nửa (30px→15px)
+   để nhường thêm chỗ ngang cho bàn cờ trên điện thoại. */
+html.mp-mode #mobile-stack .evalbar-vert { width: 15px !important; }
+/* Gọn khối Accuracy: chữ "Accuracy" chuyển lên CÙNG HÀNG với số %, thay vì
+   xuống dòng riêng như bản desktop. */
+html.mp-mode #mobile-stack .an-acc-pct { display: inline-block; }
+html.mp-mode #mobile-stack .an-acc-sub { display: inline-block; margin-top: 0; margin-left: 4px; }
+/* Bỏ đường kẻ ngang mờ dưới khối Accuracy + nén bớt khoảng đệm/margin thừa
+   (KHÔNG đụng font-size) để đẩy bàn cờ lên cao hơn trên điện thoại. */
+html.mp-mode #mobile-stack .an-accuracy-row {
+  border-bottom: none !important;
+  padding: 3px 0 !important; margin-bottom: 2px !important;
+}
+html.mp-mode #mobile-stack .an-acc-label { margin-bottom: 0 !important; }
+html.mp-mode #mobile-stack .an-acc-divider { height: 20px !important; }
+/* Giảm chiều cao đồ thị eval còn 75% (135px → 101px). viewBox SVG vẫn giữ
+   nguyên "0 0 600 120" (preserveAspectRatio="none" nên nội dung tự giãn
+   theo chiều cao CSS, không ảnh hưởng logic vẽ trong JS) — !important vì
+   chiều cao gốc được gán trực tiếp qua inline style trên thẻ <svg>. */
+html.mp-mode #mobile-stack #eval-chart-svg { height: 101px !important; }
 .an-badge-row {
   display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap;
   gap: 5px; margin-bottom: 6px;
@@ -1042,7 +1082,7 @@ html.mp-mode #mobile-stack .evbar-pct { font-size: 0.34rem !important; }
   <!-- LAYER B: Post-game review (replaces coach panel after analysis) -->
   <div id="coach-layer-review" style="display:none;-webkit-flex-direction:column;flex-direction:column;-webkit-flex:1;flex:1;overflow:hidden;min-height:0;">
     <div class="an-header" id="an-review-header" style="background:#666;color:#fff;padding:8px 12px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;font-size:0.90rem;font-weight:bold;text-transform:none;display:-webkit-flex;display:flex;-webkit-justify-content:space-between;justify-content:space-between;-webkit-align-items:center;align-items:center;-webkit-flex-shrink:0;flex-shrink:0;">
-      <span>&#128202; K&#7871;t qu&#7843; ph&#226;n t&#237;ch v&#225;n c&#7901;</span>
+      <span>&#128202; K&#7871;t qu&#7843; ph&#226;n t&#237;ch</span>
       <span id="review-back-link" style="cursor:pointer;font-size:1.05rem;opacity:0.7" onclick="closeReviewPanel()">&larr; Quay l&#7841;i</span>
     </div>
     <div class="an-body" style="-webkit-flex:1;flex:1;display:-webkit-flex;display:flex;-webkit-flex-direction:column;flex-direction:column;overflow:hidden;min-height:0;padding:10px 10px 0;">
@@ -4112,7 +4152,7 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
 
   var highlightHtml = '';
   if (mergedList.length) {
-    highlightHtml += '<div style="font-size:0.68rem;font-weight:bold;margin:6px 0 5px">\u2b50 Highlight v\u00e1n \u0111\u1ea5u:</div>';
+    highlightHtml += '<div style="font-size:0.90rem;font-weight:bold;margin:6px 0 5px">\u2b50 Highlight v\u00e1n \u0111\u1ea5u:</div>';
     highlightHtml += '<table style="width:100%;border-collapse:collapse;font-size:.68rem">';
     highlightHtml += '<thead><tr style="background:#000;color:#fff">'
           + '<th style="padding:2px 4px">N\u01b0\u1edbc</th><th style="padding:2px 4px">B\u00ean</th>'
@@ -6801,17 +6841,16 @@ function _buildMobileLayoutItems() {
     '#analyzer-status',
     '#analyzer-gamelist',
     '#lc-eval-chart',       /* 3. Đồ thị eval */
+    '#an-accuracy-row',     /* 4. Tên người chơi + % Accuracy */
     '.center-status-wrap',
     '#draw-offer-bar',
-    '.board-and-eval',      /* 4. Bàn cờ */
-    '.lc-bot-row',          /* 5. Quay lại/Ván mới + mũi tên lùi/tiến */
-    '#an-review-header',
-    '#an-accuracy-row',
-    '#an-bar-row',
-    '#an-stats-mobile',     /* 6. Bảng phân loại nước đi — bản badge gọn */
+    '.board-and-eval',      /* 5. Bàn cờ */
+    '.lc-bot-row',          /* 6. Quay lại/Ván mới + mũi tên lùi/tiến */
+    '#an-bar-row',          /* 7. Thanh diễn biến nhiều màu (nước đi) */
+    '#an-stats-mobile',     /* 8. Bảng phân loại nước đi — bản badge gọn */
     '#coach-layer-normal',  /* (tab Luyện tập, chưa có kết quả phân tích) */
     '#an-moves-title',
-    '#an-moves'             /* 7. Chi tiết từng nước */
+    '#an-moves'             /* 9. Chi tiết từng nước */
   ];
   var items = [];
   for (var i = 0; i < selectors.length; i++) {
