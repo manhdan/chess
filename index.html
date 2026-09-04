@@ -1,18 +1,17 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Chess Coach 8</title>
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-YJ1J2MJLZT"></script>
 <script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-YJ1J2MJLZT');
-</script>  
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-YJ1J2MJLZT');
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Chess Coach 8</title>
 <style>
 * { -webkit-box-sizing: border-box; box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; width: 100%; overflow: hidden; }
@@ -67,6 +66,21 @@ body {
 }
 .sq.lite { background: #fff; }
 .sq.dark { background: #d0d0d0; }
+/* Nhãn tọa độ (số hàng 1-8 / chữ cột a-h): size = 1/6 chiều cao 1 ô cờ,
+   tính động qua biến CSS --coord-fs (gán bởi fixBoardSize() theo đúng
+   kích thước bàn cờ thực tế mỗi khi resize). Màu: ô tối → chữ trắng; ô
+   sáng → chữ lấy đúng màu nền của ô tối (#d0d0d0) để tương phản dễ đọc. */
+.coord-label {
+  position: absolute;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-weight: bold; line-height: 1;
+  font-size: var(--coord-fs, 9px);
+  pointer-events: none; z-index: 2;
+}
+.coord-rank { top: 1px; left: 2px; }
+.coord-file { bottom: 1px; right: 2px; }
+.sq.dark .coord-label { color: #fff; }
+.sq.lite .coord-label { color: #d0d0d0; }
 .sq.lm-f { background: rgba(129,178,118,0.45); }   /* xanh matcha pastel — ô xuất phát */
 .sq.lm-t { background: rgba(99,158,86,0.55); }   /* xanh matcha đậm hơn — ô đích */
 .sq.chk  { background: #888 !important; }
@@ -4616,6 +4630,16 @@ function _finishAnalysisRender(){
     var _helClear = document.getElementById('history');
     if (_helClear) _helClear.textContent = '';
   }
+
+  /* QUAN TRỌNG: hiện eval-chart/accuracy/badges/bot-row phía trên vừa làm
+     THAY ĐỔI bố cục (chiếm thêm không gian dọc/ngang) — nhưng bàn cờ vẫn
+     đang giữ kích thước đã tính từ TRƯỚC ĐÓ (lúc replay trong lúc phân
+     tích, khi các khối này còn ẩn), nên có thể bị lệch/lẹm 1 cạnh cho tới
+     khi có gì đó khác trigger tính lại (vd bấm nước tiếp theo). Tính lại
+     NGAY tại đây, sau khi mọi thay đổi hiển thị ở trên đã áp dụng xong —
+     dùng setTimeout(...,0) để chắc chắn trình duyệt đã kịp áp layout mới
+     trước khi đo lại (đặc biệt cần thiết trên di động). */
+  if (typeof fixBoardSize === 'function') setTimeout(fixBoardSize, 0);
 }
 
 /* ── Eval bar ── */
@@ -5270,6 +5294,8 @@ function fixBoardSize(){
     cells[i].style.lineHeight = cellH + 'px';
     cells[i].style.fontSize   = fontSize + 'px';
   }
+  /* Nhãn tọa độ (số hàng/chữ cột): cao đúng 1/6 chiều cao 1 ô cờ */
+  bd.style.setProperty('--coord-fs', Math.max(6, Math.floor(cellH / 6)) + 'px');
 
   /* ── Sync SVG overlay ── */
   var svg = document.getElementById('coach-svg');
@@ -5337,6 +5363,23 @@ function renderBoard(){
       var cell=document.createElement('div');
       cell.className=cls.trim();
       cell.setAttribute('data-s',s);
+      /* Nhãn tọa độ: số hàng (1-8) ở góc TRÊN-TRÁI của CỘT ĐẦU TIÊN bên
+         trái (dc===0), chữ cột (a-h) ở góc DƯỚI-PHẢI của HÀNG CUỐI CÙNG
+         bên dưới (dr===7) — đúng chuẩn hiển thị bàn cờ (lichess/chess.com).
+         rank/file đã được tính theo đúng chiều gFlip ở trên nên tự động
+         đảo chiều đúng khi lật bàn cờ, không cần xử lý gì thêm ở đây. */
+      if(dc===0){
+        var rankLbl=document.createElement('span');
+        rankLbl.className='coord-label coord-rank';
+        rankLbl.textContent=String(rank+1);
+        cell.appendChild(rankLbl);
+      }
+      if(dr===7){
+        var fileLbl=document.createElement('span');
+        fileLbl.className='coord-label coord-file';
+        fileLbl.textContent=FLS.charAt(file);
+        cell.appendChild(fileLbl);
+      }
       if(s!==gSel){
         var hasLegal=false;
         for(var i=0;i<gLegal.length;i++) if(gLegal[i][1]===s){hasLegal=true;break;}
@@ -6303,28 +6346,12 @@ function analyzeTabRun() {
   }
 
   if (!raw) {
-    if (navigator.clipboard && navigator.clipboard.readText) {
-      navigator.clipboard.readText().then(function (txt) {
-        txt = (txt || '').trim();
-        if (txt) {
-          if (typeof analyzerIsUsernameOrId === 'function' && analyzerIsUsernameOrId(txt)) {
-            if (hel) hel.textContent = txt;
-            analyzerClassifyAndRoute(txt);
-            return;
-          }
-          if (hel) hel.textContent = txt;
-          _analyzeTabRunWithText(txt);
-        } else if (gMoveTexts.length) {
-          startAnalysis();
-        } else if (!_tryAutoSearchLastUsername()) {
-          alert('Clipboard tr\u1ed1ng. Vui l\u00f2ng d\u00e1n PGN v\u00e0o \u00f4 l\u1ecbch s\u1eed n\u01b0\u1edbc \u0111i.');
-        }
-      }).catch(function () {
-        if (gMoveTexts.length) startAnalysis();
-        else if (!_tryAutoSearchLastUsername()) alert('Kh\u00f4ng \u0111\u1ecdc \u0111\u01b0\u1ee3c clipboard. Vui l\u00f2ng d\u00e1n PGN th\u1ee7 c\u00f4ng v\u00e0o \u00f4 l\u1ecbch s\u1eed n\u01b0\u1edbc \u0111i.');
-      });
-      return;
-    }
+    /* Ô PGN đang trống. TRƯỚC ĐÂY ở bước này có thử đọc clipboard qua
+       navigator.clipboard.readText() — nhưng API này luôn hiện popup xin
+       quyền truy cập clipboard của trình duyệt (gây khó chịu, không mong
+       muốn), nên đã bỏ hẳn. Giờ chỉ còn: nếu đã có sẵn ván đang xem thì
+       phân tích lại; nếu không thì tự động điền + tìm lại đúng username
+       tìm kiếm gần nhất (không cần xin quyền gì cả, chỉ đọc localStorage). */
     if (gMoveTexts.length) { startAnalysis(); return; }
     if (!_tryAutoSearchLastUsername()) alert('Vui l\u00f2ng d\u00e1n PGN v\u00e0o \u00f4 l\u1ecbch s\u1eed n\u01b0\u1edbc \u0111i tr\u01b0\u1edbc.');
     return;
@@ -7065,8 +7092,18 @@ rankApplyToSelect();
 gPC = (Math.random() < 0.5) ? W : B;
 gFlip = (gPC === B);
 newGame();
-var _savedCoachMode = coachModeLoad();
-if (_savedCoachMode) setCoachMode(_savedCoachMode);
+/* setCoachMode() được ĐỊNH NGHĨA ở script block THỨ 2 (phía dưới, sau
+   khối Lozza), trong khi đoạn init này nằm ở script block THỨ NHẤT — gọi
+   thẳng ngay tại đây sẽ ném "setCoachMode is not defined" (vì block 2
+   chưa kịp chạy), làm dừng đột ngột toàn bộ phần code CÒN LẠI của block 1
+   (kéo theo switchAppTab()/evaluateMobileLayout() bên dưới không chạy
+   được nữa — đây chính là lỗi PGN không paste được + mobile không nhận
+   diện đã gặp). Dùng setTimeout(...,0) để hoãn lệnh gọi sang sau khi TẤT
+   CẢ script block đã chạy xong (kể cả block 2), an toàn tuyệt đối. */
+setTimeout(function(){
+  var _savedCoachMode = coachModeLoad();
+  if (_savedCoachMode && typeof setCoachMode === 'function') setCoachMode(_savedCoachMode);
+}, 0);
 switchAppTab('analysis');
 evaluateMobileLayout();
 </script>
