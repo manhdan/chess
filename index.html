@@ -168,9 +168,10 @@ body {
   -webkit-flex:1; flex:1;
 }
 .an-acc-label {
-  font-size:0.68rem; font-weight:bold; text-transform:uppercase;
+  font-size:0.68rem; font-weight:normal; text-transform:uppercase;
   letter-spacing:0.05em; color:#666; margin-bottom:2px;
 }
+.an-acc-label.an-acc-winner { font-weight:bold; color:#333; }
 .an-acc-pct {
   font-size:1.15rem; font-weight:bold; font-family:Georgia, 'Times New Roman', serif;
   line-height:1;
@@ -850,13 +851,20 @@ html.mp-mode #mobile-stack .clr-btn,
 html.mp-mode #mobile-stack .lc-top-sel {
   height: 26px !important; line-height: 26px !important;
 }
-/* Bảng phân loại nước đi — bản GỌN (badge tròn) thay bảng desktop */
 /* Bảng phân loại nước đi — bản GỌN (badge tròn) thay bảng desktop.
-   LƯU Ý: #an-stats-mobile có style="display:none" NGAY TRÊN THẺ (inline) —
-   rule thường trong <style> KHÔNG thể thắng được inline style, nên bắt
-   buộc phải có !important ở đây thì badge mới hiện ra được. */
+   #an-stats-mobile giờ được JS quản lý display giống hệt #an-stats (thêm
+   vào cùng danh sách show/hide trong _finishAnalysisRender()/
+   ensureReviewLayerVisible()/switchAppTab() — xem các hàm đó), KHÔNG còn
+   ép !important nữa (trước đây ép cứng display:block!important khiến JS
+   không thể ẩn được khi chuyển sang tab Luyện tập — đây chính là lỗi đã
+   gặp). Ở đây chỉ còn lo phần "chọn khác nhau giữa PC/mobile": desktop
+   luôn ẩn hẳn (rule base bên dưới), mobile thì hiện lên MỖI KHI JS clear
+   inline display (tức "" - không ép gì), nhờ specificity cao hơn rule
+   base — còn nếu JS gán hẳn display:none thì luôn thắng ở CẢ 2 nền tảng
+   vì inline style luôn thắng mọi rule thường trong <style>. */
+#an-stats-mobile { display: none; }
 html.mp-mode #mobile-stack #an-stats { display: none !important; }
-html.mp-mode #mobile-stack #an-stats-mobile { display: block !important; }
+html.mp-mode #mobile-stack #an-stats-mobile { display: block; }
 /* Bỏ dòng chữ "Eval (góc Trắng, ±600cp)" cho gọn trên mobile */
 html.mp-mode #mobile-stack #eval-chart-label { display: none !important; }
 /* Label % trên thanh eval dọc cạnh bàn cờ — bản thường 0.68rem bị tràn khi
@@ -878,6 +886,22 @@ html.mp-mode #mobile-stack .an-accuracy-row {
 }
 html.mp-mode #mobile-stack .an-acc-label { margin-bottom: 0 !important; }
 html.mp-mode #mobile-stack .an-acc-divider { height: 20px !important; }
+/* Icon vua (♔/♚) trước tên người chơi đang bị bé so với tên — tăng riêng
+   size icon (không đụng size tên) chỉ trên mobile. */
+html.mp-mode #mobile-stack .an-acc-icon { font-size: 1.6em; vertical-align: -0.1em; }
+/* Đơn giản hóa mobile: nền trắng quanh ô đồ thị eval + mục Accuracy (thay
+   vì để lộ nền xám be #f5f5f0 của toàn trang), và bỏ viền xám bao quanh
+   status bar phía trên bàn cờ (hiển thị "#xx Đen"/"-xxxcp") cho gọn. */
+html.mp-mode #mobile-stack #lc-eval-chart { background: #fff !important; }
+html.mp-mode #mobile-stack .an-accuracy-row,
+html.mp-mode #mobile-stack .an-acc-block { background: #fff !important; }
+html.mp-mode #mobile-stack .center-status-wrap .lc-status { border: none !important; }
+/* Nền khung CHỨA bàn cờ (bao gồm cả status "#xx Đen"/"-xxxcp") sang trắng
+   — CHỈ nền khung chứa, không đụng gì tới các ô/viền đen của bản thân
+   bàn cờ (nằm sâu bên trong .board-outer/.board-wrap, không bị ảnh hưởng
+   vì rule này chỉ set background của 2 container NGOÀI). */
+html.mp-mode #mobile-stack .center-status-wrap,
+html.mp-mode #mobile-stack .board-and-eval { background: #fff !important; }
 /* Giảm chiều cao đồ thị eval còn 75% (135px → 101px). viewBox SVG vẫn giữ
    nguyên "0 0 600 120" (preserveAspectRatio="none" nên nội dung tự giãn
    theo chiều cao CSS, không ảnh hưởng logic vẽ trong JS) — !important vì
@@ -4233,7 +4257,7 @@ function _finishAnalysisRender(){
   /* Đã có kết quả — hiện lại các khối accuracy/bar/table (có thể đang bị
      ẩn từ lúc chưa phân tích / đang phân tích). */
   (function(){
-    var _r=['an-accuracy-row','an-bar-row','an-stats'];
+    var _r=['an-accuracy-row','an-bar-row','an-stats','an-stats-mobile'];
     for(var _i=0;_i<_r.length;_i++){ var _e=document.getElementById(_r[_i]); if(_e) _e.style.display=''; }
   })();
   /* Xoá badge/vùng nguy hiểm quanh vua còn sót lại từ lúc đang chơi/gợi ý trước đó */
@@ -4338,17 +4362,48 @@ function _finishAnalysisRender(){
     labelWhite = isPW ? 'Bạn' : 'Máy';
     labelBlack = isPW ? 'Máy' : 'Bạn';
   }
+  /* ── Xác định bên thắng để bôi đậm đúng tên bên đó. Ưu tiên kết quả đọc
+     được từ PGN (header [Result] hoặc token "1-0"/"0-1" ở cuối phần nước
+     đi — xem extractPgnPlayerNames/extractPgnResultToken); nếu đang tự
+     chơi (không có gPgnPlayerNames, tức KHÔNG import PGN) thì suy ra qua
+     FEN CUỐI CÙNG của ván (không dùng board "live" vì có thể người dùng
+     đang xem lại 1 nước giữa chừng). Hòa hoặc KHÔNG nhận ra được kết quả
+     → mặc định bôi đậm CẢ HAI bên. ── */
+  var winnerSide = null; /* 'w' | 'b' | 'draw' | null(không rõ) */
+  if (gPgnPlayerNames && gPgnPlayerNames.result) {
+    if (gPgnPlayerNames.result === '1-0') winnerSide = 'w';
+    else if (gPgnPlayerNames.result === '0-1') winnerSide = 'b';
+    else if (gPgnPlayerNames.result === '1/2-1/2') winnerSide = 'draw';
+    /* '*' hoặc giá trị lạ khác -> giữ null (không rõ) */
+  } else if (!gPgnPlayerNames) {
+    try {
+      if (typeof gAnFens !== 'undefined' && gAnFens && gAnFens.length
+          && typeof boardFromFen === 'function' && typeof inCheck === 'function'
+          && typeof legalMoves === 'function') {
+        var _sB=gB, _sTurn=gTurn, _sCas=gCas, _sEP=gEP, _sHalf=gHalf, _sFull=gFull;
+        boardFromFen(gAnFens[gAnFens.length - 1]);
+        if (inCheck(gB, gTurn) && legalMoves(gB, gTurn, gEP, gCas).length === 0) {
+          winnerSide = (gTurn === W) ? 'b' : 'w'; /* bên đang bị chiếu hết ở FEN cuối = thua */
+        }
+        gB=_sB; gTurn=_sTurn; gCas=_sCas; gEP=_sEP; gHalf=_sHalf; gFull=_sFull;
+      }
+    } catch(e) {}
+  }
+  var bothBoldDefault = (winnerSide === 'draw' || winnerSide === null);
+  var whiteWinCls = (winnerSide === 'w' || bothBoldDefault) ? ' an-acc-winner' : '';
+  var blackWinCls = (winnerSide === 'b' || bothBoldDefault) ? ' an-acc-winner' : '';
+
   var accRow=document.getElementById('an-accuracy-row');
   if(accRow){
     accRow.innerHTML=
       '<div class="an-acc-block">'
-        +'<div class="an-acc-label">&#9812; '+labelWhite+' (Trắng)</div>'
+        +'<div class="an-acc-label'+whiteWinCls+'"><span class="an-acc-icon">&#9812;</span> '+labelWhite+' (Trắng)</div>'
         +'<div class="an-acc-pct '+accCls(accWhite)+'">'+accWhite+'%</div>'
         +'<div class="an-acc-sub">Accuracy</div>'
       +'</div>'
       +'<div class="an-acc-divider"></div>'
       +'<div class="an-acc-block">'
-        +'<div class="an-acc-label">&#9818; '+labelBlack+' (Đen)</div>'
+        +'<div class="an-acc-label'+blackWinCls+'"><span class="an-acc-icon">&#9818;</span> '+labelBlack+' (Đen)</div>'
         +'<div class="an-acc-pct '+accCls(accBlack)+'">'+accBlack+'%</div>'
         +'<div class="an-acc-sub">Accuracy</div>'
       +'</div>';
@@ -4531,6 +4586,7 @@ function _finishAnalysisRender(){
   }
 
   gAnBusy = false;
+  var _willRerunSoon = gAnPendingRerun; /* lưu lại TRƯỚC khi bị reset bên dưới */
   if(gAnPendingRerun){
     gAnPendingRerun = false;
     /* Có yêu cầu phân tích mới đến trong lúc đang bận — chạy lại NGAY, đọc
@@ -4542,6 +4598,14 @@ function _finishAnalysisRender(){
         startAnalysis();
       }
     }, 50);
+  }
+
+  /* Mobile: sau khi phân tích xong (và KHÔNG sắp có 1 lượt phân tích lại
+     nào cần đọc lại nội dung ô PGN) — xoá sạch ô PGN cho gọn, vì lúc này
+     đồ thị/kết quả đã hiển thị đầy đủ, không còn cần hiển thị PGN thô nữa. */
+  if (!_willRerunSoon && document.documentElement.classList.contains('mp-mode')) {
+    var _helClear = document.getElementById('history');
+    if (_helClear) _helClear.textContent = '';
   }
 }
 
@@ -6094,6 +6158,18 @@ function switchAppTab(tab) {
     if (gReviewIdx < 0 && layerReview && layerReview.style.display !== 'none') {
       layerReview.style.display = 'none';
       if (layerNormal) { layerNormal.style.display = 'flex'; layerNormal.style.display = '-webkit-flex'; }
+      /* QUAN TRỌNG (mobile): an-accuracy-row/an-bar-row/an-stats-mobile/
+         an-moves-title/an-moves đã bị JS di chuyển ra khỏi coach-layer-
+         review (sang #mobile-stack) để sắp xếp lại vị trí trên điện thoại
+         — nên ẩn coach-layer-review ở trên KHÔNG còn tự động ẩn được
+         chúng nữa (chúng không còn là con cháu của nó). Trên PC, các dòng
+         dưới đây là ẩn lại lần nữa những gì đã ẩn sẵn (vô hại, không đổi
+         gì); trên mobile đây là chỗ DUY NHẤT thực sự ẩn được chúng. */
+      var _reviewPieces = ['an-accuracy-row','an-bar-row','an-stats-mobile','an-moves-title','an-moves'];
+      for (var _ri = 0; _ri < _reviewPieces.length; _ri++) {
+        var _rp = document.getElementById(_reviewPieces[_ri]);
+        if (_rp) _rp.style.display = 'none';
+      }
     }
   }
   if (typeof updateNavBtn === 'function') updateNavBtn();
@@ -6131,6 +6207,7 @@ function ensureReviewLayerVisible() {
   var accRow = document.getElementById('an-accuracy-row');
   var barRow = document.getElementById('an-bar-row');
   var statsTbl = document.getElementById('an-stats');
+  var statsMobile = document.getElementById('an-stats-mobile');
   var isBusy = (typeof gAnBusy !== 'undefined' && gAnBusy);
   var hasResult = (typeof gAnScores !== 'undefined' && gAnScores.length > 0);
   if (isBusy) {
@@ -6141,6 +6218,7 @@ function ensureReviewLayerVisible() {
     if (accRow) accRow.style.display = 'none';
     if (barRow) barRow.style.display = 'none';
     if (statsTbl) statsTbl.style.display = 'none';
+    if (statsMobile) statsMobile.style.display = 'none';
   } else if (!hasResult) {
     if (moves) {
       moves.innerHTML = '<div style="padding:0 10px;text-align:left;color:#999;font-size:0.82rem;line-height:1.6">'
@@ -6153,11 +6231,13 @@ function ensureReviewLayerVisible() {
     if (accRow) accRow.style.display = 'none';
     if (barRow) barRow.style.display = 'none';
     if (statsTbl) statsTbl.style.display = 'none';
+    if (statsMobile) statsMobile.style.display = 'none';
   } else {
     if (title) title.style.display = '';
     if (accRow) accRow.style.display = '';
     if (barRow) barRow.style.display = '';
     if (statsTbl) statsTbl.style.display = '';
+    if (statsMobile) statsMobile.style.display = '';
   }
 }
 
@@ -6577,7 +6657,7 @@ function analyzerBackToList() {
    tái sử dụng engine thay thế/replay nước đi sẵn có của ChessCoach7 thay vì
    dựng PGN SAN bằng tay (không cần thư viện chess.js). */
 function analyzerReplayUciAndAnalyze(ucis, names, headers) {
-  var pgnNames = { white: names.white, black: names.black };
+  var pgnNames = { white: names.white, black: names.black, result: (headers && headers.Result) || '' };
   newGame();
   gPgnPlayerNames = pgnNames;
   if (typeof applyAutoFlipForPgnNames === 'function') applyAutoFlipForPgnNames(pgnNames);
@@ -6639,13 +6719,32 @@ function runPgnAnalysis() {
 function extractPgnPlayerNames(pgn){
   var wm = pgn.match(/\[White\s+"([^"]*)"\]/);
   var bm = pgn.match(/\[Black\s+"([^"]*)"\]/);
-  if (!wm && !bm) return null;
+  var rm = pgn.match(/\[Result\s+"([^"]*)"\]/);
   /* Bỏ phần "(Nms)" nếu có, vd "ChessFun9 (16ms)" → "ChessFun9" */
   function cleanName(s){ return s ? s.replace(/\s*\([^)]*\)\s*$/, '').trim() : ''; }
+  var result = rm ? rm[1].trim() : '';
+  /* Nhiều PGN (đặc biệt khi copy tay từ chess.com/lichess) KHÔNG có dòng
+     header [Result "..."] mà chỉ có ký hiệu tỷ số ở NGAY CUỐI phần nước
+     đi (vd "... Qe1# 0-1") — nếu không tìm thấy header, đọc token cuối
+     cùng của phần thân ván đấu (sau khi đã bỏ comment/biến thể) để vẫn
+     nhận ra được bên thắng. */
+  if (!result) result = extractPgnResultToken(pgn);
   return {
     white: wm ? cleanName(wm[1]) : '',
-    black: bm ? cleanName(bm[1]) : ''
+    black: bm ? cleanName(bm[1]) : '',
+    result: result
   };
+}
+
+/* Đọc ký hiệu tỷ số (1-0 / 0-1 / 1/2-1/2 / *) nằm ở CUỐI phần thân PGN,
+   dùng khi PGN không có header [Result "..."] tường minh. */
+function extractPgnResultToken(pgn){
+  var moveStartMatch = pgn.match(/1\.\s*(?=[A-Za-zO])/);
+  var body = moveStartMatch ? pgn.slice(moveStartMatch.index) : pgn;
+  body = (typeof stripPgnCommentsAndVariations === 'function') ? stripPgnCommentsAndVariations(body) : body;
+  body = body.replace(/[\u2010-\u2015\u2212]/g, '-'); /* chuẩn hoá các loại gạch ngang unicode về "-" */
+  var m = body.match(/(1-0|0-1|1\/2-1\/2|\*)\s*$/);
+  return m ? m[1] : '';
 }
 
 /* Loại bỏ comment {...} và biến thể (variation) trong ngoặc đơn (...) khỏi
