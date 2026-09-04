@@ -1886,6 +1886,29 @@ function rankSyncSelectLock(){
   var hasMoves = (typeof gStateHistory!=='undefined' && gStateHistory.length>1);
   sel.disabled = !!(isPlay && hasMoves);
 }
+/* ── Lưu localStorage: chế độ Coach (Gợi ý/Kiểm tra/Tự do) + username
+   chess.com tìm kiếm gần nhất — theo đúng pattern try/catch của
+   rankLoad/rankSave ở trên. ── */
+var COACH_MODE_KEY = 'chesscoach_coach_mode';
+var LAST_USERNAME_KEY = 'chesscoach_last_username';
+
+function coachModeSave(mode){
+  try{ localStorage.setItem(COACH_MODE_KEY, mode); }catch(e){}
+}
+function coachModeLoad(){
+  try{
+    var v = localStorage.getItem(COACH_MODE_KEY);
+    if(v==='hint'||v==='verify'||v==='free') return v;
+  }catch(e){}
+  return null;
+}
+function lastUsernameSave(username){
+  try{ if(username) localStorage.setItem(LAST_USERNAME_KEY, username); }catch(e){}
+}
+function lastUsernameLoad(){
+  try{ return localStorage.getItem(LAST_USERNAME_KEY) || ''; }catch(e){ return ''; }
+}
+
 /* Người dùng tự tay đổi ELO qua dropdown (chỉ khi chưa có nước đi nào) —
    đồng bộ gRank theo lựa chọn đó để lần thắng/thua kế tiếp tính đúng từ
    đây, không bị ghi đè lại bởi rank cũ trong localStorage. */
@@ -6152,6 +6175,18 @@ function flipBoardOnly() {
    - Nếu ô PGN trống → tự động dán PGN từ clipboard, rồi tự chạy phân tích ngay.
    - Nếu ô PGN chứa 1 PGN hợp lệ khác với ván hiện tại → replay rồi phân tích PGN đó.
    - Nếu không đổi gì → phân tích lại ván hiện tại. */
+/* Ô PGN đang trống và không có gì khác để làm (clipboard cũng trống) —
+   nếu trước đây từng tìm theo username, tự động tìm lại đúng username đó
+   thay vì chỉ báo lỗi suông. Trả về true nếu đã kích hoạt tìm kiếm. */
+function _tryAutoSearchLastUsername() {
+  var saved = (typeof lastUsernameLoad === 'function') ? lastUsernameLoad() : '';
+  if (!saved) return false;
+  var hel2 = document.getElementById('history');
+  if (hel2) hel2.textContent = saved;
+  analyzerFetchGamesByUser(saved);
+  return true;
+}
+
 function analyzeTabRun() {
   /* Nếu 1 lượt phân tích khác đang chạy (engine chưa xong), KHÔNG bắt đầu
      lượt mới ngay lập tức — vì kết quả bestmove/info trả về trễ của lượt cũ
@@ -6192,17 +6227,17 @@ function analyzeTabRun() {
           _analyzeTabRunWithText(txt);
         } else if (gMoveTexts.length) {
           startAnalysis();
-        } else {
+        } else if (!_tryAutoSearchLastUsername()) {
           alert('Clipboard tr\u1ed1ng. Vui l\u00f2ng d\u00e1n PGN v\u00e0o \u00f4 l\u1ecbch s\u1eed n\u01b0\u1edbc \u0111i.');
         }
       }).catch(function () {
         if (gMoveTexts.length) startAnalysis();
-        else alert('Kh\u00f4ng \u0111\u1ecdc \u0111\u01b0\u1ee3c clipboard. Vui l\u00f2ng d\u00e1n PGN th\u1ee7 c\u00f4ng v\u00e0o \u00f4 l\u1ecbch s\u1eed n\u01b0\u1edbc \u0111i.');
+        else if (!_tryAutoSearchLastUsername()) alert('Kh\u00f4ng \u0111\u1ecdc \u0111\u01b0\u1ee3c clipboard. Vui l\u00f2ng d\u00e1n PGN th\u1ee7 c\u00f4ng v\u00e0o \u00f4 l\u1ecbch s\u1eed n\u01b0\u1edbc \u0111i.');
       });
       return;
     }
     if (gMoveTexts.length) { startAnalysis(); return; }
-    alert('Vui l\u00f2ng d\u00e1n PGN v\u00e0o \u00f4 l\u1ecbch s\u1eed n\u01b0\u1edbc \u0111i tr\u01b0\u1edbc.');
+    if (!_tryAutoSearchLastUsername()) alert('Vui l\u00f2ng d\u00e1n PGN v\u00e0o \u00f4 l\u1ecbch s\u1eed n\u01b0\u1edbc \u0111i tr\u01b0\u1edbc.');
     return;
   }
 
@@ -6445,6 +6480,7 @@ function analyzerIsBotGame(game, targetUser) {
 function analyzerFetchGamesByUser(username) {
   analyzerSetStatus('\u0110ang t\u00ecm tr\u1eadn \u0111\u1ea5u g\u1ea7n nh\u1ea5t c\u1ee7a "' + username + '"...', '#2196F3');
   window._analyzerLastUsername = username;
+  lastUsernameSave(username);
   var archivesUrl = 'https://api.chess.com/pub/player/' + username + '/games/archives';
   fetch(archivesUrl).then(function (res) {
     if (!res.ok) throw new Error('Kh\u00f4ng t\u00ecm th\u1ea5y ng\u01b0\u1eddi ch\u01a1i ho\u1eb7c API t\u1eeb ch\u1ed1i.');
@@ -6921,6 +6957,8 @@ rankApplyToSelect();
 gPC = (Math.random() < 0.5) ? W : B;
 gFlip = (gPC === B);
 newGame();
+var _savedCoachMode = coachModeLoad();
+if (_savedCoachMode) setCoachMode(_savedCoachMode);
 switchAppTab('analysis');
 evaluateMobileLayout();
 </script>
@@ -9432,6 +9470,7 @@ function coachOnPlayerMove(fenBefore, boardBefore, turnBefore, epBefore, casBefo
 /* ── Mode switch ── */
 function setCoachMode(mode) {
   coachMode = mode;
+  coachModeSave(mode);
   var modes = ['hint','verify','free'];
   for (var i = 0; i < modes.length; i++) {
     var btn = document.getElementById('mode-'+modes[i]);
