@@ -1086,7 +1086,7 @@ html.mp-mode #mobile-stack #eval-chart-svg { height: 101px !important; }
     <div id="lc-eval-chart" style="display:none;padding:6px 6px 4px;-webkit-flex-shrink:0;flex-shrink:0;display:-webkit-flex;display:flex;-webkit-flex-direction:column;flex-direction:column;-webkit-align-items:stretch;align-items:stretch">
       <div id="eval-chart-label" style="font-size:0.68rem;color:#888;margin-bottom:3px;-webkit-flex-shrink:0;flex-shrink:0">Eval (góc Trắng, ±600cp)</div>
       <svg id="eval-chart-svg" viewBox="0 0 600 120" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"
-        style="width:100%;height:135px;display:block;border:1px solid #ccc;border-radius:2px;background:#fafafa;cursor:crosshair;shape-rendering:geometricPrecision">
+        style="width:100%;height:135px;display:block;border:1px solid #ccc;border-radius:8px;overflow:hidden;background:#fafafa;cursor:crosshair;shape-rendering:geometricPrecision">
       </svg>
     </div>
 
@@ -6120,12 +6120,22 @@ var gPgnPlayerNames = null; /* {white, black} trích từ PGN header khi import,
 /* Nếu 1 trong các tên này cầm quân ĐEN trong PGN import → tự động đổi bên
    (đen ở dưới) để tiện theo dõi góc nhìn quen thuộc. So khớp không phân biệt
    hoa/thường, dạng "chứa" (để chịu được hậu tố kiểu "(1234)" nếu có). */
+/* Nếu 1 trong các tên này cầm quân ĐEN trong PGN import → tự động đổi bên
+   (đen ở dưới) để tiện theo dõi góc nhìn quen thuộc. So khớp không phân biệt
+   hoa/thường, dạng "chứa" (để chịu được hậu tố kiểu "(1234)" nếu có).
+   NGOÀI 3 tên cố định, còn áp dụng cho username đang lưu trong localStorage
+   (lastUsernameLoad — username chess.com tìm kiếm gần nhất) — vẫn CHỈ đổi
+   bên khi username đó cầm quân Đen, không ảnh hưởng gì nếu cầm Trắng. */
 var AUTO_FLIP_BLACK_NAMES = ['samackhat', 'hoaian2014', 'manhdan86'];
 function applyAutoFlipForPgnNames(pgnNames){
   if(!pgnNames || !pgnNames.black) return;
   var blackLower = String(pgnNames.black).toLowerCase();
   for(var i=0;i<AUTO_FLIP_BLACK_NAMES.length;i++){
     if(blackLower.indexOf(AUTO_FLIP_BLACK_NAMES[i]) !== -1){ gFlip = true; return; }
+  }
+  if(typeof lastUsernameLoad==='function'){
+    var savedUser = String(lastUsernameLoad()||'').toLowerCase();
+    if(savedUser && blackLower.indexOf(savedUser) !== -1){ gFlip = true; return; }
   }
 }
 
