@@ -322,8 +322,8 @@ body {
   -webkit-flex-shrink: 0; flex-shrink: 0;
   display: -webkit-flex; display: flex;
   -webkit-flex-direction: column; flex-direction: column;
-  border-right: 1px solid #000;
-  background: #fafafa;
+  background: #f5f5f0;
+  border-right: 1px solid #ddd;
   height: 100%; max-height: 100%;
   min-height: 0; /* allow flex children to shrink properly */
   overflow: hidden;
@@ -357,7 +357,7 @@ body {
   word-break: break-word;
   -webkit-flex-shrink: 0; flex-shrink: 0;
   padding: 5px 8px;
-  background: #fafafa;
+  background: #f5f5f0; /* khớp màu nền cột giữa chứa bàn cờ (= màu spacer dưới bàn cờ) */
   display: -webkit-flex; display: flex;
   -webkit-align-items: center; align-items: center;
 }
@@ -406,8 +406,9 @@ body {
 /* history fills remaining space between status and bottom row */
 .left-col .history {
   display: block;
-  width: 100%; border: none;
-  border-top: 1px solid #ddd; border-bottom: 1px solid #ddd;
+  width: 100%;
+  border: 1px solid #ddd;
+  border-radius: 8px;
   padding: 4px 6px; font-size: 0.75rem;
   font-family: 'Courier New', monospace;
   overflow-y: auto; color: #444; word-break: break-all;
@@ -418,7 +419,6 @@ body {
 /* ── Top row: 3 equal-width controls ── */
 .lc-top-table {
   width: 100%; border-collapse: collapse;
-  border-bottom: 1px solid #ddd;
   table-layout: fixed;
   -webkit-flex-shrink: 0; flex-shrink: 0;
 }
@@ -460,15 +460,15 @@ body {
 .clr-btn {
   display: block; width: 100%; box-sizing: border-box;
   margin: 3px auto; padding: 0; border: none;
-  background: #eee; color: #333;
+  background: #d6d6d6; color: #333;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 0.90rem; font-weight: bold;
   line-height: 26px; height: 26px; max-width: 220px;
   border-radius: 999px;
   cursor: pointer; text-align: center; white-space: nowrap;
 }
-.clr-btn:hover  { background: #e0e0e0; }
-.clr-btn.active { background: #eee; color: #333; }
-.clr-btn.active:hover { background: #e0e0e0; }
+.clr-btn:hover  { background: #c8c8c8; }
+.clr-btn.active { background: #d6d6d6; color: #333; }
+.clr-btn.active:hover { background: #c8c8c8; }
 .clr-btn:active { opacity: 0.7; }
 
 .lc-top-sel {
@@ -502,7 +502,6 @@ body {
    Đổi bên/ELO để đồng bộ giao diện. ── */
 .lc-bot-row {
   display: -webkit-flex; display: flex;
-  border-top: 1px solid #ddd;
   -webkit-flex-shrink: 0; flex-shrink: 0;
   padding: 3px 4px; box-sizing: border-box;
 }
@@ -510,14 +509,14 @@ body {
   -webkit-flex: 1; flex: 1;
   margin: 0 2px; padding: 0;
   border: none;
-  background: #eee; color: #333;
+  background: #d6d6d6; color: #333;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 0.75rem; font-weight: bold;
   height: 26px; line-height: 26px;
   cursor: pointer; text-align: center;
   border-radius: 999px; box-sizing: border-box;
 }
-.lc-bot-btn:hover  { background: #e0e0e0; }
-.lc-bot-btn:active { background: #ddd; }
+.lc-bot-btn:hover  { background: #c8c8c8; }
+.lc-bot-btn:active { background: #bfbfbf; }
 .lc-bot-btn:disabled { color: #bbb; cursor: default; background: #f5f5f5; }
 
 /* ── CENTER col status bar ── */
@@ -530,8 +529,6 @@ body {
 .center-status-wrap .lc-status {
   -webkit-flex: 1; flex: 1;
   max-width: 100%;
-  border: 1px solid #ddd;
-  border-bottom: none;
   text-align: center;
   padding: 4px 8px;
   font-size: 0.82rem;
@@ -541,10 +538,11 @@ body {
 .center-col {
   -webkit-flex: 1 1 0; flex: 1 1 0;
   min-width: 0; min-height: 0;
+  border-right: 1px solid #ddd;
   display: -webkit-flex; display: flex;
   -webkit-flex-direction: column; flex-direction: column;
   -webkit-align-items: stretch; align-items: stretch;
-  -webkit-justify-content: center; justify-content: center;
+  -webkit-justify-content: flex-start; justify-content: flex-start;
   height: 100%; max-height: 100%;
   overflow: hidden;
 }
@@ -609,7 +607,6 @@ body {
   display: -webkit-flex; display: flex;
   -webkit-flex-direction: column; flex-direction: column;
   gap: 0;
-  border-left: 1px solid #000;
   height: 100%; max-height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -831,17 +828,29 @@ body {
    hiển thị khi class đã được gắn. ═══════════════════════════════════ */
 html.mp-mode, html.mp-mode body {
   height: auto; min-height: 100%; overflow-y: auto; overflow-x: hidden;
-  /* Đồng bộ TOÀN BỘ nền trang về 1 màu trắng duy nhất (đúng màu nền hiện
-     có của mục thống kê Brilliant/Great/Best/Blunder — .coach-panel —
-     và giờ áp luôn cho cả trang) thay vì để lộ màu be-xám #f5f5f0 mặc
-     định ở những khoảng trống xen giữa các khối, cho giao diện mobile
-     tối giản/đồng nhất hơn. Các khối tự có màu nền riêng (bàn cờ, pill
-     Luyện tập/Phân tích màu xám đậm, badge viền màu...) vẫn giữ nguyên
-     màu của chúng — chỉ có "nền trang" (khoảng nền chung/khoảng trống)
-     đổi thành trắng. */
-  background: #fff;
+  /* Đồng bộ TOÀN BỘ nền trang về 1 màu duy nhất #f5f5f0 (be-xám nhạt,
+     đúng màu nền gốc của trang — không phải trắng #fff như lần sửa
+     trước bị hiểu nhầm) để giao diện mobile tối giản/đồng nhất. Các khối
+     tự có màu nền riêng mang tính thiết kế (bàn cờ, pill Luyện tập/Phân
+     tích màu xám đậm, badge viền màu, ô PGN màu vàng lúc soạn...) vẫn
+     giữ nguyên màu của chúng. */
+  background: #f5f5f0 !important;
 }
-html.mp-mode #mobile-stack { background: #fff; }
+html.mp-mode #mobile-stack,
+html.mp-mode #mobile-stack .lc-top-table,
+html.mp-mode #mobile-stack #analyzer-status,
+html.mp-mode #mobile-stack #analyzer-gamelist,
+html.mp-mode #mobile-stack .lc-bot-row {
+  background: #f5f5f0 !important;
+}
+/* Ô PGN: KHÔNG ép màu ở đây nữa — để màu vàng nhạt (#fffde7) JS tự gán
+   lúc đang ở chế độ soạn (switchAppTab) hiển thị đúng như trước, không
+   bị !important ở trên đè mất. */
+/* Status bar: #f5f5f0 trên mobile — TRỪ 3 trạng thái đặc biệt (chiếu/hết
+   cờ/đang nghĩ) vẫn giữ nguyên màu xám/đen như PC, không bị đè mất. */
+html.mp-mode #mobile-stack .lc-status:not(.check):not(.gameover):not(.thinking) {
+  background: #f5f5f0 !important;
+}
 html.mp-mode .app-shell { height: auto; min-height: 100%; overflow: visible; }
 html.mp-mode .app-wrap-outer { overflow: visible; min-height: 0; }
 /* Ẩn hẳn layout 3 cột gốc — nội dung THẬT của nó đã được JS di chuyển
@@ -863,6 +872,11 @@ html.mp-mode #mobile-stack {
 html.mp-mode #mobile-stack #history {
   height: 28px !important; max-height: 28px !important; min-height: 28px !important;
   line-height: 1.3 !important; overflow-y: auto !important;
+  /* Viền xám nhạt (khớp màu viền #ccc của đồ thị eval) thay cho viền đen
+     gốc, bo góc nhẹ (6px) — mềm mại hơn nhưng không tròn hẳn như các nút
+     pill phía trên (border-radius 999px). */
+  border: 1px solid #ccc !important;
+  border-radius: 6px !important;
 }
 /* "Chi tiết từng nước" và Coach panel (Luyện tập) không tự cuộn riêng
    nữa — để cả trang cuộn 1 lần cho tự nhiên trên điện thoại (JS đã gỡ
@@ -873,7 +887,7 @@ html.mp-mode #mobile-stack #coach-layer-normal {
   overflow: visible !important; height: auto !important; min-height: 0 !important;
 }
 /* Nút bấm to hơn cho ngón tay chạm (hàng Quay lại + mũi tên tiến/lùi) */
-html.mp-mode #mobile-stack .lc-bot-row { padding: 6px 6px; }
+html.mp-mode #mobile-stack .lc-bot-row { padding: 6px 6px; border-top: 1px solid #ddd; }
 html.mp-mode #mobile-stack .lc-bot-btn { height: 34px; line-height: 34px; font-size: 0.82rem; }
 html.mp-mode #mobile-stack .lc-top-table { font-size: 1.05rem; }
 /* Tăng chiều cao hàng nút trên cùng thêm 10% cho dễ chạm tay trên điện
@@ -906,21 +920,23 @@ html.mp-mode #mobile-stack #eval-chart-label { display: none !important; }
 /* Giảm bề rộng thanh % chiến thắng (evalbar-vert) còn 1 nửa (30px→15px)
    để nhường thêm chỗ ngang cho bàn cờ trên điện thoại. */
 /* Thanh % chiến thắng trên mobile: chuyển từ thanh DỌC cạnh bàn cờ thành
-   thanh NGANG nằm DƯỚI bàn cờ, Trắng luôn bên trái, Đen luôn bên phải
-   (không đảo theo gFlip, khác với PC). Cách làm: đổi board-and-eval
-   sang column (bàn cờ trên, thanh dưới) và evalbar-vert sang row-reverse
-   (DOM là black,fill,white — row-reverse hiển thị white trước/trái,
-   black sau/phải). JS (updateEvalBarVert) tự nhận diện mp-mode để tính
-   theo WIDTH thay vì HEIGHT — xem hàm đó. */
+   thanh NGANG nằm DƯỚI bàn cờ. Hướng mặc định (row-reverse, DOM là
+   black,fill,white → hiển thị white trái/black phải) áp dụng khi Trắng
+   đang ở DƯỚI bàn cờ (gFlip=false); JS (updateEvalBarVert) sẽ TỰ ĐẢO
+   sang 'row' (black trái/white phải) khi gFlip=true (Đen ở dưới) — nên
+   KHÔNG được đặt !important ở flex-direction, để inline style JS gán đè
+   được lên rule mặc định này. */
 html.mp-mode #mobile-stack .board-and-eval {
   -webkit-flex-direction: column; flex-direction: column;
 }
 html.mp-mode #mobile-stack .evalbar-vert {
   width: 100% !important; height: 14px !important;
-  -webkit-flex-direction: row-reverse !important; flex-direction: row-reverse !important;
+  -webkit-flex-direction: row-reverse; flex-direction: row-reverse;
   border-left: none !important; border-top: 1px solid #999;
 }
-html.mp-mode #mobile-stack .evbar-pct { display: none !important; }
+/* Số % trên thanh ngang mobile: cỡ chữ nhỏ, line-height khớp bar mỏng
+   14px — JS (updateEvalBarVert) tự quyết định hiện/ẩn theo thắng/thua. */
+html.mp-mode #mobile-stack .evbar-pct { font-size: 9px; line-height: 14px; }
 /* Gọn khối Accuracy: chữ "Accuracy" chuyển lên CÙNG HÀNG với số %, thay vì
    xuống dòng riêng như bản desktop. */
 html.mp-mode #mobile-stack .an-acc-pct { display: inline-block; }
@@ -929,26 +945,53 @@ html.mp-mode #mobile-stack .an-acc-sub { display: inline-block; margin-top: 0; m
    (KHÔNG đụng font-size) để đẩy bàn cờ lên cao hơn trên điện thoại. */
 html.mp-mode #mobile-stack .an-accuracy-row {
   border-bottom: none !important;
-  padding: 3px 0 !important; margin-bottom: 2px !important;
+  padding: 1px 0 !important; margin-bottom: 1px !important;
 }
 html.mp-mode #mobile-stack .an-acc-label { margin-bottom: 0 !important; }
 html.mp-mode #mobile-stack .an-acc-divider { height: 20px !important; }
+/* Thu nhỏ thêm chữ trong khối Accuracy để giảm chiều cao tối đa trên mobile */
+html.mp-mode #mobile-stack .an-acc-pct { font-size: 1.1rem !important; }
+/* Thanh diễn biến nước đi (#an-bar-row): cách xa cụm nút Quay lại/mũi tên
+   hơn (margin-top), nhưng gần bảng phân loại "[icon] Trắng/Đen" hơn
+   (margin-bottom nhỏ lại so với mặc định 12px). */
+html.mp-mode #mobile-stack #an-bar-row {
+  margin-top: 8px !important;
+  margin-bottom: 4px !important;
+}
+html.mp-mode #mobile-stack .an-acc-label { font-size: 0.58rem !important; }
+html.mp-mode #mobile-stack .an-acc-sub { font-size: 0.6rem !important; }
+/* Thanh status ("Lượt của bạn"/"#xx Đen"...) trên mobile: giữ NGUYÊN cỡ
+   chữ gốc (kế thừa từ .lc-status/.lc-status-left/.lc-status-right ở rule
+   nền tảng), chỉ giảm CHIỀU CAO bằng height cố định + line-height (thay
+   vì giảm min-height gốc 24px xuống 0 và thu nhỏ chữ như trước) — còn
+   18px, tức 75% của 24px gốc. */
+html.mp-mode #mobile-stack .lc-status {
+  padding: 0 6px !important;
+  min-height: 0 !important;
+  height: 18px !important;
+  line-height: 18px !important;
+}
 /* Icon vua (♔/♚) trước tên người chơi đang bị bé so với tên — tăng riêng
    size icon (không đụng size tên) chỉ trên mobile. */
 html.mp-mode #mobile-stack .an-acc-icon { font-size: 1.6em; vertical-align: -0.1em; }
-/* Đơn giản hóa mobile: nền trắng quanh ô đồ thị eval + mục Accuracy (thay
-   vì để lộ nền xám be #f5f5f0 của toàn trang), và bỏ viền xám bao quanh
-   status bar phía trên bàn cờ (hiển thị "#xx Đen"/"-xxxcp") cho gọn. */
-html.mp-mode #mobile-stack #lc-eval-chart { background: #fff !important; }
+/* Đơn giản hóa mobile: đồng bộ nền các khối này về CÙNG 1 màu #f5f5f0
+   với nền chung của trang (thay vì để trắng #fff như trước, hoặc để lộ
+   viền/tách màu rời rạc), và bỏ viền xám bao quanh status bar phía trên
+   bàn cờ (hiển thị "#xx Đen"/"-xxxcp") cho gọn. */
+html.mp-mode #mobile-stack #lc-eval-chart {
+  background: #f5f5f0 !important;
+  padding-left: 0 !important; padding-right: 0 !important;
+  padding-top: 2px !important;
+}
 html.mp-mode #mobile-stack .an-accuracy-row,
-html.mp-mode #mobile-stack .an-acc-block { background: #fff !important; }
+html.mp-mode #mobile-stack .an-acc-block { background: #f5f5f0 !important; }
 html.mp-mode #mobile-stack .center-status-wrap .lc-status { border: none !important; }
-/* Nền khung CHỨA bàn cờ (bao gồm cả status "#xx Đen"/"-xxxcp") sang trắng
-   — CHỈ nền khung chứa, không đụng gì tới các ô/viền đen của bản thân
-   bàn cờ (nằm sâu bên trong .board-outer/.board-wrap, không bị ảnh hưởng
-   vì rule này chỉ set background của 2 container NGOÀI). */
+/* Nền khung CHỨA bàn cờ (bao gồm cả status "#xx Đen"/"-xxxcp") — CHỈ nền
+   khung chứa, không đụng gì tới các ô/viền đen của bản thân bàn cờ (nằm
+   sâu bên trong .board-outer/.board-wrap, không bị ảnh hưởng vì rule này
+   chỉ set background của 2 container NGOÀI). */
 html.mp-mode #mobile-stack .center-status-wrap,
-html.mp-mode #mobile-stack .board-and-eval { background: #fff !important; }
+html.mp-mode #mobile-stack .board-and-eval { background: #f5f5f0 !important; }
 /* Giảm chiều cao đồ thị eval còn 75% (135px → 101px). viewBox SVG vẫn giữ
    nguyên "0 0 600 120" (preserveAspectRatio="none" nên nội dung tự giãn
    theo chiều cao CSS, không ảnh hưởng logic vẽ trong JS) — !important vì
@@ -4699,14 +4742,49 @@ function updateEvalBarVert(whitePct){
 
   if (isMobileNow) {
     /* Mobile: thanh NGANG dưới bàn cờ — Đen chiếm chiều RỘNG (không phải
-       cao) = (1-whitePct)% tổng bề rộng thanh. CSS đã đặt row-reverse nên
-       Trắng luôn hiện bên trái, Đen luôn hiện bên phải, KHÔNG đảo theo
-       gFlip (khác PC — mobile cố định 1 chiều duy nhất theo yêu cầu). */
+       cao) = (1-whitePct)% tổng bề rộng thanh. Hướng thanh ĐẢO theo gFlip
+       giống PC: mặc định (gFlip=false, Trắng ở dưới bàn cờ) → Trắng bên
+       trái/Đen bên phải (row-reverse, DOM là black,fill,white); khi Đổi
+       bên (gFlip=true, Đen ở dưới bàn cờ) → đảo ngược thành Đen bên
+       trái/Trắng bên phải (row). */
+    ev.style.webkitFlexDirection = gFlip ? 'row' : 'row-reverse';
+    ev.style.flexDirection       = gFlip ? 'row' : 'row-reverse';
+
     var barW = ev.offsetWidth || 300;
     var blackW = Math.round((1 - whitePct / 100) * barW);
     if (blackEl) { blackEl.style.width = blackW + 'px'; blackEl.style.height = ''; }
+
+    /* % hiển thị sát ranh giới Trắng/Đen — CHỈ hiện cho bên đang thắng
+       (>50% hoặc <50%); đúng 50-50 thì ẩn (giống PC). boundary = vị trí
+       ranh giới tính từ TRÁI thanh, phụ thuộc hướng đang hiển thị:
+       - gFlip=false (Trắng trái):  Trắng chiếm [0,boundary], boundary=barW-blackW
+       - gFlip=true  (Đen trái):    Đen chiếm [0,boundary],   boundary=blackW
+       _pctGap: khoảng cách nhỏ (thay vì dán sát 0px) cho phía bắt đầu
+       NGAY TẠI ranh giới, để số không đè lên vạch chia. */
     var pctElM = document.getElementById('evbar-pct');
-    if (pctElM) pctElM.style.display = 'none'; /* ẩn số % trên thanh ngang mỏng, xem CSS mp-mode */
+    if (pctElM) {
+      var _pctLineW = 24; /* ước lượng bề rộng chữ "100%" ở font nhỏ */
+      var _pctGap   = 3;
+      var _boundaryM = gFlip ? blackW : (barW - blackW);
+      pctElM.style.top = '0'; pctElM.style.width = 'auto'; pctElM.style.textAlign = 'center';
+      if (whitePct > 50) {
+        pctElM.textContent = Math.round(whitePct) + '%';
+        pctElM.style.left = gFlip
+          ? (_boundaryM + _pctGap) + 'px'
+          : Math.max(0, _boundaryM - _pctLineW) + 'px';
+        pctElM.style.color = '#000';
+        pctElM.style.display = 'block';
+      } else if (whitePct < 50) {
+        pctElM.textContent = Math.round(100 - whitePct) + '%';
+        pctElM.style.left = gFlip
+          ? Math.max(0, _boundaryM - _pctLineW - _pctGap) + 'px'
+          : (_boundaryM + _pctGap) + 'px';
+        pctElM.style.color = '#fff';
+        pctElM.style.display = 'block';
+      } else {
+        pctElM.style.display = 'none';
+      }
+    }
     return;
   }
 
@@ -5335,23 +5413,36 @@ function fixBoardSize(){
   var centerCol   = boardAndEv  && boardAndEv.parentNode;    /* .center-col     */
   if(!centerCol) return;
 
-  /* PC: có thêm #board-bottom-spacer (bù khoảng trống dưới bàn cờ đúng
-     bằng chiều cao thanh status phía trên, để bàn cờ cách đều trên/dưới).
-     Spacer này CHIẾM THÊM đúng 1 lần chiều cao thanh status trong tổng
-     không gian dọc — phải trừ thêm phần này ra khỏi maxH, nếu không bàn
-     cờ sẽ được tính to hơn thực tế có chỗ chứa, đẩy tràn khiến chính
-     thanh status (phía trên) VÀ spacer (phía dưới) bị .center-col cắt
-     bớt (overflow:hidden) — đây chính là lỗi "status bar bị lẹm" đã gặp. */
+  /* PC: status bar (phía trên bàn cờ) giờ cao ĐÚNG BẰNG dãy nút định
+     hướng trên cùng (.lc-top-table — Luyện tập/Phân tích, Đổi bên, Phân
+     tích); còn #board-bottom-spacer (phía dưới bàn cờ) cao ĐÚNG BẰNG dãy
+     nút Quay lại + 2 mũi tên (.lc-bot-row) — 2 dãy nút này nằm ở CỘT
+     TRÁI (.left-col), đo được ngay không phụ thuộc kích thước bàn cờ.
+     Phải trừ CẢ HAI khỏi maxH (không phải chỉ 1 lần như trước), nếu
+     không bàn cờ tính to hơn thực tế có chỗ chứa → tràn → bị cắt bớt
+     (lỗi "status bar bị lẹm" từng gặp). */
   var isMobileNow = document.documentElement.classList.contains('mp-mode');
-  var statusWrap  = document.getElementById('center-status-wrap');
-  var statusH     = (!isMobileNow && statusWrap) ? statusWrap.offsetHeight : 0;
+  var topTable    = document.querySelector('.lc-top-table');
+  var botRow      = document.querySelector('.lc-bot-row');
+  var statusBox   = document.getElementById('status');
+  var topTableH   = (!isMobileNow && topTable) ? topTable.offsetHeight : 0;
+  var botRowH     = (!isMobileNow && botRow)   ? botRow.offsetHeight   : 0;
+  if (!isMobileNow && statusBox && topTableH) statusBox.style.height = topTableH + 'px';
 
-  /* Board = square; constrained by viewport height and center-col width */
-  var VPAD  = 16;
-  var maxH  = Math.max(200, window.innerHeight - VPAD - statusH);
-  /* center-col is flex:1 so its offsetWidth may not be ready on first call */
-  var colW  = centerCol.offsetWidth > 30 ? centerCol.offsetWidth - 14
-            : window.innerWidth * 0.5 - 14; /* subtract evalbar width */
+  /* Board = square; constrained by chiều cao THỰC của center-col (không
+     dùng window.innerHeight vì .center-col có thể không khớp 100% viewport
+     — dùng offsetHeight thực đo được để đường viền trên/dưới bàn cờ khớp
+     chính xác với 2 cụm nút bên cột trái, không còn khoảng hở do VPAD hay
+     do center-col canh giữa theo chiều dọc). */
+  var maxH  = Math.max(200, (isMobileNow ? window.innerHeight : centerCol.offsetHeight) - topTableH - botRowH);
+  /* center-col is flex:1 so its offsetWidth may not be ready on first call.
+     Mobile: bàn cờ giờ full bề rộng (evalbar nằm NGANG dưới bàn cờ, không
+     còn cạnh bàn cờ nữa) nên KHÔNG trừ bớt 14px như trước (14px đó vốn để
+     chừa chỗ cho evalbar-vert nằm cạnh bàn cờ ở layout hàng-ngang, chỉ PC
+     mới còn cần). */
+  var evalbarPad = isMobileNow ? 0 : 14;
+  var colW  = centerCol.offsetWidth > 30 ? centerCol.offsetWidth - evalbarPad
+            : window.innerWidth * (isMobileNow ? 1 : 0.5) - evalbarPad;
   var size  = Math.min(colW, maxH);
 
   /* Làm tròn size xuống đúng BỘI SỐ CỦA 8 (dựa theo cellH đã floor) TRƯỚC
@@ -5382,16 +5473,16 @@ function fixBoardSize(){
   /* Nhãn tọa độ (số hàng/chữ cột): cao đúng 1/6 chiều cao 1 ô cờ, cách lề
      ô ~3% bề rộng ô cờ (không còn sát đường kẻ) */
   bd.style.setProperty('--coord-fs', Math.max(6, Math.floor(cellH / 6)) + 'px');
-  bd.style.setProperty('--coord-pad', Math.max(1, Math.round(cellH * 0.03)) + 'px');
+  bd.style.setProperty('--coord-pad', Math.max(1, Math.round(cellH * 0.04)) + 'px');
 
   /* ── Sync SVG overlay ── */
   var svg = document.getElementById('coach-svg');
   if(svg){ svg.style.width = size+'px'; svg.style.height = size+'px'; }
 
-  /* ── PC: gán chiều cao spacer đúng bằng statusH đã đo ở trên ── */
+  /* ── PC: gán chiều cao spacer đúng bằng chiều cao .lc-bot-row đã đo ── */
   if (!isMobileNow) {
     var spacer = document.getElementById('board-bottom-spacer');
-    if (spacer) spacer.style.height = statusH + 'px';
+    if (spacer) spacer.style.height = botRowH + 'px';
   }
 
   /* ── Sync evalbar height ── */
@@ -5643,7 +5734,13 @@ function setStatus(){
   var inReview = (typeof gReviewIdx!=='undefined' && gReviewIdx>=0
                   && (typeof gBranchActive==='undefined' || !gBranchActive));
 
-  var moveNum = Math.floor(gUciHist.length/2)+1;
+  /* Số thứ tự nước: khi đang XEM LẠI (review) một nước cụ thể, phải tính
+     theo gReviewIdx (số nước ĐÃ ĐI tính đến thời điểm đang xem, tức
+     gReviewIdx+1 ply) — KHÔNG được dùng gUciHist.length (luôn là TỔNG số
+     nước của CẢ VÁN), nếu không status sẽ luôn hiện nước cuối cùng của
+     ván bất kể đang xem lại nước nào (lỗi đã gặp). */
+  var plyCount = inReview ? (gReviewIdx+1) : gUciHist.length;
+  var moveNum = Math.floor(plyCount/2)+1;
   var leftTxt = '#'+_padNum2(moveNum)+' '+tn;
   var centerTxt='', rightTxt='';
   var best = _currentBestInfo();
@@ -7110,7 +7207,7 @@ function _buildMobileLayoutItems() {
     '#draw-offer-bar',
     '.board-and-eval',      /* 5. Bàn cờ */
     '.lc-bot-row',          /* 6. Quay lại/Ván mới + mũi tên lùi/tiến */
-    '#an-bar-row',          /* 7. Thanh diễn biến nhiều màu (nước đi) */
+    '#an-bar-row',          /* 7. Thanh diễn biến nhiều màu (nước đi) — ngay dưới lc-bot-row */
     '#an-stats-mobile',     /* 8. Bảng phân loại nước đi — bản badge gọn */
     '#coach-layer-normal',  /* (tab Luyện tập, chưa có kết quả phân tích) */
     '#an-moves-title',
