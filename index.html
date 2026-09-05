@@ -893,10 +893,24 @@ html.mp-mode #mobile-stack #eval-chart-label { display: none !important; }
 /* Label % trên thanh eval dọc cạnh bàn cờ — bản thường 0.68rem bị tràn khi
    bàn cờ (và evalbar-vert đi kèm) thu nhỏ theo bề ngang điện thoại, nên
    thu còn 1 nửa (0.34rem) riêng cho mobile. */
-html.mp-mode #mobile-stack .evbar-pct { font-size: 0.34rem !important; }
 /* Giảm bề rộng thanh % chiến thắng (evalbar-vert) còn 1 nửa (30px→15px)
    để nhường thêm chỗ ngang cho bàn cờ trên điện thoại. */
-html.mp-mode #mobile-stack .evalbar-vert { width: 15px !important; }
+/* Thanh % chiến thắng trên mobile: chuyển từ thanh DỌC cạnh bàn cờ thành
+   thanh NGANG nằm DƯỚI bàn cờ, Trắng luôn bên trái, Đen luôn bên phải
+   (không đảo theo gFlip, khác với PC). Cách làm: đổi board-and-eval
+   sang column (bàn cờ trên, thanh dưới) và evalbar-vert sang row-reverse
+   (DOM là black,fill,white — row-reverse hiển thị white trước/trái,
+   black sau/phải). JS (updateEvalBarVert) tự nhận diện mp-mode để tính
+   theo WIDTH thay vì HEIGHT — xem hàm đó. */
+html.mp-mode #mobile-stack .board-and-eval {
+  -webkit-flex-direction: column; flex-direction: column;
+}
+html.mp-mode #mobile-stack .evalbar-vert {
+  width: 100% !important; height: 14px !important;
+  -webkit-flex-direction: row-reverse !important; flex-direction: row-reverse !important;
+  border-left: none !important; border-top: 1px solid #999;
+}
+html.mp-mode #mobile-stack .evbar-pct { display: none !important; }
 /* Gọn khối Accuracy: chữ "Accuracy" chuyển lên CÙNG HÀNG với số %, thay vì
    xuống dòng riêng như bản desktop. */
 html.mp-mode #mobile-stack .an-acc-pct { display: inline-block; }
@@ -1102,6 +1116,13 @@ html.mp-mode #mobile-stack #eval-chart-svg { height: 101px !important; }
 </div>
 
 </div><!-- end .board-and-eval -->
+<!-- Khoảng trống bù dưới bàn cờ, cao đúng bằng thanh status phía trên
+     (#center-status-wrap) — để bàn cờ nằm CÁCH ĐỀU trên/dưới màn hình
+     thay vì bị lệch lên trên do thanh status chỉ có ở phía trên. Chiều
+     cao được JS đo & gán trong fixBoardSize(), chỉ áp dụng trên PC (trên
+     mobile phần tử này không bị lấy ra khỏi .center-col nên nằm im
+     trong khối .app-wrap đang ẩn, không ảnh hưởng gì). -->
+<div id="board-bottom-spacer" style="-webkit-flex-shrink:0;flex-shrink:0;width:100%"></div>
 </div><!-- end .center-col -->
 
 <!-- ═══ RIGHT: coach column ═══ -->
@@ -1954,6 +1975,14 @@ function lastUsernameSave(username){
 }
 function lastUsernameLoad(){
   try{ return localStorage.getItem(LAST_USERNAME_KEY) || ''; }catch(e){ return ''; }
+}
+/* Chữ mờ gợi ý trong ô PGN (chế độ Phân tích): nếu đã từng tìm username
+   nào đó trước đây (còn lưu trong localStorage) thì hiện LUÔN username đó
+   thay vì câu hướng dẫn mặc định — để người dùng biết trước bấm "Phân
+   tích" ngay sẽ tự tìm cho ai. */
+function analyzerPlaceholderText(){
+  var saved = lastUsernameLoad();
+  return saved || 'D\u00e1n User name ho\u1eb7c PGN ho\u1eb7c ID tr\u1eadn \u0111\u1ea5u v\u00e0o \u0111\u00e2y r\u1ed3i b\u1ea5m Ph\u00e2n t\u00edch';
 }
 
 /* Người dùng tự tay đổi ELO qua dropdown (chỉ khi chưa có nước đi nào) —
@@ -4655,26 +4684,52 @@ function updateEvalBarVert(whitePct){
   gLastEvalPct = whitePct;
   var ev = document.getElementById('evalbar-vert');
   if(!ev) return;
+  var blackEl = ev.querySelector('.evbar-black');
+  var isMobileNow = document.documentElement.classList.contains('mp-mode');
+
+  if (isMobileNow) {
+    /* Mobile: thanh NGANG dưới bàn cờ — Đen chiếm chiều RỘNG (không phải
+       cao) = (1-whitePct)% tổng bề rộng thanh. CSS đã đặt row-reverse nên
+       Trắng luôn hiện bên trái, Đen luôn hiện bên phải, KHÔNG đảo theo
+       gFlip (khác PC — mobile cố định 1 chiều duy nhất theo yêu cầu). */
+    var barW = ev.offsetWidth || 300;
+    var blackW = Math.round((1 - whitePct / 100) * barW);
+    if (blackEl) { blackEl.style.width = blackW + 'px'; blackEl.style.height = ''; }
+    var pctElM = document.getElementById('evbar-pct');
+    if (pctElM) pctElM.style.display = 'none'; /* ẩn số % trên thanh ngang mỏng, xem CSS mp-mode */
+    return;
+  }
+
   var barH = ev.offsetHeight || 400;
   /* Black segment from top = (1 - whitePct/100) × barH */
   var blackH = Math.round((1 - whitePct / 100) * barH);
-  var blackEl = ev.querySelector('.evbar-black');
-  if(blackEl) blackEl.style.height = blackH + 'px';
+  if(blackEl){ blackEl.style.height = blackH + 'px'; blackEl.style.width = ''; }
+
+  /* Mặc định (Trắng ở dưới bàn cờ, gFlip=false): Đen trên - Trắng dưới,
+     khớp với việc quân Đen luôn hiện ở phía trên bàn cờ lúc đó. Khi Đổi
+     bên (gFlip=true, Đen ở dưới bàn cờ) → đảo ngược thanh eval cho khớp:
+     Trắng lên trên, Đen xuống dưới. Dùng column-reverse để đảo thứ tự
+     hiển thị mà KHÔNG cần đổi công thức tính blackH ở trên. */
+  ev.style.webkitFlexDirection = gFlip ? 'column-reverse' : 'column';
+  ev.style.flexDirection       = gFlip ? 'column-reverse' : 'column';
 
   /* % hiển thị sát ranh giới đen/trắng — chỉ hiện cho bên đang thắng
-     (>50%). Trắng thắng: chữ nằm NGAY DƯỚI ranh giới (rơi vào vùng nền
-     trắng). Đen thắng: chữ nằm NGAY TRÊN ranh giới (rơi vào vùng nền đen). */
+     (>50%). Vị trí tính từ ĐỈNH thanh: bình thường ranh giới nằm ở
+     blackH (vì Đen trên); khi đảo chiều (Trắng trên) ranh giới nằm ở
+     (barH-blackH) thay vào đó — phần offset ±lineHeight theo đó cũng đảo
+     dấu để chữ luôn nằm ĐÚNG bên trong vùng màu của bên đang thắng. */
   var pctEl = document.getElementById('evbar-pct');
   if(pctEl){
-    var _pctLineH = 12; /* ước lượng chiều cao 1 dòng chữ, dùng để đẩy lên khi đen thắng */
+    var _pctLineH = 12; /* ước lượng chiều cao 1 dòng chữ */
+    var _boundary = gFlip ? (barH - blackH) : blackH;
     if(whitePct > 50){
       pctEl.textContent = Math.round(whitePct) + '%';
-      pctEl.style.top = blackH + 'px';
+      pctEl.style.top = (gFlip ? (_boundary - _pctLineH) : _boundary) + 'px';
       pctEl.style.color = '#000';
       pctEl.style.display = 'block';
     } else if(whitePct < 50){
       pctEl.textContent = Math.round(100 - whitePct) + '%';
-      pctEl.style.top = (blackH - _pctLineH) + 'px';
+      pctEl.style.top = (gFlip ? _boundary : (_boundary - _pctLineH)) + 'px';
       pctEl.style.color = '#fff';
       pctEl.style.display = 'block';
     } else {
@@ -5195,7 +5250,7 @@ function newGame(){
     var _hel=document.getElementById('history');
     if(_hel){
       if(typeof gAppTab!=='undefined' && gAppTab==='analysis'){
-        _hel.setAttribute('data-placeholder','D\u00e1n User name ho\u1eb7c PGN ho\u1eb7c ID tr\u1eadn \u0111\u1ea5u v\u00e0o \u0111\u00e2y r\u1ed3i b\u1ea5m Ph\u00e2n t\u00edch');
+        _hel.setAttribute('data-placeholder', analyzerPlaceholderText());
       } else {
         _hel.setAttribute('data-placeholder','Vui l\u00f2ng \u0111i qu\u00e2n');
       }
@@ -5270,9 +5325,20 @@ function fixBoardSize(){
   var centerCol   = boardAndEv  && boardAndEv.parentNode;    /* .center-col     */
   if(!centerCol) return;
 
+  /* PC: có thêm #board-bottom-spacer (bù khoảng trống dưới bàn cờ đúng
+     bằng chiều cao thanh status phía trên, để bàn cờ cách đều trên/dưới).
+     Spacer này CHIẾM THÊM đúng 1 lần chiều cao thanh status trong tổng
+     không gian dọc — phải trừ thêm phần này ra khỏi maxH, nếu không bàn
+     cờ sẽ được tính to hơn thực tế có chỗ chứa, đẩy tràn khiến chính
+     thanh status (phía trên) VÀ spacer (phía dưới) bị .center-col cắt
+     bớt (overflow:hidden) — đây chính là lỗi "status bar bị lẹm" đã gặp. */
+  var isMobileNow = document.documentElement.classList.contains('mp-mode');
+  var statusWrap  = document.getElementById('center-status-wrap');
+  var statusH     = (!isMobileNow && statusWrap) ? statusWrap.offsetHeight : 0;
+
   /* Board = square; constrained by viewport height and center-col width */
   var VPAD  = 16;
-  var maxH  = Math.max(200, window.innerHeight - VPAD);
+  var maxH  = Math.max(200, window.innerHeight - VPAD - statusH);
   /* center-col is flex:1 so its offsetWidth may not be ready on first call */
   var colW  = centerCol.offsetWidth > 30 ? centerCol.offsetWidth - 14
             : window.innerWidth * 0.5 - 14; /* subtract evalbar width */
@@ -5300,6 +5366,12 @@ function fixBoardSize(){
   /* ── Sync SVG overlay ── */
   var svg = document.getElementById('coach-svg');
   if(svg){ svg.style.width = size+'px'; svg.style.height = size+'px'; }
+
+  /* ── PC: gán chiều cao spacer đúng bằng statusH đã đo ở trên ── */
+  if (!isMobileNow) {
+    var spacer = document.getElementById('board-bottom-spacer');
+    if (spacer) spacer.style.height = statusH + 'px';
+  }
 
   /* ── Sync evalbar height ── */
   syncBoardRows(size);
@@ -5864,7 +5936,7 @@ function takeBack(){
     } else {
       hel.textContent='';
       if(typeof gAppTab!=='undefined' && gAppTab==='analysis'){
-        hel.setAttribute('data-placeholder','D\u00e1n User name ho\u1eb7c PGN ho\u1eb7c ID tr\u1eadn \u0111\u1ea5u v\u00e0o \u0111\u00e2y r\u1ed3i b\u1ea5m Ph\u00e2n t\u00edch');
+        hel.setAttribute('data-placeholder', analyzerPlaceholderText());
       } else {
         hel.setAttribute('data-placeholder','Vui l\u00f2ng \u0111i qu\u00e2n');
       }
@@ -6154,7 +6226,7 @@ function switchAppTab(tab) {
       hel.style.background = '#fffde7';
       hel.style.cursor = 'text';
       if (hel.textContent === '\u2014') hel.textContent = '';
-      hel.setAttribute('data-placeholder', 'D\u00e1n User name ho\u1eb7c PGN ho\u1eb7c ID tr\u1eadn \u0111\u1ea5u v\u00e0o \u0111\u00e2y r\u1ed3i b\u1ea5m Ph\u00e2n t\u00edch');
+      hel.setAttribute('data-placeholder', analyzerPlaceholderText());
       if (!hel.textContent) hel.classList.add('pgn-empty-hint'); else hel.classList.remove('pgn-empty-hint');
     }
 
@@ -7106,6 +7178,21 @@ setTimeout(function(){
 }, 0);
 switchAppTab('analysis');
 evaluateMobileLayout();
+
+/* Lúc mở trang/refresh: nếu đã có username tìm kiếm gần nhất lưu trong
+   localStorage, hiện luôn username đó làm chữ mờ gợi ý trong ô PGN (thay
+   cho dòng hướng dẫn mặc định) — để người dùng biết trước username nào
+   sẽ được tự động tìm nếu bấm "Phân tích" mà không gõ gì. Đặt SAU
+   switchAppTab() ở trên vì chính hàm đó set lại placeholder mặc định. */
+(function(){
+  var _savedU = (typeof lastUsernameLoad === 'function') ? lastUsernameLoad() : '';
+  if (!_savedU) return;
+  var _h = document.getElementById('history');
+  if (_h && _h.getAttribute('data-placeholder') !== null) {
+    _h.setAttribute('data-placeholder', _savedU);
+  }
+})();
+
 </script>
 <script>
 
