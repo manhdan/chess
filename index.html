@@ -11,8 +11,35 @@ gtag('config', 'G-YJ1J2MJLZT');
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Chess Coach 8</title>
+<title>Chess Coach 9</title>
 <style>
+:root {
+  /* Màu ô bàn cờ — đổi qua setBoardTheme(), lưu localStorage để nhớ lựa
+     chọn giữa các lần mở trang. Mặc định = màu hiện tại của app (trắng/xám). */
+  --board-lite: #fff;
+  --board-dark: #d0d0d0;
+  --board-coord-dark: #d0d0d0;
+  /* Màu highlight ô xuất phát/đích của nước vừa đi — tách riêng theo ô
+     sáng/tối (giống chess.com: ô sáng và ô tối được tô 2 sắc độ khác
+     nhau của cùng 1 tông màu highlight). */
+  --board-hl-lite: rgba(129,178,118,0.45);
+  --board-hl-dark: rgba(99,158,86,0.55);
+  /* Viền chia ô — CHỈ theme "hiện tại" có viền; xanh lá/xanh dương/nâu gỗ
+     KHÔNG có viền (giống chess.com thật), đổi qua setBoardTheme(). */
+  --board-border: 0.5px solid rgba(0,0,0,0.22);
+  /* Họa tiết vân (đá cho theme xanh dương, gỗ cho theme nâu gỗ) — mặc
+     định "none", setBoardTheme() gán background-image mô phỏng vân. */
+  --board-texture: none;
+  /* Màu vùng "Trắng đang thắng" trên đồ thị eval — mặc định (theme hiện
+     tại) giữ đúng màu xanh nhạt cũ; các theme khác sẽ là màu ô sáng của
+     bàn cờ nhưng sáng nhạt hơn (tính trong setBoardTheme()). Vùng "Đen
+     đang thắng" (xám #555) KHÔNG đổi ở bất kỳ theme nào. */
+  --board-eval-white: #d4edda;
+  /* Màu ô khi chọn quân để di chuyển — mặc định (theme hiện tại) giữ
+     đúng màu xám đậm cũ; các theme khác sẽ là màu ô tối của bàn cờ
+     nhưng tối hơn (tính trong setBoardTheme()). */
+  --board-select: #555;
+}
 * { -webkit-box-sizing: border-box; box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; width: 100%; overflow: hidden; }
 select, button, input { -webkit-box-sizing: border-box; box-sizing: border-box; }
@@ -58,18 +85,32 @@ body {
 
 /* ── BOARD ── */
 .board-outer { width: 100%; max-width: 1000px; }
-.board { display: block; overflow: hidden; border: 1px solid #000; width: 100%; }
+.board {
+  display: block; overflow: hidden; border: 1px solid #000; width: 100%;
+  position: relative;
+}
 .sq {
   float: left; width: 12.5%; position: relative;
   cursor: pointer; text-align: center;
-  border: 0.5px solid #bbb; overflow: hidden;
+  /* Viền chia ô: chỉ hiện ở theme "hiện tại" (mặc định) — các theme màu
+     (xanh lá/xanh dương/nâu gỗ) không có viền, giống chess.com thật.
+     Đổi qua biến --board-border trong setBoardTheme(). */
+  border: var(--board-border);
+  overflow: hidden;
 }
-.sq.lite { background: #fff; }
-.sq.dark { background: #d0d0d0; }
+/* Màu nền ô: LUÔN là màu đặc (opaque) ở mọi theme — vân đá/gỗ (nếu
+   theme có) được renderBoard() gán TRỰC TIẾP làm background-image cho
+   từng ô (xem gBoardTextureVariants), vẽ đè lên trên màu nền đặc này nên
+   luôn hiện rõ đúng độ đậm đã thiết kế (không bị "chìm" do chồng 2 lớp
+   trong suốt như cách làm trước). Để đỡ lặp lại y hệt giữa các ô liền
+   kề, renderBoard() xoay vòng qua NHIỀU biến thể vân khác nhau theo vị
+   trí ô thay vì dùng chung 1 pattern cho cả 64 ô. */
+.sq.lite { background-color: var(--board-lite); }
+.sq.dark { background-color: var(--board-dark); }
 /* Nhãn tọa độ (số hàng 1-8 / chữ cột a-h): size = 1/6 chiều cao 1 ô cờ,
    tính động qua biến CSS --coord-fs (gán bởi fixBoardSize() theo đúng
    kích thước bàn cờ thực tế mỗi khi resize). Màu: ô tối → chữ trắng; ô
-   sáng → chữ lấy đúng màu nền của ô tối (#d0d0d0) để tương phản dễ đọc. */
+   sáng → chữ lấy đúng màu nền của ô tối (--board-dark) để tương phản dễ đọc. */
 .coord-label {
   position: absolute;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -80,11 +121,15 @@ body {
 .coord-rank { top: var(--coord-pad, 2px); left: var(--coord-pad, 2px); }
 .coord-file { bottom: var(--coord-pad, 2px); right: var(--coord-pad, 2px); }
 .sq.dark .coord-label { color: #fff; }
-.sq.lite .coord-label { color: #d0d0d0; }
-.sq.lm-f { background: rgba(129,178,118,0.45); }   /* xanh matcha pastel — ô xuất phát */
-.sq.lm-t { background: rgba(99,158,86,0.55); }   /* xanh matcha đậm hơn — ô đích */
+.sq.lite .coord-label { color: var(--board-coord-dark, var(--board-dark)); }
+/* Highlight ô xuất phát/đích của nước vừa đi — tách theo ô sáng/tối
+   (giống chess.com: 2 sắc độ khác nhau của cùng tông màu), đổi theo
+   theme đang chọn qua --board-hl-lite/--board-hl-dark. Chỉ đổi
+   background-color, background-image (vân) vẫn giữ nguyên đè lên trên. */
+.sq.lite.lm-f, .sq.lite.lm-t { background-color: var(--board-hl-lite); }
+.sq.dark.lm-f,  .sq.dark.lm-t  { background-color: var(--board-hl-dark); }
 .sq.chk  { background: #888 !important; }
-.sq.sel  { background: #555 !important; }
+.sq.sel  { background-color: var(--board-select, #555) !important; }
 .sq.sel .piece { color: #fff !important; }
 .dot-marker {
   position: absolute; width: 30%; height: 30%;
@@ -614,7 +659,7 @@ body {
 
 /* ── Square badges ── */
 .sq-badge {
-  position: absolute; bottom: 1px; right: 1px;
+  position: absolute; bottom: 1px; left: 1px;
   width: 18%; height: 18%;
   pointer-events: none; z-index: 8;
   display: -webkit-flex; display: flex;
@@ -660,7 +705,7 @@ body {
 .rb-mistake    { background: #ffa049; color: #fff; }
 .rb-inaccuracy { background: #f9a825; color: #333; }
 .rb-missed     { background: #6a0000; color: #fff; }
-.sq.king-safe-sq { background: rgba(0,150,136,0.22) !important; }
+.sq.king-safe-sq { background: rgba(255,87,34,0.25) !important; }
 
 /* ═══════════════ COACH PANEL ═══════════════ */
 .coach-panel {
@@ -684,6 +729,44 @@ body {
   -webkit-justify-content: space-between; justify-content: space-between;
 }
 .coach-header-title { display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; gap: 6px; }
+
+/* ── 3 hạt đổi giao diện bàn cờ (trong thanh "Kết quả phân tích") ──
+   Hạt 1 = màu hiện tại, hạt 2 = xanh lá, hạt 3 = xanh dương. Kiểu dáng
+   tham khảo theme-dots của CITAD2026_style.html. */
+.board-theme-dots {
+  display: -webkit-flex; display: flex;
+  -webkit-align-items: center; align-items: center;
+  gap: 6px;
+}
+.board-theme-dot {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid rgba(255,255,255,0.55);
+  padding: 0; flex-shrink: 0;
+  transition: transform 0.15s, border-color 0.15s;
+}
+.board-theme-dot:hover { transform: scale(1.18); }
+.board-theme-dot.active { border-color: #fff; transform: scale(1.12); }
+.board-theme-dot-current { background: linear-gradient(135deg, #fff 50%, #d0d0d0 50%); }
+.board-theme-dot-green   { background: linear-gradient(135deg, #ebecd0 50%, #739552 50%); }
+.board-theme-dot-blue    { background: linear-gradient(135deg, #d8e3e7 50%, #7195aa 50%); }
+.board-theme-dot-wood    { background: linear-gradient(135deg, #c8ab78 50%, #9e754e 50%); }
+/* Nút "← Quay lại" cạnh dãy chấm chọn giao diện (header panel "Kết quả
+   phân tích", nền tối #666) — trước đây chỉ là <span> chữ thường, không
+   có style nút bo tròn như các nút khác trong app. Dùng cùng bo góc
+   999px (giống .lc-bot-btn/.board-theme-dot) nhưng nền trắng mờ để hợp
+   với header tối, không dùng nền xám đặc như .lc-bot-btn (sẽ lệch tông
+   trên nền #666). */
+.review-back-btn {
+  display: inline-flex; align-items: center;
+  padding: 4px 12px; border-radius: 999px;
+  background: rgba(255,255,255,0.18); color: #fff;
+  font-size: 0.85rem; font-weight: bold;
+  cursor: pointer; opacity: 0.95;
+  transition: background 0.15s, opacity 0.15s;
+}
+.review-back-btn:hover, .review-back-btn:active { background: rgba(255,255,255,0.32); opacity: 1; }
 
 
 /* mode buttons — nằm ở cuối cột (thay chỗ hint-btn cũ). Cụm 3 nút hợp nhất
@@ -1137,22 +1220,22 @@ html.mp-mode #mobile-stack #eval-chart-svg { height: 101px !important; }
   <svg id="coach-svg" viewBox="0 0 8 8" preserveAspectRatio="none">
     <defs>
       <marker id="arr-grn" markerWidth="2.2" markerHeight="2.2" refX="1.5" refY="1.1" orient="auto">
-        <polygon points="0 0,2.2 1.1,0 2.2" fill="rgba(26,122,26,0.20)"/>
+        <polygon points="0 0,2.2 1.1,0 2.2" fill="rgb(26,122,26)"/>
       </marker>
       <marker id="arr-blu" markerWidth="2.2" markerHeight="2.2" refX="1.5" refY="1.1" orient="auto">
-        <polygon points="0 0,2.2 1.1,0 2.2" fill="rgba(26,95,168,0.20)"/>
+        <polygon points="0 0,2.2 1.1,0 2.2" fill="rgb(26,95,168)"/>
       </marker>
       <marker id="arr-red" markerWidth="2.2" markerHeight="2.2" refX="1.5" refY="1.1" orient="auto">
-        <polygon points="0 0,2.2 1.1,0 2.2" fill="rgba(190,20,20,0.20)"/>
+        <polygon points="0 0,2.2 1.1,0 2.2" fill="rgb(190,20,20)"/>
       </marker>
       <marker id="arr-pur" markerWidth="2.2" markerHeight="2.2" refX="1.5" refY="1.1" orient="auto">
-        <polygon points="0 0,2.2 1.1,0 2.2" fill="rgba(120,26,154,0.20)"/>
+        <polygon points="0 0,2.2 1.1,0 2.2" fill="rgb(120,26,154)"/>
       </marker>
       <marker id="arr-teal" markerWidth="2.2" markerHeight="2.2" refX="1.5" refY="1.1" orient="auto">
-        <polygon points="0 0,2.2 1.1,0 2.2" fill="rgba(0,150,136,0.24)"/>
+        <polygon points="0 0,2.2 1.1,0 2.2" fill="rgb(0,150,136)"/>
       </marker>
       <marker id="arr-pinkorange" markerWidth="2.2" markerHeight="2.2" refX="1.5" refY="1.1" orient="auto">
-        <polygon points="0 0,2.2 1.1,0 2.2" fill="rgba(255,111,71,0.28)"/>
+        <polygon points="0 0,2.2 1.1,0 2.2" fill="rgb(255,111,71)"/>
       </marker>
     </defs>
     <g id="svg-sq-hi"></g>
@@ -1204,7 +1287,15 @@ html.mp-mode #mobile-stack #eval-chart-svg { height: 101px !important; }
   <div id="coach-layer-review" style="display:none;-webkit-flex-direction:column;flex-direction:column;-webkit-flex:1;flex:1;overflow:hidden;min-height:0;">
     <div class="an-header" id="an-review-header" style="background:#666;color:#fff;padding:8px 12px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;font-size:0.90rem;font-weight:bold;text-transform:none;display:-webkit-flex;display:flex;-webkit-justify-content:space-between;justify-content:space-between;-webkit-align-items:center;align-items:center;-webkit-flex-shrink:0;flex-shrink:0;">
       <span>&#128202; K&#7871;t qu&#7843; ph&#226;n t&#237;ch</span>
-      <span id="review-back-link" style="cursor:pointer;font-size:1.05rem;opacity:0.7" onclick="closeReviewPanel()">&larr; Quay l&#7841;i</span>
+      <span style="display:-webkit-flex;display:flex;-webkit-align-items:center;align-items:center;gap:12px">
+        <span id="review-back-link" class="review-back-btn" onclick="closeReviewPanel()">&larr; Quay l&#7841;i</span>
+        <span class="board-theme-dots" id="boardThemeDots">
+          <button class="board-theme-dot board-theme-dot-current active" id="boardThemeCurrent" onclick="setBoardTheme('current')" title="Giao di&#7879;n hi&#7879;n t&#7841;i"></button>
+          <button class="board-theme-dot board-theme-dot-green" id="boardThemeGreen" onclick="setBoardTheme('green')" title="Giao di&#7879;n xanh l&#225;"></button>
+          <button class="board-theme-dot board-theme-dot-blue" id="boardThemeBlue" onclick="setBoardTheme('blue')" title="Giao di&#7879;n xanh d&#432;&#417;ng"></button>
+          <button class="board-theme-dot board-theme-dot-wood" id="boardThemeWood" onclick="setBoardTheme('wood')" title="Giao di&#7879;n n&#226;u g&#7895;"></button>
+        </span>
+      </span>
     </div>
     <div class="an-body" style="-webkit-flex:1;flex:1;display:-webkit-flex;display:flex;-webkit-flex-direction:column;flex-direction:column;overflow:hidden;min-height:0;padding:10px 10px 0;">
       <div style="-webkit-flex-shrink:0;flex-shrink:0">
@@ -2029,6 +2120,360 @@ function lastUsernameSave(username){
 function lastUsernameLoad(){
   try{ return localStorage.getItem(LAST_USERNAME_KEY) || ''; }catch(e){ return ''; }
 }
+/* ── Giao diện màu bàn cờ (3 hạt trong thanh "Kết quả phân tích") ──
+   current = màu mặc định của app (trắng/xám); green/blue = 2 theme tham
+   khảo từ CITAD2026_style.html. Lưu lựa chọn vào localStorage để giữ
+   nguyên giao diện ở các lần mở trang sau, trừ khi người dùng đổi lại.
+
+   ĐỂ DỄ CHỈNH: phần code "implementation" (helper functions, mảng vân
+   đá) nằm TRƯỚC, còn TOÀN BỘ THAM SỐ CÓ THỂ CHỈNH của mọi giao diện
+   (màu sắc, độ nhiễu, kích thước tile...) được GOM CHUNG vào 1 khối
+   ngay bên dưới header "THAM SỐ GIAO DIỆN BÀN CỜ" — chỉ cần sửa trong
+   khối đó, không cần đụng vào phần implementation. */
+var BOARD_THEME_KEY = 'chesscoach_board_theme';
+
+/* [Implementation — vân mây/watercolor, học từ ChessStyle7.html] Áp dụng
+   cho CẢ theme "blue" (đá xanh dương) LẪN "wood" (nâu gỗ) — thay hẳn
+   cách làm cũ của từng theme (blue: radial-gradient blob CSS; wood: màu
+   phẳng + noise-tile riêng) bằng CÙNG 1 kỹ thuật vân dùng chung. Dùng 2D
+   blurred-noise: sinh nhiễu ngẫu nhiên rồi làm mờ qua box-blur nhiều
+   lượt (theo cả 2 chiều hàng/cột), tạo 2 lớp (mảng LỚN mờ nhiều = loang
+   màu nước; mảng VỪA mờ ít hơn = vân mịn hơn), cộng thêm hạt nhiễu mịn
+   (speckle) — cho cảm giác mây trôi/loang mực nước tự nhiên hơn hẳn so
+   với vài blob tròn cố định (blue cũ) hay hạt nhiễu tile lặp lại (wood
+   cũ).
+
+   Sinh 1 ảnh DUY NHẤT MỖI THEME, gán làm nền cho CẢ khung #board (không
+   phải per-cell) — ĐÃ THỬ per-cell (cắt lát bằng background-size 800%
+   800% + background-position theo từng ô, giống hệt "vân đá" cũ) nhưng
+   gây LAG rõ rệt (mỗi lần renderBoard() — tức mỗi lần đi quân — phải
+   crop/scale/blend lại ảnh raster cho 64 ô), đúng bài học đã gặp với
+   vân gỗ trước đây. Nên chuyển hẳn sang gán 1 lần cho #board.
+
+   Vì mỗi theme có 2 màu ô (caro sáng/tối) riêng, nếu chỉ gán ảnh XÁM
+   THUẦN lên #board (ô để trong suốt) thì mất hẳn màu — cả bàn chỉ còn
+   thấy màu xám của vân (bug đã gặp thực tế). Cách sửa: NƯỚNG SẴN màu
+   caro (lite/dark CỦA ĐÚNG THEME đang chọn) + vân mây làm 1 bằng cách tự
+   tính overlay-blend NGAY LÚC SINH ẢNH (công thức _overlayBlend(), y hệt
+   background-blend-mode:overlay của CSS nhưng tính bằng JS 1 lần duy
+   nhất) — ảnh xuất ra đã có sẵn đúng màu + vân mây hoà quyện, không cần
+   CSS blend-mode ở runtime nữa. Cache riêng theo TỪNG THEME
+   (gCloudTextureCache, key = tên theme) vì mỗi theme nướng màu khác
+   nhau — không thể dùng chung 1 ảnh cache cho cả 2 theme. */
+var CLOUD_TEXTURE_PARAMS = {
+  /* ĐÃ CHỐT sau khi thử qua thanh trượt debug — xem lịch sử ở comment
+     phía trên khối này nếu cần đối chiếu cách hoạt động từng tham số. */
+  largeWin:22, largeScale:76,
+  medWin:11,   medScale:0,
+  speckle:17,
+  grainRowWin:13, grainScale:32
+};
+var gCloudTextureCache = {}; /* cache riêng theo TỪNG THEME (key = tên theme) — mỗi theme nướng màu khác nhau vào ảnh nên không thể dùng chung 1 cache, kẻo đổi theme bị lẫn màu của theme trước */
+
+function _hexToRgb(hex){
+  var m=/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  return m ? [parseInt(m[1],16),parseInt(m[2],16),parseInt(m[3],16)] : [0,0,0];
+}
+/* Chuyển 1 màu (hex "#rrggbb" HOẶC "rgb(...)"/"rgba(...)" có sẵn) thành
+   chuỗi rgba() với alpha MỚI chỉ định — dùng để làm màu highlight bán
+   trong suốt cho theme có vân mây (xem setBoardTheme()), để lộ vân bên
+   dưới thay vì che phẳng hoàn toàn. Nếu input đã là rgb()/rgba(), giữ
+   nguyên r,g,b và chỉ thay alpha. */
+function _toRgbaColor(color, alpha){
+  var m = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i.exec(color);
+  if(m) return 'rgba('+m[1]+','+m[2]+','+m[3]+','+alpha+')';
+  var rgb = _hexToRgb(color);
+  return 'rgba('+rgb[0]+','+rgb[1]+','+rgb[2]+','+alpha+')';
+}
+/* Overlay blend chuẩn CSS (background-blend-mode:overlay), tính tay ngay
+   lúc sinh ảnh — b: giá trị màu NỀN (0-255), o: giá trị lớp PHỦ/vân
+   (0-255, ở đây là giá trị xám của vân mây). */
+function _overlayBlend(b,o){
+  return b<128 ? (2*b*o/255) : (255-2*(255-b)*(255-o)/255);
+}
+function genCloudTexture(P, liteHex, darkHex, size, grain, strength){
+  var W=size||800, H=W, CELL=W/8;
+  var _strength = (typeof strength==='number') ? strength : 1;
+  var canvas=document.createElement('canvas');
+  canvas.width=W; canvas.height=H;
+  var ctx=canvas.getContext('2d');
+
+  function boxBlur1D(arr, win){
+    win=Math.max(1,Math.round(win));
+    var n=arr.length, out=new Float64Array(n), half=Math.floor(win/2);
+    var sum=0;
+    for(var i=-half;i<=half;i++){ sum += arr[Math.min(n-1,Math.max(0,i))]; }
+    out[0]=sum/win;
+    for(var i=1;i<n;i++){
+      var addIdx=Math.min(n-1,i+half);
+      var remIdx=Math.max(0,i-half-1);
+      sum += arr[addIdx]-arr[remIdx];
+      out[i]=sum/win;
+    }
+    return out;
+  }
+  function blurRows(field, w, h, win){
+    var row=new Float64Array(w);
+    for(var y=0;y<h;y++){
+      for(var x=0;x<w;x++) row[x]=field[y*w+x];
+      var sm=boxBlur1D(row,win);
+      field.set(sm, y*w);
+    }
+  }
+  function blurCols(field, w, h, win){
+    var col=new Float64Array(h);
+    for(var x=0;x<w;x++){
+      for(var y=0;y<h;y++) col[y]=field[y*w+x];
+      var sm=boxBlur1D(col,win);
+      for(var y=0;y<h;y++) field[y*w+x]=sm[y];
+    }
+  }
+  function genNoiseField(w,h,win,scale){
+    var field=new Float64Array(w*h);
+    for(var i=0;i<field.length;i++) field[i]=Math.random()*2-1;
+    blurRows(field,w,h,win);
+    blurCols(field,w,h,win);
+    var mean=0; for(var i=0;i<field.length;i++) mean+=field[i]; mean/=field.length;
+    var maxAbs=1e-6;
+    for(var i=0;i<field.length;i++){ field[i]-=mean; if(Math.abs(field[i])>maxAbs) maxAbs=Math.abs(field[i]); }
+    for(var i=0;i<field.length;i++) field[i]=field[i]/maxAbs*scale;
+    return field;
+  }
+  /* [Riêng vân gỗ] "thớ gỗ": sinh 1 GIÁ TRỊ NGẪU NHIÊN CHO MỖI CỘT (mảng
+     1 chiều, dài = W), làm mờ nhẹ theo chiều ngang để các vệt liền kề
+     chuyển màu mượt (không răng cưa), rồi RẢI Y HỆT giá trị đó xuống
+     TOÀN BỘ chiều cao của cột — đảm bảo mỗi vệt hiện RÕ Y NHƯ NHAU ở mọi
+     hàng (1 đến 8), không còn phụ thuộc gì vào chiều dọc cả.
+     BUG ĐÃ SỬA: cách làm cũ (làm mờ 2D bằng box-blur cửa sổ cực lớn theo
+     cột) bị xử lý biên kiểu "lặp lại giá trị mép" (clamp) làm SAI LỆCH
+     mức trung bình hoá gần biên trên/dưới so với ở giữa — biên (hàng
+     1,8) được trung bình hoá ÍT hơn nên giữ nhiều nhiễu thô hơn (rõ),
+     còn ở giữa bị trung bình hoá gần triệt để (mờ gần bằng 0), rồi khi
+     chuẩn hoá theo giá trị max TOÀN ẢNH (bị mấy điểm biên kéo cao lên),
+     phần giữa càng bị dìm mờ thêm — đúng khớp hiện tượng "chỉ rõ ở hàng
+     1 và 8". Cách sinh theo CỘT rồi rải đều dọc này loại bỏ hẳn vấn đề
+     đó vì không còn bước làm mờ theo chiều dọc nào nữa. */
+  function genGrainField(w,h,rowWin,scale){
+    var colVal=new Float64Array(w);
+    for(var x=0;x<w;x++) colVal[x]=Math.random()*2-1;
+    var smoothed=boxBlur1D(colVal, rowWin);
+    var mean=0; for(var x=0;x<w;x++) mean+=smoothed[x]; mean/=w;
+    var maxAbs=1e-6;
+    for(var x=0;x<w;x++){ smoothed[x]-=mean; if(Math.abs(smoothed[x])>maxAbs) maxAbs=Math.abs(smoothed[x]); }
+    for(var x=0;x<w;x++) smoothed[x]=smoothed[x]/maxAbs*scale;
+    var field=new Float64Array(w*h);
+    for(var y=0;y<h;y++){
+      for(var x=0;x<w;x++) field[y*w+x]=smoothed[x];
+    }
+    return field;
+  }
+
+  /* Co giãn cửa sổ làm mờ theo đúng tỉ lệ kích thước ảnh thực tế so với
+     800 (giá trị gốc P.largeWin/medWin được tinh chỉnh cho) — để vân
+     giữ đúng tỉ lệ to/nhỏ khi sinh ảnh ở độ phân giải khác 800 (ví dụ
+     bàn cờ thật to hơn 800px), không bị vụn/rối do cửa sổ làm mờ trở
+     nên "nhỏ tương đối" so với ảnh khi ảnh phóng to. */
+  var _wScale = W/800;
+  var large=genNoiseField(W,H,P.largeWin*_wScale,P.largeScale);
+  var med=genNoiseField(W,H,P.medWin*_wScale,P.medScale);
+  var grainField = grain ? genGrainField(W,H,P.grainRowWin*_wScale,P.grainScale) : null;
+  var liteRgb=_hexToRgb(liteHex), darkRgb=_hexToRgb(darkHex);
+
+  var img=ctx.createImageData(W,H);
+  for(var y=0;y<H;y++){
+    var row=(y/CELL)|0;
+    for(var x=0;x<W;x++){
+      var col=(x/CELL)|0;
+      /* Parity (row+col)%2===0 = ô sáng — khớp đúng parity thật của
+         .sq lite/dark trong renderBoard() (rank+file)%2, KHÔNG đổi theo
+         gFlip (đã kiểm chứng ở phần vân gỗ trước đây: rank+file parity
+         luôn = (row+col+1)%2 dù lật bàn hay không). */
+      var isLite=((row+col)%2===0);
+      var base=isLite?liteRgb:darkRgb;
+      var fi=y*W+x;
+      var o=128+large[fi]+med[fi];
+      if(grainField) o += grainField[fi];
+      o += (Math.random()*2-1)*P.speckle;
+      o=Math.max(0,Math.min(255,o));
+      var idx=fi*4;
+      /* "strength" mô phỏng opacity của lớp vân đè lên màu nền: pha trộn
+         ngược kết quả overlay-blend với chính màu nền gốc theo tỉ lệ
+         strength (1 = giữ nguyên hiệu ứng overlay như cũ; 0.8 = chỉ lấy
+         80% hiệu ứng, lộ thêm 20% màu nền gốc — đúng như yêu cầu "giảm
+         alpha lớp vân xuống 80%"). strength=1 cho kết quả HỆT như trước
+         khi thêm tham số này (không đổi hành vi cho theme không set). */
+      img.data[idx]  =Math.round(base[0] + (_overlayBlend(base[0],o)-base[0])*_strength);
+      img.data[idx+1]=Math.round(base[1] + (_overlayBlend(base[1],o)-base[1])*_strength);
+      img.data[idx+2]=Math.round(base[2] + (_overlayBlend(base[2],o)-base[2])*_strength);
+      img.data[idx+3]=255;
+    }
+  }
+  ctx.putImageData(img,0,0);
+  return canvas.toDataURL('image/png');
+}
+/* Cường độ lớp vân đè lên màu nền, riêng theo TỪNG THEME (1 = như cũ,
+   thấp hơn = màu nền lộ ra nhiều hơn, vân "nhạt" hơn) — xem giải thích
+   đầy đủ ở tham số "strength" của genCloudTexture(). */
+var CLOUD_TEXTURE_STRENGTH = { wood: 0.8, blue: 1.0 };
+function getCloudTextureURL(themeName, liteHex, darkHex){
+  if(!gCloudTextureCache[themeName]){
+    /* Sinh ảnh ở đúng (hoặc lớn hơn) kích thước THẬT của bàn cờ trên màn
+       hình, có tính devicePixelRatio — tránh bug đã gặp: cố định 800×800
+       rồi kéo giãn (background-size:100% 100%) để vừa khung #board thực
+       tế (thường >800px trên PC, nhất là màn hình DPI cao) làm vân bị
+       mờ. Chỉ sinh 1 LẦN DUY NHẤT MỖI THEME (cache riêng theo tên theme),
+       không ảnh hưởng tốc độ. */
+    var _boardEl = document.getElementById('board');
+    var _px = (_boardEl && _boardEl.clientWidth) ? _boardEl.clientWidth : 480;
+    var _dpr = window.devicePixelRatio || 1;
+    if(_dpr>2) _dpr=2; /* chặn trần — tránh ảnh quá nặng trên màn hình DPR cực cao */
+    var _size = Math.round(_px*_dpr);
+    _size = Math.max(480, Math.min(_size, 1600)); /* giới hạn hợp lý cả 2 chiều */
+    var _strength = (CLOUD_TEXTURE_STRENGTH[themeName]!==undefined) ? CLOUD_TEXTURE_STRENGTH[themeName] : 1;
+    gCloudTextureCache[themeName] = genCloudTexture(CLOUD_TEXTURE_PARAMS, liteHex, darkHex, _size, themeName==='wood', _strength);
+  }
+  return gCloudTextureCache[themeName];
+}
+/* [Implementation — sinh texture nhiễu] xem giải thích cơ chế đầy đủ ở
+   khối tham số bên dưới (chỗ khai báo BOARD_NOISE_PARAM). Hàm này chỉ
+   ĐỌC 2 tham số đó, không cần sửa gì trong hàm khi chỉnh độ nhiễu. */
+var gNoiseTileURL = null;
+function getNoiseTileURL(){
+  if(gNoiseTileURL) return gNoiseTileURL;
+  var dpr = window.devicePixelRatio || 1;
+  if(dpr>3) dpr=3; /* chặn trần — texture nhỏ nên không cần DPR quá cao */
+  var px = Math.round(BOARD_NOISE_TILE_CSS_PX*dpr);
+  var canvas=document.createElement('canvas');
+  canvas.width=px; canvas.height=px;
+  var ctx=canvas.getContext('2d');
+  var img=ctx.createImageData(px,px);
+  for(var i=0;i<img.data.length;i+=4){
+    var n=(Math.random()*2-1)*BOARD_NOISE_PARAM;
+    var val=Math.max(0,Math.min(255,128+n));
+    img.data[i]=val; img.data[i+1]=val; img.data[i+2]=val; img.data[i+3]=255;
+  }
+  ctx.putImageData(img,0,0);
+  gNoiseTileURL=canvas.toDataURL('image/png');
+  return gNoiseTileURL;
+}
+/* [Implementation] Trộn 1 màu hex với trắng (amt>0, để làm SÁNG hơn)
+   hoặc đen (amt<0, để làm TỐI hơn). amt: 0..1 = tỉ lệ trộn. Dùng để tự
+   tính evalWhite/selectColor trong BOARD_THEMES bên dưới — KHÔNG cần
+   sửa hàm này, chỉ cần đổi số amt ngay tại chỗ gọi nó. */
+function _mixHexWith(hex, target, amt){
+  var m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if(!m) return hex;
+  var r=parseInt(m[1],16), g=parseInt(m[2],16), b=parseInt(m[3],16);
+  var tr=(target==='white')?255:0, tg=(target==='white')?255:0, tb=(target==='white')?255:0;
+  r=Math.round(r+(tr-r)*amt); g=Math.round(g+(tg-g)*amt); b=Math.round(b+(tb-b)*amt);
+  function h2(v){ v=Math.max(0,Math.min(255,v)); var s=v.toString(16); return s.length<2?'0'+s:s; }
+  return '#'+h2(r)+h2(g)+h2(b);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   THAM SỐ GIAO DIỆN BÀN CỜ — CHỈNH Ở ĐÂY (gom chung 1 chỗ cho cả 4
+   giao diện: current/green/blue/wood). Không cần sửa gì ở trên.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Độ nhiễu (noise) dùng chung cho MỌI giao diện có bật noiseOverlay:true
+   bên dưới (hiện là "wood" và "blue"). Số càng lớn càng nhiễu/hạt rõ. */
+var BOARD_NOISE_PARAM = 12;
+/* Kích thước 1 tile nhiễu hiển thị, tính bằng CSS px — CỐ ĐỊNH, không
+   phụ thuộc bàn cờ to/nhỏ (đây là cách tránh bị mờ khi phóng to bàn cờ
+   trên PC). Số nhỏ hơn = hạt nhiễu mịn/nhỏ hơn; số lớn hơn = hạt to hơn. */
+var BOARD_NOISE_TILE_CSS_PX = 120;
+
+/* Bảng màu + tuỳ chọn của từng giao diện. Mỗi dòng 1 theme:
+   - lite/dark      : màu nền ô sáng/tối (opaque, luôn thấy được)
+   - hlLite/hlDark   : màu tô ô xuất phát/đích của nước vừa đi
+   - border          : viền chia ô ("none" = không viền)
+   - variants        : mảng vân phủ thêm dạng CSS gradient (hiện KHÔNG
+                       theme nào dùng nữa — để null; giữ cơ chế lại
+                       phòng khi cần thêm biến thể kiểu này sau này)
+   - noiseOverlay    : true/false — có phủ thêm lớp nhiễu hạt (theo
+                       BOARD_NOISE_PARAM/BOARD_NOISE_TILE_CSS_PX ở trên)
+                       hay không — TẮT cho "blue" vì vân mây bên dưới đã
+                       có sẵn hạt speckle riêng, tránh chồng 2 lớp nhiễu
+   - cloudTexture    : true/false — có dùng vân mây/watercolor (theo
+                       CLOUD_TEXTURE_PARAMS ở trên, học từ
+                       ChessStyle7.html) hay không — hiện chỉ "blue"
+   - evalWhite       : màu vùng "Trắng thắng" trên đồ thị eval — mặc
+                       định tự tính SÁNG hơn màu lite (_mixHexWith)
+   - selectColor     : màu ô khi đang chọn quân — mặc định tự tính TỐI
+                       hơn màu dark (_mixHexWith)                       */
+var BOARD_THEMES = {
+  current: { lite: '#fff',    dark: '#d0d0d0', hlLite: 'rgba(129,178,118,0.45)', hlDark: 'rgba(99,158,86,0.55)', border: '0.5px solid rgba(0,0,0,0.22)', variants: null, noiseOverlay: false, cloudTexture: false, evalWhite: '#d4edda',                            selectColor: '#555' },
+  green:   { lite: '#ebecd0', dark: '#739552', hlLite: '#f5f682',                hlDark: '#b9ca43',              border: 'none',                          variants: null, noiseOverlay: false, cloudTexture: false, evalWhite: '#ebecd0',                            selectColor: _mixHexWith('#739552','black',0.5) },
+  blue:    { lite: '#d8e3e7', dark: '#7195aa', hlLite: '#95d9e9',                hlDark: '#6cbad1',              border: 'none',                          variants: null, noiseOverlay: false, cloudTexture: true,  evalWhite: '#d8e3e7',                            selectColor: _mixHexWith('#7195aa','black',0.5) },
+  wood:    { lite: '#c8ab78', dark: '#9e754e', hlLite: '#c59946',                hlDark: '#a97931',              border: 'none',                          variants: null, noiseOverlay: false, cloudTexture: true,  evalWhite: _mixHexWith('#c8ab78','white',0.75),  selectColor: _mixHexWith('#9e754e','black',0.25) }
+};
+/* ══════════════════ HẾT KHỐI THAM SỐ CÓ THỂ CHỈNH ══════════════════ */
+
+var gBoardTextureVariants = null;  /* mảng pattern vân dạng gradient hiện hành (không theme nào dùng, giữ cơ chế) — đọc bởi renderBoard() */
+var gNoiseOverlayActive = false;   /* true khi theme đang chọn có phủ thêm lớp nhiễu hạt (hiện chỉ gỗ) — đọc bởi renderBoard() */
+var gCloudTextureActive = false;   /* true khi theme đang chọn dùng vân mây (hiện chỉ đá xanh dương) — đọc bởi renderBoard() */
+function setBoardTheme(theme){
+  var t = BOARD_THEMES[theme] ? theme : 'current';
+  var c = BOARD_THEMES[t];
+  var isCloud = !!c.cloudTexture;
+  /* Ô .sq LUÔN đặc (opaque) — TRỪ theme có vân mây (cloudTexture:true):
+     lúc đó ảnh vân được gán 1 LẦN DUY NHẤT lên khung #board (không phải
+     per-cell), nên .sq phải để TRONG SUỐT mới lộ đúng phần ảnh bên dưới.
+     --board-coord-dark LUÔN giữ màu ĐẶC gốc (tách riêng khỏi --board-dark)
+     để chữ tọa độ trên ô sáng không bị "biến mất" khi --board-dark
+     chuyển trong suốt — bài học từ bug đã gặp lúc làm vân gỗ trước đây. */
+  document.documentElement.style.setProperty('--board-lite', isCloud ? 'transparent' : c.lite);
+  document.documentElement.style.setProperty('--board-dark', isCloud ? 'transparent' : c.dark);
+  document.documentElement.style.setProperty('--board-coord-dark', c.dark);
+  /* Màu highlight (nước vừa đi lm-f/lm-t, ô đang chọn .sel): ở theme có
+     vân mây, các màu này KHÔNG được để ĐẶC hoàn toàn — vì .sq vốn trong
+     suốt để lộ vân từ #board bên dưới, nếu tô ĐẶC lên trên sẽ CHE MẤT
+     HẲN vân ở đúng ô đó, nhìn phẳng lì/lệch tông so với các ô xung quanh
+     (bug đã gặp thực tế). Chuyển sang BÁN TRONG SUỐT (alpha ~0.6) để vân
+     bên dưới vẫn xuyên qua được, tạo cảm giác "phủ màu lên trên vân" tự
+     nhiên thay vì "thay hẳn vân bằng màu phẳng". Theme không có vân
+     (current/green) giữ nguyên màu ĐẶC như cũ — không có gì bên dưới cần
+     lộ ra nên không cần đổi. */
+  var _hlAlpha = 0.60;
+  document.documentElement.style.setProperty('--board-hl-lite', isCloud ? _toRgbaColor(c.hlLite,_hlAlpha) : c.hlLite);
+  document.documentElement.style.setProperty('--board-hl-dark', isCloud ? _toRgbaColor(c.hlDark,_hlAlpha) : c.hlDark);
+  document.documentElement.style.setProperty('--board-border', c.border);
+  document.documentElement.style.setProperty('--board-eval-white', c.evalWhite);
+  document.documentElement.style.setProperty('--board-select', isCloud ? _toRgbaColor(c.selectColor,_hlAlpha) : c.selectColor);
+  gBoardTextureVariants = c.variants;
+  gNoiseOverlayActive = !!c.noiseOverlay;
+  gCloudTextureActive = isCloud;
+  var _boardEl = document.getElementById('board');
+  if(_boardEl){
+    if(isCloud){
+      /* Gán ảnh vân mây 1 LẦN DUY NHẤT cho cả khung #board — không đụng
+         lại mỗi khi renderBoard() chạy (đi quân/chọn ô...), tránh đúng
+         bug lag đã gặp với vân gỗ trước đây (64 ô tự crop/scale/blend lại
+         ảnh raster mỗi lần render). Ảnh cache sẵn (getCloudTextureURL()),
+         chỉ sinh 1 lần cho cả phiên làm việc. */
+      _boardEl.style.backgroundImage = 'url(' + getCloudTextureURL(t, c.lite, c.dark) + ')';
+      _boardEl.style.backgroundSize = '100% 100%';
+    } else {
+      _boardEl.style.backgroundImage = '';
+      _boardEl.style.backgroundSize = '';
+    }
+  }
+  if (typeof renderBoard === 'function') renderBoard(); /* vẽ lại ngay để áp texture mới */
+  if (typeof renderEvalChart === 'function') renderEvalChart(); /* áp màu mới cho đồ thị eval nếu đang hiện */
+  var dots = document.querySelectorAll('.board-theme-dot');
+  for(var i=0;i<dots.length;i++) dots[i].classList.remove('active');
+  var idMap = { current:'boardThemeCurrent', green:'boardThemeGreen', blue:'boardThemeBlue', wood:'boardThemeWood' };
+  var activeDot = document.getElementById(idMap[t]);
+  if(activeDot) activeDot.classList.add('active');
+  try{ localStorage.setItem(BOARD_THEME_KEY, t); }catch(e){}
+}
+function boardThemeLoad(){
+  try{
+    var v = localStorage.getItem(BOARD_THEME_KEY);
+    if(v && BOARD_THEMES[v]) return v;
+  }catch(e){}
+  return 'current';
+}
 /* Chữ mờ gợi ý trong ô PGN (chế độ Phân tích): nếu đã từng tìm username
    nào đó trước đây (còn lưu trong localStorage) thì hiện LUÔN username đó
    thay vì câu hướng dẫn mặc định — để người dùng biết trước bấm "Phân
@@ -2798,6 +3243,36 @@ function anCPwhite(sc){
    Fix D: Band-degradation check — nếu bandDrop >= 2 và !isBest → tối thiểu Inaccuracy
    Fix E: isBest bắt buộc cho Brilliant và Great Move (tránh gán nhãn sai nước thứ 2)
    ────────────────────────────────────────────────────────────────────────────── */
+/* Ngưỡng chất tối thiểu (centipawn) để 1 nước hy sinh quân được coi là "đủ lớn"
+   cho nhãn Brilliant — dùng chung cho cả 2 nhánh (mate-sacrifice và sacrifice
+   thường). Trước là 250 (chỉ bắt được từ Tượng/Mã đổi lấy không trở lên — Mã
+   (320)/Tượng (330) đổi Tốt (100) = mất ròng 220/230cp, DƯỚI 250 nên bị bỏ sót).
+   Hạ xuống 220 để bắt được đúng case "Mã/Tượng đổi Tốt" (đổi ròng 220-230cp)
+   khi đó là 1 nước hy sinh có mục đích rõ ràng (vd phá thế trận đối phương). */
+var BRILLIANT_SAC_MIN_CP = 220;
+/* Ngưỡng chênh lệch eval ở ĐỘ SÂU NÔNG (SHALLOW_DEPTH) để coi 1 nước hy
+   sinh là "nhìn có vẻ tệ trước khi tính sâu" (shallowLooksBad) — đặc
+   trưng bắt buộc của Brilliant thật (thoạt nhìn tưởng sai lầm, tính sâu
+   mới thấy đúng). Trước là 100, tinh chỉnh cho các case hy sinh MẠNH
+   (thí hẳn 1 quân, ~300cp+). Hạ xuống 70 để bắt thêm case hy sinh NHẸ
+   hơn (Mã/Tượng đổi Tốt, ~220-230cp — xem BRILLIANT_SAC_MIN_CP) vốn có
+   độ "trông tệ" ở depth nông cũng nhỏ hơn tương ứng (case Bxa6 thực đo
+   được cpLossShallow=74, dưới ngưỡng 100 cũ nhưng trên ngưỡng 70 mới).
+   Đã thử hạ SHALLOW_DEPTH (6→5→4) thay vì hạ ngưỡng này nhưng cho kết
+   quả tệ hơn (cpLossShallow giảm xuống 45 rồi 23, đi ngược mong muốn) —
+   nên SHALLOW_DEPTH giữ nguyên 6, chỉ hạ ngưỡng này. */
+var BRILLIANT_SHALLOW_MIN_CP = 55; /* REVERT về 55 sau khi phát hiện fix tạm (55→50, xem
+   git history/chat log) SAI HƯỚNG: cpLossShallow KHÔNG phải trị tuyệt đối
+   (=shallowBestEvalCp - shallowActualEvalCp, có dấu) — case 15...Nc5 định nhắm tới
+   thực ra cho cpLossShallow ÂM (-50, vì shallowActual>shallowBest — nước đó đã "trông
+   tốt sẵn" ở depth nông, không có signature "trông tệ ở shallow, tốt ở deep" đặc
+   trưng của Brilliant) nên hạ ngưỡng không hề giúp ích. Đồng thời hạ ngưỡng gây
+   regression thật: 12.Nxf6+ có cpLossShallow=+57 (đúng dấu), vốn đã sát ngưỡng 55, hạ
+   xuống 50 vô tình đẩy nó (hoặc 1 nước tương tự) lọt qua thành Brilliant ngoài ý muốn.
+   → 15...Nc5 cần hướng xử lý KHÁC hẳn (không thuộc dạng shallow-looks-bad), xem thảo
+   luận tiếp theo trong lịch sử chat/comment ở nhánh brilliantBase/brilliantIndirect.
+   Lịch sử ngưỡng trước đó (65→55, dao động đo được 45-74 qua nhiều cấu hình
+   worker/Hash) vẫn giữ nguyên như comment gốc — xem bản backup nếu cần đối chiếu. */
 function classifyMoveCore(data) {
   var evalBefore = data.evalBefore;
   var evalBest   = data.evalBest;
@@ -2816,6 +3291,7 @@ function classifyMoveCore(data) {
   var isBest         = data.isBest;         /* nước đi trùng bestUci của engine */
   var isForced       = data.isForced;       /* chỉ có đúng 1 nước hợp lệ */
   var givesCheck     = data.givesCheck;     /* nước này chiếu vua */
+  var isImmediateCheckmate = data.isImmediateCheckmate; /* true = ván kết thúc ngay (Rd8# kiểu), false/undefined = chiếu ép còn tiếp diễn (Qe2+ kiểu) */
 
   var numGoodAlternatives = data.numGoodAlternatives;
 
@@ -2876,8 +3352,16 @@ function classifyMoveCore(data) {
 
   /* 1. MATE PRIORITY */
   /* Missed Mate: engine thấy có mate nhưng nước thực tế KHÔNG dẫn đến mate.
-     Dùng < 0 (không phải <= 0) để tránh bắt nhầm mateActual=0 (mate-in-0 = người chơi vừa chiếu hết). */
-  if (mateBest !== null && mateBest > 0 && (mateActual === null || mateActual < 0)) {
+     Dùng mateBest >= 0 (KHÔNG phải > 0): quy ước m1 của engine này mã hoá
+     "chiếu hết ngay trong 1 nước" bằng m1=0 (xem ví dụ Rd8# ở comment bên
+     dưới, dòng "si.m1=0"), CHỨ KHÔNG PHẢI m1=1 như trực giác thường nghĩ.
+     BUG ĐÃ SỬA: trước đây dùng "mateBest > 0" nên bỏ sót đúng trường hợp
+     phổ biến nhất — thế cờ có nước chiếu hết ngay (mateBest=0) — khiến nó
+     bị rơi xuống nhánh Missed Win thay vì Missed Mate khi người chơi bỏ
+     lỡ. Vế `mateActual < 0` (không phải <= 0) vẫn giữ nguyên để tránh bắt
+     nhầm mateActual=0 (mate-in-0 = người chơi vừa chiếu hết, tức đã đi
+     ĐÚNG chứ không phải bỏ sót). */
+  if (mateBest !== null && mateBest >= 0 && (mateActual === null || mateActual < 0)) {
     return "Missed Mate";
   }
   /* Best/Brilliant: mateActual >= 0 bao gồm cả mate-in-0 (sn.s1=-9999, đối thủ bị chiếu hết ngay). */
@@ -2891,10 +3375,25 @@ function classifyMoveCore(data) {
          - Rd8#: si.m1=0 → mateActual đến từ sn.s1=-9999 (noMove), isSacrifice=false → _sacLoss=0
            → không trigger Brilliant do _sacLoss < 250 ✓ */
     var _sacLoss = isSacrifice ? materialLostCp : intoAttackLoss;
-    /* Khi người chơi đi đúng nước có mateBest > 0 (engine đã thấy mate từ trước),
-       không cần evalBefore guard vì đây là sacrifice chủ ý tạo mate sequence (Qb8+). */
-    var _mateFromSi = (mateBest !== null && mateBest > 0 && isBest);
-    if (isBest && _sacLoss >= 250 && (_mateFromSi || evalBefore < 600)) return "Brilliant";
+    /* Khi người chơi đi đúng nước có mateBest >= 0 (engine đã thấy mate từ
+       trước — bao gồm cả mate-in-1 mã hoá bằng mateBest=0, xem giải thích
+       ở nhánh Missed Mate phía trên), không cần evalBefore guard vì đây
+       là sacrifice chủ ý tạo mate sequence (Qb8+). */
+    var _mateFromSi = (mateBest !== null && mateBest >= 0 && isBest);
+    if (isBest && _sacLoss >= BRILLIANT_SAC_MIN_CP && (_mateFromSi || evalBefore < 600)) return "Brilliant";
+    /* ── FIX BUG CC9 (phát hiện qua case 29...Qe2+ trong ván mate liên hoàn,
+       bị gán "Best" thay vì "Great") ──
+       Nguyên nhân: nhánh này return "Best" chung cho MỌI nước có mateActual>=0
+       không đạt Brilliant, gộp cả 2 case bản chất khác nhau:
+         - 17.Rd8# (isImmediateCheckmate=true): ván đã kết thúc thật, không còn
+           gì để "unique" nữa → Best là đúng.
+         - 29...Qe2+ (isImmediateCheckmate=false): chỉ là 1 nước chiếu ép TRONG
+           chuỗi mate, đối phương còn phải đi tiếp (30.Kc1) — đây là nước chiếu
+           TỐT NHẤT (isBest=true) để duy trì/rút ngắn chuỗi ép mate, xứng Great
+           Move, không nên bị đánh đồng với Best như 1 nước chiếu hết xuông.
+       Fix: khi isBest + givesCheck + KHÔNG PHẢI chiếu hết thật, nâng lên Great
+       Move thay vì Best. */
+    if (isBest && givesCheck && !isImmediateCheckmate) return "Great Move";
     return "Best";
   }
 
@@ -2915,23 +3414,76 @@ function classifyMoveCore(data) {
   }
 
   /* 3. BRILLIANT — Fix B (evalBefore < 800) + Fix E (bắt buộc isBest) */
-  var shallowLooksBad = cpLossShallow >= 100 * strictness;
+  var shallowLooksBad = cpLossShallow >= BRILLIANT_SHALLOW_MIN_CP * strictness;
+  /* isNearBest: nới từ "phải trùng tuyệt đối bestUci" sang "trùng HOẶC chỉ
+     kém bestUci không quá 10cp" (cùng ngưỡng dùng cho tier "Best" ở dưới) —
+     ca thực tế: 1 nước hy sinh quân (VD Bxa6) có thể KHÔNG phải bestUci
+     tuyệt đối theo engine (VD Na4 nhỉnh hơn 1 chút ở depth sâu), nhưng bản
+     thân 2 nước gần như ngang nhau (cpLoss<=10, coi như sai số đo lường) —
+     nước hy sinh vẫn xứng đáng Brilliant nếu mọi điều kiện khác đều đạt.
+     Chỉ áp dụng cho BRILLIANT (brilliantBase/brilliantIndirect bên dưới),
+     KHÔNG đụng tới isBest ở Great Move/Great Defense/nhánh mate — giữ
+     nguyên yêu cầu khớp tuyệt đối cho các nhãn đó. */
+  var isNearBest = isBest || cpLoss <= 10;
   var brilliantBase =
-    isBest &&
+    isNearBest &&
     isSacrifice &&
-    materialLostCp >= 250 &&
+    materialLostCp >= BRILLIANT_SAC_MIN_CP &&
     Math.abs(evalBefore) < 800 &&
     cpLoss <= 20 * strictness &&
     shallowLooksBad;
 
   /* Brilliant gián tiếp: sacrifice mà SEE không bắt được vì quân bị ăn ở nước sau
      (ví dụ axb4!! thí Xe a1 gián tiếp — SEE chỉ thấy chốt đổi chốt).
-     Dấu hiệu: eval tăng đột biến >= 300cp dù shallow không trông xấu. */
+     Dấu hiệu: eval tăng đột biến dù shallow không trông xấu.
+     ── FIX BUG CC9 (phát hiện qua case 11.axb4!! trong ván bẫy Legall's Mate,
+     bị gán nhầm "Great Move" thay vì "Brilliant") ──
+     Nguyên nhân: ngưỡng evalDelta>=300 cứng quá cao. Đo thực tế tại
+     11.axb4!!: evalBefore=471, evalActual=745 → evalDelta=274, THIẾU 26cp so
+     với 300 nên bị trượt nhánh này dù mọi điều kiện khác đều đạt (isSacrifice,
+     isNearBest, cpLoss=0, |evalBefore|<800).
+     Fix: hạ ngưỡng về BRILLIANT_SAC_MIN_CP (220 — hằng số có sẵn, đúng nghĩa
+     "tương đương 1 Mã/Tượng", đã dùng cho nhánh brilliantBase) thay vì magic
+     number 300 riêng — vừa bắt được case axb4!!, vừa dùng chung 1 nguồn ngưỡng
+     vật chất tối thiểu cho "Brilliant" ở cả 2 nhánh (base + indirect), tránh
+     sau này sửa BRILLIANT_SAC_MIN_CP mà quên sửa theo ở đây.
+     ĐÁNH ĐỔI: 220 permissive hơn 300 khá nhiều → cần theo dõi qua nhiều ván
+     mẫu khác xem có làm nhãn Brilliant bị lạm phát (gán cho các nước chỉ có
+     swing eval 220-300cp thông thường, không thực sự đặc sắc) hay không — nếu
+     có, đây là ứng viên đầu tiên cần xem lại. */
   var evalDelta = evalActual - evalBefore;
-  var brilliantIndirect = isBest && isSacrifice && cpLoss <= 20 * strictness
-    && evalDelta >= 300 && Math.abs(evalBefore) < 800;
+  var brilliantIndirect = isNearBest && isSacrifice && cpLoss <= 20 * strictness
+    && evalDelta >= BRILLIANT_SAC_MIN_CP * strictness && Math.abs(evalBefore) < 800;
 
-  if ((brilliantBase || brilliantIndirect) && (bestGap === null || bestGap >= 100)) return "Brilliant";
+  /* bestGap: chênh lệch eval giữa nước tốt nhất và nước tốt-nhì (evalBest -
+     eval2ndBest) — vốn dùng để đảm bảo Brilliant là "lối đi RÕ RỆT DUY
+     NHẤT", không phải "1 trong vài nước đều ổn ổn". YÊU CẦU NÀY BỎ QUA khi
+     bản thân nước ĐÃ CHƠI đã đạt isNearBest (cpLoss<=10) — vì lúc đó câu
+     hỏi "còn nước nào khác gần ngang không" không còn ý nghĩa với CHÍNH
+     nước đang xét nữa (nó tự nó đã là 1 trong những lựa chọn tốt nhất rồi,
+     không cần so thêm với ứng viên thứ 3 nào khác). Trường hợp cụ thể phát
+     hiện ra điều này (15.Bxa6 trong 1 ván test): eval2ndBest trùng khít
+     evalActual (đều = 0cp) — dấu hiệu rất mạnh cho thấy chính nước đã chơi
+     LÀ nước "tốt-nhì" mà bestGap đang đem ra so sánh, nên 2 điều kiện
+     bestGap và isNearBest thực chất đo cùng 1 thứ trong case đó, giữ cả
+     2 là dư thừa/mâu thuẫn.
+     LƯU Ý CHO SAU NÀY: nếu về sau thấy nhãn "Brilliant" xuất hiện NHIỀU
+     BẤT THƯỜNG (bị lạm phát, gắn cho những nước chỉ "ổn" chứ không thực
+     sự đặc sắc), đây là ứng viên đầu tiên cần xem lại — có thể cần thêm
+     lại 1 điều kiện phụ (ví dụ chỉ bỏ qua bestGap khi cpLoss thực sự rất
+     nhỏ, gần 0, thay vì toàn dải <=10 như isNearBest đang cho phép). */
+  var bestGapOk = isNearBest || bestGap === null || bestGap >= 100;
+  if(typeof window!=='undefined' && window.__DEBUG_BRILLIANT__){
+    console.log('[brilliant-debug]', {
+      isNearBest: isNearBest, isBest: isBest, cpLoss: cpLoss,
+      isSacrifice: isSacrifice, materialLostCp: materialLostCp,
+      evalBefore: evalBefore, shallowLooksBad: shallowLooksBad,
+      cpLossShallow: cpLossShallow, brilliantBase: brilliantBase,
+      evalDelta: evalDelta, brilliantIndirect: brilliantIndirect,
+      bestGap: bestGap, bestGapOk: bestGapOk
+    });
+  }
+  if ((brilliantBase || brilliantIndirect) && bestGapOk) return "Brilliant";
 
   /* isUniqueGoodMove — dùng cho Great Defense và Great Move
      170→220: Great hiện ra hơi nhiều (4/3 so với chess.com 1/4) — siết nhẹ lại.
@@ -2961,9 +3513,43 @@ function classifyMoveCore(data) {
     /* givesCheck: Great chỉ khi nước chiếu đó THỰC SỰ unique (bestGap >= 250).
        Bỏ fallback bestGap=null → tránh mọi nước chiếu đơn giản thành Great. */
     if (givesCheck && isUniqueGoodMove) return "Great Move";
+    /* Ghi chú: case "chiếu trong chuỗi mate" (29...Qe2+) ĐÃ được xử lý ở nhánh
+       "if (mateActual !== null && mateActual >= 0)" phía trên (return sớm hơn) —
+       không cần thêm điều kiện ở đây nữa. Nếu code chạy tới được dòng này với
+       mateBest!==null thì đó là trạng thái không nên xảy ra (đã bị Missed Mate
+       hoặc nhánh mate ở trên bắt hết), nên không cần xử lý thêm tại đây. */
     /* Thí quân đáng kể mà vẫn là nước tốt nhất */
-    if (isSacrifice && materialLostCp >= 300) return "Great Move";
+    if (isSacrifice && materialLostCp >= 220) return "Great Move";
+    /* Hạ từ 300→220 — FIX BUG CC9 (case 10.Nxb5, ván Legall's Mate): sau khi
+       deep re-verify sửa đúng eval, isBest chuyển sang true (trước đây false
+       khi engine depth12 coi nước khác hơn), khiến nó rơi vào NHÁNH NÀY
+       (trong if(isBest)) thay vì nhánh !isBest bên dưới (đã hạ 220 từ trước
+       cho case Bxa6) — 2 nhánh bị LỆCH NGƯỠNG (300 vs 220) một cách vô cớ dù
+       cùng ý nghĩa "hy sinh đáng kể" chỉ khác isBest true/false, khiến cùng
+       1 loại case (materialLostCp=220-299) được xử lý khác nhau tuỳ tình cờ
+       isBest là gì. Đồng bộ về 1 ngưỡng duy nhất 220 cho cả 2 nhánh. */
   }
+  /* ── FIX BUG CC9 (phát hiện qua case 15...Nc5 — hụt Brilliant vì không có
+     "shallow-looks-bad", nhưng vẫn xứng Great vì là hy sinh quân lớn gần như
+     tốt nhất) ──
+     Nguyên nhân: nhánh "thí quân đáng kể" phía trên (isSacrifice &&
+     materialLostCp>=300) chỉ chạy khi isBest=true (trong khối if(isBest) ở
+     trên). Nc5 có isBest=false (engine coi Bd4 nhỉnh hơn chút, cpLoss vẫn =0
+     vì evalActual quy đổi bằng evalBest qua công thức max()) nên bị bỏ qua
+     hoàn toàn, không được xét nhánh sacrifice này, rơi thẳng xuống Best.
+     Fix: tách riêng 1 nhánh dùng isNearBest (isBest HOẶC cpLoss<=10) thay vì
+     bắt buộc isBest tuyệt đối — vẫn giữ ngưỡng materialLostCp>=300 để không
+     nới lỏng thêm, chỉ nới điều kiện "phải là nước SỐ 1 tuyệt đối" thành
+     "gần như tốt nhất". Đặt NGOÀI khối if(isBest) vì Nc5 không thoả isBest. */
+  if (!isBest && isNearBest && isSacrifice && materialLostCp >= 220) return "Great Move";
+  /* Hạ từ 300→220 (=BRILLIANT_SAC_MIN_CP) — FIX BUG CC9 (case 15.Bxa6, ván
+     ELO cao): sau khi deep re-verify sửa đúng cpLoss (isNearBest=true),
+     materialLostCp=230 vẫn trượt ngưỡng cũ 300 dù chỉ thiếu 70. Hạ xuống
+     220 để đồng bộ 1 ngưỡng "hy sinh đáng kể" duy nhất dùng chung cho cả
+     Brilliant (BRILLIANT_SAC_MIN_CP) và Great (nhánh này) — tránh 2 ngưỡng
+     gần nhau nhưng lệch nhau vô cớ (220 vs 300) gây khó hiểu khi debug sau
+     này. ĐANG THEO DÕI: cần regression đầy đủ để chắc không có case khác
+     bị đẩy lên Great sai vì hạ ngưỡng này. */
   /* givesCheck mà không phải isBest: chỉ Great nếu cpLoss rất thấp VÀ unique */
   if (givesCheck && cpLoss <= 15 * strictness && isUniqueGoodMove) return "Great Move";
 
@@ -3006,13 +3592,27 @@ function classifyMoveCore(data) {
 
   /* 8. STANDARD CLASSIFICATION */
   /* Losing-position blunder escalation: khi đang thua rõ (evalBefore < -100)
-     mà nước đi làm tệ thêm đáng kể (cpLoss >= 100) và rơi vào thua nặng hơn
+     mà nước đi làm tệ thêm đáng kể (cpLoss >= ngưỡng) và rơi vào thua nặng hơn
      (evalActual < -400) → tối thiểu Blunder. Bắt các nước như O-O-O?? mà
      engine chỉ thấy cpLoss nhỏ do horizon effect nhưng thực tế chí mạng.
      NGƯỠNG ĐÃ NỚI (100/-400, từ 60/-250): bản cũ quá nhạy, tự động gắn
      Blunder cho hàng loạt nước chỉ "tệ thêm nhẹ" trong 1 thế đang thua dần
-     đều — không phải blunder thật theo chuẩn chess.com. */
-  if (!isBest && evalBefore < -100 && cpLoss >= 100 && evalActual < -400) {
+     đều — không phải blunder thật theo chuẩn chess.com.
+     ── FIX BUG CC9 (phát hiện qua ván tàn cuộc Đen đã thua nặng — Mã chạy
+     loanh quanh câu giờ bị gắn Blunder hàng loạt, chess.com chỉ tính 2
+     Blunder thật) ──
+     Nguyên nhân: ngưỡng cpLoss>=100 CỐ ĐỊNH không phân biệt "đang hơi thua,
+     tệ thêm là escalation thật" với "đã thua thảm khốc sẵn (-700 đến
+     -1600+), tệ thêm chút nữa không còn ý nghĩa thực dụng" (Win% đã ~0% cả
+     trước lẫn sau). Fix: ngưỡng cpLoss cần thiết TĂNG TUYẾN TÍNH theo độ sâu
+     thua, giữ nguyên hành vi cũ (ngưỡng=100) khi |evalBefore|<=600 (vùng
+     "còn có thể cứu được"), từ 600 trở đi mỗi 100cp thua thêm thì ngưỡng
+     tăng 50cp — không có trần tuyệt đối, mất đủ nhiều (cpLoss lớn theo tỷ
+     lệ) vẫn coi là Blunder như bạn yêu cầu (ví dụ -800→-1200, cpLoss=400,
+     ngưỡng lúc đó=200, 400>=200 vẫn Blunder). */
+  var _escalationExtra     = Math.max(0, Math.abs(evalBefore) - 600);
+  var _escalationCpLossMin = 100 + 0.5 * _escalationExtra;
+  if (!isBest && evalBefore < -100 && cpLoss >= _escalationCpLossMin && evalActual < -400) {
     return "Blunder";
   }
 
@@ -3132,6 +3732,27 @@ function _needsMultiPVBackfill(prevIdx){
 function _buildClassifyInput(i){
   var si = gAnScores[i], sn = gAnScores[i+1];
   if (!si || !sn) return null;
+  /* ── FIX BUG CC9 (phát hiện qua case 10...cxb5 bị nhiễm chéo thành Brilliant
+     sai, do bản fix deep-reverify TRƯỚC ghi đè TRỰC TIẾP vào gAnScores[i]) ──
+     Nguyên nhân bug cũ: gAnScores dùng CHUNG cho mọi nước — ghi đè gAnScores[k]
+     bằng depth16 cho nước target i (dùng k=i và k=i+1) vô tình làm nước LIỀN KỀ
+     (i-1 hoặc i+1) khi tự tính toán lại dùng 1 bên depth16 (mới) + 1 bên depth12
+     (cũ chưa bị chạm tới) — 2 depth khác nhau tạo chênh lệch ảo, gây nhiễm chéo
+     sang các nước KHÔNG hề được đánh dấu.
+     Fix: KHÔNG đụng vào gAnScores gốc nữa. Kết quả depth16 lưu riêng ở
+     gDeepReverifyOverrides[i], chỉ áp dụng CỤC BỘ (bản sao si/sn) khi tính
+     input cho ĐÚNG nước i đó — các nước liền kề vẫn dùng nguyên gAnScores gốc
+     (đồng nhất depth12 cả 2 phía), không bị ảnh hưởng. */
+  if (typeof gDeepReverifyOverrides !== 'undefined' && gDeepReverifyOverrides && gDeepReverifyOverrides[i]) {
+    var ov = gDeepReverifyOverrides[i];
+    var si2 = {}, k;
+    for (k in si) if (si.hasOwnProperty(k)) si2[k] = si[k];
+    si2.s1 = ov.beforeS1; si2.m1 = ov.beforeM1;
+    var sn2 = {};
+    for (k in sn) if (sn.hasOwnProperty(k)) sn2[k] = sn[k];
+    sn2.s1 = ov.afterS1; sn2.m1 = ov.afterM1;
+    si = si2; sn = sn2;
+  }
 
   var best    = anCP(si.s1, si.m1);      /* eval tốt nhất tại vị trí trước nước i (góc nhìn người đi nước i) */
   var afterCP = anCP(sn.s1, sn.m1);      /* eval tại vị trí sau nước i (góc nhìn đối thủ) */
@@ -3188,13 +3809,51 @@ function _buildClassifyInput(i){
     materialLostCp = Math.max(0, netLoss);
   }
   /* intoAttackLoss: dùng riêng cho nhánh Brilliant-to-mate khi isSacrifice=false
-     nhưng quân đi vào ô bị tấn công và mất vật chất thực. */
-  var intoAttackLoss = (info.intoAttack && netLoss > 0) ? Math.max(0, netLoss) : 0;
+     nhưng quân đi vào ô bị tấn công và mất vật chất thực.
+     ── FIX BUG CC9 (phát hiện qua case 17.Rd8# bị gán nhầm Brilliant) ──
+     Nguyên nhân: trước đây intoAttackLoss tính thẳng từ netLoss thô
+     (movedVal - capVal), HOÀN TOÀN BỎ QUA seeVal đã tính đúng ở trên (dòng
+     ~3690-3695). Khi có boardAfter, seeVal là kết quả SEE thật (đệ quy đầy đủ
+     chuỗi trao đổi, biết quân có được bảo vệ hay không — kể cả trường hợp Vua
+     không thể ăn hợp lệ vì ô bị quân khác bảo vệ, xem seeOnSquare()/PVAL[king]
+     =20000). netLoss thô không biết luật này nên tính nhầm "mất vật chất" cho
+     những nước mà thực tế không hề có/sẽ có nước ăn nào xảy ra.
+     Case cụ thể: 17.Rd8# — Xe d8 được Tượng g5 bảo vệ nên Vua Đen không thể ăn
+     hợp lệ (đi vào sẽ lộ chiếu) → seeVal≈0 (isSacrifice=false đúng), nhưng
+     intoAttackLoss cũ vẫn = netLoss = 500 (giá trị Xe) vì không biết điều đó
+     → trigger nhầm điều kiện Brilliant (_sacLoss>=220) cho 1 nước chiếu hết
+     bình thường, đáng lẽ chỉ là "Best".
+     Fix: khi đã có boardAfter (SEE thật đã chạy), DÙNG seeVal cho cả
+     intoAttackLoss thay vì netLoss — đảm bảo nhất quán với isSacrifice/
+     materialLostCp (đã dùng seeVal), đồng thời tự động xử lý đúng cả case
+     chuỗi trao đổi nhiều quân (SEE đệ quy đã tính net cuối cùng, không chỉ 1
+     nước ăn đầu). Chỉ fallback về netLoss thô khi KHÔNG có boardAfter (legacy
+     data, không chạy SEE được). */
+  var intoAttackLoss;
+  if (info.intoAttack && info.boardAfter != null) {
+    intoAttackLoss = Math.max(0, -seeVal);
+  } else {
+    intoAttackLoss = (info.intoAttack && netLoss > 0) ? Math.max(0, netLoss) : 0;
+  }
 
   var numGoodAlternatives = _countGoodAlternatives(si);
 
   /* isBest: nước đi thực tế trùng với nước engine đề xuất */
   var isBest = !!(si.bestUci && gUciHist && gUciHist[i] && si.bestUci === gUciHist[i]);
+
+  /* BUG ĐÃ SỬA: khi isBest===true (nước đã chơi CHÍNH LÀ bestUci mà si đã
+     đề xuất tại vị trí này), cpLoss BẮT BUỘC phải = 0 tuyệt đối — không
+     được để giá trị "played" (tính từ sn, 1 lượt search ĐỘC LẬP khác,
+     chạy SAU khi nước đã được chơi) kéo evalBest xuống thấp hơn "best"
+     (dự đoán ban đầu của si). Hai lượt search độc lập (si dự đoán trước
+     vs sn tính lại sau) hoàn toàn có thể bất nhất nhẹ với nhau (hiện
+     tượng bình thường của mọi engine cờ vua, không phải lỗi người chơi)
+     — trước đây evalBest=max(best,played) chỉ bảo vệ 1 chiều (played>best,
+     tránh phạt oan nước tốt hơn dự đoán), thiếu chiều ngược lại nên nước
+     ĐÚNG THEO CHÍNH GỢI Ý CỦA ENGINE vẫn bị chấm mất cp so với chính nó.
+     Case thật phát hiện ra: 16.Qxa6+ (đúng bestUci, isBest=true) vẫn bị
+     chấm "Mistake -120cp" vì sn cho kết quả bi quan hơn si dự đoán. */
+  if (isBest) evalBest = played;
 
   /* isForced: chỉ có đúng 1 nước hợp lệ tại vị trí này.
      Tính từ gAnFens[i] bằng cách parse FEN và gọi legalMoves. */
@@ -3236,6 +3895,20 @@ function _buildClassifyInput(i){
               : (sn.m1 !== null && sn.m1 !== 0)           ? -sn.m1
               : (sn.s1 === -9999)                         ? 0
               : null,
+    /* isImmediateCheckmate: TRUE chỉ khi ván đấu THỰC SỰ kết thúc ngay tại nước này
+       (sn.s1===-9999, đối thủ hết nước đi hợp lệ vì đang bị chiếu hết).
+       ── FIX BUG CC9 (phát hiện qua case 29...Qe2+ bị nhầm lẫn với 17.Rd8#) ──
+       Trước đây classifyMoveCore chỉ nhìn "mateActual===0" để coi 1 nước là
+       "đã tạo/hoàn tất mate", nhưng mateActual=0 có thể đến từ 2 nguồn khác hẳn
+       nhau (xem 3 nhánh tính mateActual ngay trên):
+         - Rd8#: qua nhánh sn.s1===-9999 → ván đã kết thúc thật.
+         - Qe2+: qua nhánh isBest&&si.m1>0 (si.m1=1 → mateActual=1-1=0) → chỉ là
+           "còn 0 nước nữa theo đếm mate của engine", nhưng bàn cờ CHƯA kết thúc,
+           đối thủ vẫn còn phải đi tiếp (30.Kc1) trước khi bị mate thật ở nước sau.
+       Không có field riêng để tách 2 case này khiến cả 2 bị xử lý y hệt nhau ở
+       nhánh Best/Brilliant, trong khi bản chất khác hẳn: Rd8# không còn gì để
+       "unique" nữa (ván xong), còn Qe2+ là 1 nước chiếu ép chọn lọc, xứng Great. */
+    isImmediateCheckmate: (sn.s1 === -9999),
 
     shallowBestEvalCp:   shallowBest,
     shallowActualEvalCp: shallowActual,
@@ -3300,7 +3973,12 @@ function _startAnalysisReplay() {
     gAnReplayTimer = setTimeout(_step, 1000);
   }
 
-  gAnReplayTimer = setTimeout(_step, 400);
+  /* Gọi _step() NGAY LẬP TỨC (không chờ setTimeout 400ms) để nhảy về
+     đầu ván (move 0) liền — trước đây delay 400ms khiến board vẫn hiện
+     nguyên thế cờ CUỐI trận (trạng thái đang có sẵn lúc bấm "Phân tích")
+     trong khoảng chờ đó rồi mới nhảy về đầu, gây cảm giác "nháy" 1 cái
+     rất nhanh sang thế cuối trận trước khi replay bắt đầu đúng từ đầu. */
+  _step();
 }
 
 /* ── POOL WORKER: tạo/tái sử dụng ANALYSIS_WORKERS worker Lozza song song ── */
@@ -3312,7 +3990,7 @@ function anPoolEnsure(n, cb){
   }
   anPoolTerminate();
   var failed=false;
-  var hashEach=Math.max(32, Math.floor(384/n));
+  var hashEach=Math.max(32, Math.floor(ANALYSIS_HASH_TOTAL_MB/n));
   for(var i=0;i<n;i++){
     (function(id){
       var w=_makeLozzaWorkerRaw();
@@ -3382,14 +4060,28 @@ function _anDispatchChunks(n){
   }, 200);
 }
 
+/* [TẠM TẮT — theo yêu cầu, để đỡ phức tạp] Trước đây so sánh ván đang
+   phân tích với ván lần GẦN NHẤT: nếu giống hệt → coi là "phân tích lại"
+   → tự chạy DEPTH SÂU HƠN (14). Giờ luôn dùng ANALYSIS_DEPTH_DEFAULT cho
+   MỌI lần bấm "Phân tích", không phân biệt PGN đổi hay không — bấm nút
+   Phân tích luôn cho ra ĐÚNG 1 kết quả duy nhất (không có 2 mức depth
+   khác nhau tuỳ ngữ cảnh nữa). gLastAnalyzedGameKey/ANALYSIS_DEPTH_
+   REANALYZE giữ lại trong code (không xoá) để dễ bật lại sau này nếu
+   cần, nhưng KHÔNG còn được dùng ở startAnalysis() nữa. */
+var ANALYSIS_DEPTH_DEFAULT = 12;
+var ANALYSIS_DEPTH_REANALYZE = 14; /* không còn dùng — xem ghi chú trên */
+var gLastAnalyzedGameKey = null;   /* không còn dùng — xem ghi chú trên */
 function startAnalysis(){
   if(!gMoveTexts.length){alert('Không có nước nào để phân tích!');return;}
   if(gAnBusy){ gAnPendingRerun = true; return; } /* đang có 1 lượt phân tích khác chạy dở — tránh chồng lấn */
   gAnBusy = true;
 
+  ANALYSIS_DEPTH = ANALYSIS_DEPTH_DEFAULT; /* luôn cố định — xem ghi chú "TẠM TẮT" ở trên */
+
   gAnFens=gFenHistory.concat([boardToFen()]);
   gAnResultsMap={};
   gAnScores=[];
+  gDeepReverifyOverrides={}; /* reset override deep-reverify của ván trước, tránh rò rỉ sang ván mới */
   gAnDoneCount=0;
   gAnTotalCount=gAnFens.length;
   gAnBackfillCount=0;
@@ -3421,10 +4113,30 @@ function startAnalysis(){
    hơn hẳn so với lúc chạy đơn lẻ 1 worker — nếu giữ nguyên ngưỡng cũ (vốn
    tính cho 1 worker độc chiếm CPU), watchdog sẽ bắn oan giữa chừng, huỷ
    worker và thay bằng giá trị vật chất ước lượng thay vì eval thật → đây
-   chính là nguyên nhân kết quả bị lệch/không ổn định giữa các lần chạy. */
-function _anWatchdogMs(base){
+   chính là nguyên nhân kết quả bị lệch/không ổn định giữa các lần chạy.
+
+   NGOÀI số worker, còn cần "nới" theo ĐỘ SÂU TÌM KIẾM thực tế của lượt
+   'go depth' đó — các "base" (15000/20000ms) vốn được canh chỉnh cho
+   depth mặc định 12; khi người dùng tăng ANALYSIS_DEPTH lên 14+ (hoặc
+   tự động lên 14 khi "phân tích lại", xem startAnalysis()), thời gian
+   tính 1 vị trí có thể tăng theo cấp số nhân so với depth 12 — nếu vẫn
+   giữ ngân sách cũ, watchdog dễ bắn oan giữa chừng ở CHÍNH những vị trí
+   phức tạp/nhiều nhánh chiến thuật (ví dụ ngay sau 1 nước hy sinh quân),
+   khiến vị trí đó bị thay bằng eval ước lượng thô (chỉ đếm quân, không
+   có bestUci) — sai lệch hẳn so với eval thật, dễ làm nước Best/Brilliant
+   thật sự bị chấm nhầm thành Mistake. depthForSearch: độ sâu THẬT SỰ của
+   lượt 'go depth' sắp chạy (SHALLOW_DEPTH cho pha shallow, ANALYSIS_DEPTH
+   cho pha main/mpv_backfill) — mặc định lấy ANALYSIS_DEPTH nếu không
+   truyền vào. Hệ số nhân theo depth: 1.6^(depth-12), chặn trần ở 6 lần
+   để watchdog vẫn có tác dụng thật (không biến thành vô hạn) nếu worker
+   THẬT SỰ bị treo (lỗi/crash) chứ không phải chỉ vì tính lâu. */
+function _anWatchdogMs(base, depthForSearch){
   var n = Math.max(1, gAnPool.length);
-  return base * n;
+  var d = (typeof depthForSearch==='number') ? depthForSearch
+        : (typeof ANALYSIS_DEPTH!=='undefined' ? ANALYSIS_DEPTH : 12);
+  var depthFactor = Math.pow(1.6, Math.max(0, d-12));
+  if(depthFactor>6) depthFactor=6;
+  return Math.round(base * n * depthFactor);
 }
 
 /* ── Pipeline phân tích cho 1 worker/slot (bản song song hoá của
@@ -3439,10 +4151,18 @@ function _anSlotAnalyzeNext(slot){
   }
   if(slot.phase==='shallow'){
     slot.shallowCur={d1:0,s1:0,m1:null};
+    /* KHÔNG xoá TT riêng ở đây nữa (đã thử, xem lịch sử — có ổn định hơn
+       nhưng đổi lấy việc mất lợi ích transposition-hit giữa các vị trí
+       liền kề trong cùng cụm, không đáng đánh đổi). TT vẫn tích luỹ suốt
+       cả cụm như thiết kế gốc — chỉ xoá 1 LẦN DUY NHẤT khi bắt đầu cụm
+       (xem 'ucinewgame' trong _anDispatchChunks()). Để có kết quả ổn định
+       giữa các lần phân tích, giải pháp đúng là CỐ ĐỊNH ANALYSIS_WORKERS/
+       ANALYSIS_HASH_TOTAL_MB (không đổi qua lại nữa) — xem comment ở 2
+       hằng số đó — chứ không phải xoá TT giữa chừng. */
     slot.worker.postMessage('setoption name MultiPV value 1');
     slot.worker.postMessage('position fen '+gAnFens[slot.pos]);
     slot.worker.postMessage('go depth '+SHALLOW_DEPTH);
-    _armAnSlotWatchdog(slot, _anWatchdogMs(15000));
+    _armAnSlotWatchdog(slot, _anWatchdogMs(15000, SHALLOW_DEPTH));
     return;
   }
   if(slot.phase==='mpv_backfill'){
@@ -3450,7 +4170,7 @@ function _anSlotAnalyzeNext(slot){
     slot.worker.postMessage('setoption name MultiPV value 2');
     slot.worker.postMessage('position fen '+gAnFens[slot.backfillIdx]);
     slot.worker.postMessage('go depth '+ANALYSIS_DEPTH);
-    _armAnSlotWatchdog(slot, _anWatchdogMs(20000));
+    _armAnSlotWatchdog(slot, _anWatchdogMs(20000, ANALYSIS_DEPTH));
     return;
   }
   slot.cur={d1:0,s1:0,m1:null, d2:0,s2:null,m2:null, d3:0,s3:null,m3:null, d4:0,s4:null,m4:null};
@@ -3459,7 +4179,7 @@ function _anSlotAnalyzeNext(slot){
   slot.worker.postMessage('setoption name MultiPV value 1');
   slot.worker.postMessage('position fen '+gAnFens[slot.pos]);
   slot.worker.postMessage('go depth '+ANALYSIS_DEPTH);
-  _armAnSlotWatchdog(slot, _anWatchdogMs(20000));
+  _armAnSlotWatchdog(slot, _anWatchdogMs(20000, ANALYSIS_DEPTH));
 }
 
 /* Xử lý 1 vị trí 0 nước hợp lệ HOÀN TOÀN Ở PHÍA CLIENT, không đụng gì tới
@@ -3570,7 +4290,7 @@ function _handleAnSlotMsg(slot, msg){
       slot.worker.postMessage('setoption name MultiPV value 1');
       slot.worker.postMessage('position fen '+gAnFens[slot.pos]);
       slot.worker.postMessage('go depth '+ANALYSIS_DEPTH);
-      _armAnSlotWatchdog(slot, 20000);
+      _armAnSlotWatchdog(slot, _anWatchdogMs(20000, ANALYSIS_DEPTH));
       return;
     }
 
@@ -3583,7 +4303,7 @@ function _handleAnSlotMsg(slot, msg){
       slot.cur._pendingBestUci = bm;
       slot.worker.postMessage('position fen '+gAnFens[slot.pos]);
       slot.worker.postMessage('go depth 1');
-      _armAnSlotWatchdog(slot, _anWatchdogMs(8000));
+      _armAnSlotWatchdog(slot, _anWatchdogMs(8000, 1));
       return;
     } else if(slot.cur.d1===0){
       var fallbackCp = materialCpFromFen(gAnFens[slot.pos], slot.cur.side);
@@ -3686,7 +4406,7 @@ function _anSlotOnWatchdog(slot){
     nw.onmessage=function(e){ _anSlotOnMessage(slot, String(e.data||'').trim()); };
     nw.onerror=function(){ if(slot._active) _anSlotOnWatchdog(slot); };
     nw.postMessage('uci');
-    nw.postMessage('setoption name Hash value '+Math.max(32, Math.floor(384/Math.max(1,gAnPool.length))));
+    nw.postMessage('setoption name Hash value '+Math.max(32, Math.floor(ANALYSIS_HASH_TOTAL_MB/Math.max(1,gAnPool.length))));
     nw.postMessage('ucinewgame');
     nw.postMessage('isready');
   }
@@ -4347,11 +5067,171 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
   return {highlightHtml: highlightHtml, topHtml: topHtml, summaryHtml: html, highlightIdxSet: mergedByIdx};
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   DEEP RE-VERIFY PASS — FIX BUG CC9
+   ── Phát hiện qua case 15.Bxa6 (ván ELO cao, hy sinh Tượng mở tấn công) ──
+   Đã đo thực nghiệm xác nhận: query ĐỘC LẬP (không dùng Hash tích luỹ cả
+   ván) ở CHÍNH depth 12 cho cpLoss≈0, khác hẳn cpLoss=50 lấy từ pipeline
+   phân tích thật (Na4 vs Bxa6). Nguyên nhân là NHIỄU giữa các lần search
+   khác Hash-state (đã ghi nhận từ trước ở BRILLIANT_SHALLOW_MIN_CP), KHÔNG
+   phải do thiếu depth — tăng depth (đã test tới 20) không tự sửa được vì
+   bản chất là nhiễu, không phải thiếu tầm nhìn.
+   Giải pháp: với các vị trí NGHI NGỜ bị nhiễu (xem 2 điều kiện dưới), chạy
+   lại 1 lần depth cao hơn (16) hoàn toàn ĐỘC LẬP (fresh, không cache) để có
+   số liệu đáng tin cậy hơn, rồi GHI ĐÈ vào gAnScores trước khi classify. */
+var DEEP_REVERIFY_DEPTH       = 15; /* Tạm hạ từ 16→15 để tăng tốc — theo yêu cầu, chấp nhận độ tin cậy thấp hơn 1 chút */
+var gDeepReverifyOverrides    = {}; /* { [i]: {beforeS1,beforeM1,afterS1,afterM1} } — reset mỗi lần startAnalysis() */
+var DEEP_REVERIFY_SAC_MIN_CP  = 220; /* = BRILLIANT_SAC_MIN_CP, khai riêng để không phụ thuộc thứ tự định nghĩa */
+var DEEP_REVERIFY_CPLOSS_MIN  = 20;  /* = ngưỡng cpLoss của Brilliant (brilliantBase/brilliantIndirect) */
+var DEEP_REVERIFY_CPLOSS_MAX  = 100; /* cận trên vùng "nghi nhiễu" — quá xa mốc Brilliant thì khả năng cao là sai thật, không phải nhiễu */
+
+/* Quét toàn bộ nước đã phân tích, đánh dấu vị trí cần re-verify. Đánh dấu
+   theo 2 điều kiện độc lập (thoả 1 trong 2 là đủ):
+     (A) isSacrifice tại i, VÀ nước tại i+2 (CÙNG BÊN với i) là 1 nước chiếu
+         — dấu hiệu "hy sinh mở đường cho chuỗi chiếu tiếp theo", loại vị
+         trí chiến thuật cao dễ bị nhiễu. gMoveInfo[].givesCheck tính theo
+         luật cờ thuần tuý (inCheck()), không phụ thuộc engine/Hash.
+     LỚP LỌC CHUNG (áp dụng TRƯỚC khi xét A hay B): nếu nhãn classify depth12
+     GỐC của i đã là Brilliant hoặc Great Move rồi thì BỎ QUA HẲN, không xét
+     A/B nữa — dù nó có thoả điều kiện "sac + chiếu cùng bên 2 ply sau" (A)
+     hay "cpLoss vùng nghi ngờ" (B) đi nữa, vì mục tiêu re-verify là NÂNG
+     HẠNG nước đang bị đánh giá thấp hơn thực tế, không phải để re-verify
+     nước đã đạt hạng cao sẵn — tốn thời gian vô ích.
+     (A) isSacrifice tại i, VÀ nước tại i+2 (CÙNG BÊN với i) là 1 nước chiếu.
+     (B) isSacrifice && materialLostCp>=220 && cpLoss thuộc (20,100]. */
+function _anCollectDeepReverifyTargets(){
+  var targets = [];
+  for (var i = 0; i < gMoveTexts.length; i++){
+    var ci = _buildClassifyInput(i);
+    if (!ci || !ci.isSacrifice) continue;
+
+    var origLabel = classifyMoveCore(ci); /* nhãn depth12 gốc — override chưa tồn tại ở bước quét này */
+    if (origLabel === "Brilliant" || origLabel === "Great Move") continue; /* LỚP LỌC CHUNG: đã đạt hạng cao sẵn, bỏ qua A/B luôn */
+
+    var cpLoss = Math.max(0, ci.evalBest - ci.evalActual);
+    var infoI  = gMoveInfo[i];
+    var infoI2 = gMoveInfo[i+2];
+    var condA = !!(infoI && infoI2 && infoI2.givesCheck && infoI2.side === infoI.side);
+    var condB = (ci.materialLostCp >= DEEP_REVERIFY_SAC_MIN_CP &&
+                 cpLoss > DEEP_REVERIFY_CPLOSS_MIN && cpLoss <= DEEP_REVERIFY_CPLOSS_MAX);
+
+    if (condA || condB) targets.push(i);
+  }
+  return targets;
+}
+
+/* Chạy lại depth DEEP_REVERIFY_DEPTH, ĐỘC LẬP (fresh position query, không
+   dùng gAnScores cache), cho từng vị trí bị đánh dấu.
+   ── VIẾT LẠI SAU BUG NHIỄM CHÉO (xem comment ở _buildClassifyInput) ──
+   2 thay đổi so với bản đầu:
+     1) KHÔNG ghi đè gAnScores nữa — lưu kết quả vào gDeepReverifyOverrides[i]
+        riêng, áp dụng cục bộ trong _buildClassifyInput. Loại bỏ hoàn toàn
+        nhiễm chéo sang nước liền kề.
+     2) Chạy SONG SONG trên tất cả worker đang rảnh trong gAnPool (thay vì
+        tuần tự trên 1 worker) — giải quyết vấn đề chậm khi có nhiều vị trí
+        bị đánh dấu (ví dụ ván có 4 vị trí trước đây phải chạy 8 query tuần
+        tự trên 1 worker; giờ chia đều cho 6 worker, chạy đồng thời). */
+function _anDeepReverifyPass(indices, cb){
+  gDeepReverifyOverrides = {};
+  if (!indices.length){ cb(); return; }
+
+  var btnEl = document.getElementById('clr-toggle');
+  var doneCount = 0;
+  var total = indices.length;
+  function updateProgressUi(){
+    if (btnEl) btnEl.innerHTML = '\u{1F50D} Reverifying ' + doneCount + '/' + total + '...';
+  }
+  function maybeFinish(){
+    if (doneCount >= total) cb();
+  }
+  updateProgressUi();
+
+  /* Mỗi worker rảnh nhận 1 hàng đợi con (round-robin theo index trong mảng
+     indices) — worker nào xong việc của mình thì tự lấy tiếp target kế
+     trong hàng đợi CHUNG (dùng con trỏ nextTaskIdx dùng chung, không chia
+     cứng theo số worker) để cân bằng tải nếu các vị trí có thời gian tính
+     khác nhau (vị trí phức tạp hơn tự nhiên chiếm worker lâu hơn). */
+  var nextTaskIdx = 0;
+  var nWorkers = Math.max(1, gAnPool.length);
+
+  function runOneTarget(w, i, onWorkerFree){
+    var subStep = 0; /* 0 = đang đo fen[i], 1 = đang đo fen[i+1] */
+    var freshBefore = null, freshAfter = null;
+    var originalOnMessage = w.onmessage;
+
+    /* FIX BUG CC9: TRƯỚC ĐÂY lọc cứng "chỉ nhận dòng đúng depth===DEEP_REVERIFY_DEPTH",
+       khiến freshBefore/freshAfter = null nếu Lozza (KHÔNG phải Stockfish, có thể
+       không luôn in đúng dòng "info depth 16" — có thể dừng sớm ở depth gần đó) —
+       gây evalBefore=null trong _buildClassifyInput. Sửa: lấy dòng score CUỐI CÙNG
+       bất kể depth cụ thể (giống cách các lệnh probe thủ công đã dùng thành công
+       trong suốt phiên làm việc này), đúng giá trị hội tụ ngay trước bestmove. */
+    function parseAndStore(msg, side){
+      var m = msg.match(/^info depth (\d+).*?score cp (-?\d+)/);
+      if (m){
+        var val = { s1: +m[2], m1: null };
+        if (side===0) freshBefore = val; else freshAfter = val;
+      }
+      var mm = msg.match(/^info depth (\d+).*?score mate (-?\d+)/);
+      if (mm){
+        var mateVal = +mm[2];
+        var cpEq = mateVal>=0 ? (9999-Math.abs(mateVal)) : -(9999-Math.abs(mateVal));
+        var valM = { s1: cpEq, m1: mateVal };
+        if (side===0) freshBefore = valM; else freshAfter = valM;
+      }
+    }
+    function onMsg(e){
+      var msg = e.data;
+      if (typeof msg !== 'string') return;
+      parseAndStore(msg, subStep);
+      if (msg.indexOf('bestmove') === 0){
+        if (subStep === 0){
+          subStep = 1;
+          runQuery(i + 1);
+        } else {
+          gDeepReverifyOverrides[i] = {
+            beforeS1: freshBefore ? freshBefore.s1 : null, beforeM1: freshBefore ? freshBefore.m1 : null,
+            afterS1:  freshAfter  ? freshAfter.s1  : null, afterM1:  freshAfter  ? freshAfter.m1  : null
+          };
+          w.onmessage = originalOnMessage;
+          onWorkerFree();
+        }
+      }
+    }
+    w.onmessage = onMsg;
+    function runQuery(fenIdx){
+      w.postMessage('stop');
+      w.postMessage('position fen ' + gAnFens[fenIdx]);
+      w.postMessage('go depth ' + DEEP_REVERIFY_DEPTH);
+    }
+    runQuery(i);
+  }
+
+  function pumpWorker(slot){
+    if (!slot || !slot.worker) return;
+    var myTaskIdx = nextTaskIdx++;
+    if (myTaskIdx >= total){ return; } /* hết việc cho worker này */
+    var i = indices[myTaskIdx];
+    runOneTarget(slot.worker, i, function(){
+      doneCount++;
+      updateProgressUi();
+      maybeFinish();
+      pumpWorker(slot); /* worker này rảnh, lấy tiếp target kế trong hàng đợi chung nếu còn */
+    });
+  }
+
+  for (var k = 0; k < nWorkers; k++) pumpWorker(gAnPool[k]);
+}
+
 function finishAnalysis(){
   /* Lozza không hỗ trợ 'searchmoves' trong lệnh go → Pass C không hoạt động
      và gây treo nếu có nhiều position forced liên tiếp (stack từ _runPass2Next đệ quy).
      Bỏ Pass C, dùng MultiPV s2 với clamp đã có trong _buildClassifyInput. */
-  _finishAnalysisRender();
+  var targets = _anCollectDeepReverifyTargets();
+  if (targets.length){
+    _anDeepReverifyPass(targets, function(){ _finishAnalysisRender(); });
+  } else {
+    _finishAnalysisRender();
+  }
 }
 
 /* ── _runPass2Next đã bị loại bỏ (Lozza không hỗ trợ searchmoves) ── */
@@ -5059,24 +5939,30 @@ function _reviewJumpToCore(idx, noScroll){
      vẽ mũi tên xanh lá minh họa nước gợi ý. */
   var arr = document.getElementById('svg-arrows');
   if(arr) arr.innerHTML = '';
+  /* Missed Win/Missed Mate: đảo màu so với các loại lỗi khác — mũi tên
+     GỢI Ý nước nên đi → CAM (pinkorange), mũi tên nước ĐỐI PHƯƠNG sẽ đi
+     (khai thác việc bỏ lỡ thắng/chiếu hết) → XANH NGỌC (teal). Các loại
+     lỗi khác (blunder/mistake/inaccuracy) vẫn giữ màu như cũ (gợi ý xanh
+     lá, đối phương xanh ngọc). */
+  var isMissedWinMate = (cls === 'missed_win' || cls === 'missed_mate');
+  var suggestColor = isMissedWinMate ? 'pinkorange' : 'green';
   if(hasSuggestion){
     var bff = FLS.indexOf(scSuggest.bestUci.charAt(0));
     var bfr = parseInt(scSuggest.bestUci.charAt(1), 10) - 1;
     var btf = FLS.indexOf(scSuggest.bestUci.charAt(2));
     var btr = parseInt(scSuggest.bestUci.charAt(3), 10) - 1;
     if(bff>=0 && btf>=0 && bfr>=0 && btr>=0 && typeof drawArrow==='function'){
-      drawArrow(sq(bfr,bff), sq(btr,btf), 'green');
+      drawArrow(sq(bfr,bff), sq(btr,btf), suggestColor);
     }
   }
 
   /* Vẽ thêm mũi tên "trừng phạt" cho nước TỐT NHẤT của đối phương ở thế cờ hiện tại
      (gAnScores[idx+1].bestUci) — tận dụng sai lầm vừa mắc phải:
      - Blunder/Mistake    → mũi tên xanh ngọc (teal)
-     - Missed Win/Missed Mate → mũi tên hồng cam (pinkorange) — bên kia tận dụng
+     - Missed Win/Missed Mate → mũi tên xanh ngọc (teal) — bên kia tận dụng
        thế nào để khai thác việc đối phương vừa bỏ lỡ thắng/chiếu hết.
      Áp dụng cho cả 2 tab. */
-  var punishColor = (cls === 'blunder' || cls === 'mistake' || cls === 'inaccuracy') ? 'teal'
-                   : (cls === 'missed_win' || cls === 'missed_mate') ? 'pinkorange'
+  var punishColor = (cls === 'blunder' || cls === 'mistake' || cls === 'inaccuracy' || isMissedWinMate) ? 'teal'
                    : null;
   if(punishColor && gAnScores[idx+1] && gAnScores[idx+1].bestUci && gAnScores[idx+1].bestUci.length >= 4){
     var puci = gAnScores[idx+1].bestUci;
@@ -5108,13 +5994,37 @@ function _reviewJumpToCore(idx, noScroll){
       missed_win: { cls:'rb-missed',     sym:'?'  }
     };
     var bd = badgeMap[cls];
-    if(!bd) return;
-    var sqEl = document.querySelector('[data-s="'+toSq+'"]');
-    if(!sqEl) return;
-    var badge = document.createElement('div');
-    badge.className = 'sq-review-badge ' + bd.cls;
-    badge.textContent = bd.sym;
-    sqEl.appendChild(badge);
+    if(bd){
+      var sqEl = document.querySelector('[data-s="'+toSq+'"]');
+      if(sqEl){
+        var badge = document.createElement('div');
+        badge.className = 'sq-review-badge ' + bd.cls;
+        badge.textContent = bd.sym;
+        sqEl.appendChild(badge);
+      }
+    }
+
+    /* Badge riêng CHIẾU HẾT — CHỈ hiện trên bàn cờ (ô Vua bị mate), KHÔNG
+       liên quan gì đến nhãn phân loại (cls) hay bảng "Chi tiết từng
+       nước" — tách hẳn khỏi badgeMap/bd ở trên, luôn kiểm tra độc lập
+       mỗi khi vẽ lại review. Dùng lại đúng style "rb-missed" (đỏ mận có
+       sẵn) nhưng đổi ký hiệu thành "#" (quy ước SAN cho chiếu hết) và
+       đặt ở Ô VUA đang bị chiếu hết — KHÔNG phải ô quân vừa đi (toSq) —
+       vì quân vừa đi và Vua bị mate là 2 ô khác nhau. */
+    if(typeof inCheck==='function' && typeof legalMoves==='function'
+       && inCheck(gB,gTurn) && legalMoves(gB,gTurn,gEP,gCas).length===0){
+      var mateKingSq=-1;
+      for(var ks=0;ks<64;ks++) if(gB[ks]===gTurn*6){ mateKingSq=ks; break; }
+      if(mateKingSq>=0){
+        var kingSqEl = document.querySelector('[data-s="'+mateKingSq+'"]');
+        if(kingSqEl){
+          var mateBadge = document.createElement('div');
+          mateBadge.className = 'sq-review-badge rb-missed';
+          mateBadge.textContent = '#';
+          kingSqEl.appendChild(mateBadge);
+        }
+      }
+    }
   })();
 
   /* Hiện trạng thái — dùng chung setStatus() để có layout 3 cột (trái/giữa/phải)
@@ -5270,8 +6180,8 @@ var gAnFens=[];        /* danh sách FEN cần phân tích (n+1 vị trí) */
 var gAnIdx=0;          /* vị trí đang phân tích */
 var gAnScores=[];      /* kết quả engine per position */
 var gAnCur={};         /* kết quả đang thu thập */
-var ANALYSIS_DEPTH=12;
-var SHALLOW_DEPTH=6;   /* depth nông cho shallow-eval (Brilliant/Great Defense filter) */
+var ANALYSIS_DEPTH=12; /* giá trị mặc định lúc trang vừa mở — startAnalysis() tự ghi đè lại thành ANALYSIS_DEPTH_DEFAULT (12) hoặc ANALYSIS_DEPTH_REANALYZE (16) mỗi lần bấm Phân tích, xem khai báo 2 hằng số đó ở gần đầu startAnalysis() */
+var SHALLOW_DEPTH=6;   /* depth nông cho shallow-eval (Brilliant/Great Defense filter) — đã thử hạ xuống 5/4 nhưng cho kết quả cpLossShallow NHỎ HƠN (45/23 so với 74 ở depth 6) — shallow search không "tệ dần đều" theo depth 1 cách dự đoán được, khá nhiễu tuỳ vị trí. Depth 6 (gốc) vẫn là lựa chọn tốt nhất trong số đã thử nghiệm thực tế — trả về 6, chuyển hướng sang hạ thẳng ngưỡng shallowLooksBad thay vì đổi depth (xem BRILLIANT_SHALLOW_MIN_CP). */
 var gAnPhase='main';   /* 'shallow' | 'main' | 'mpv_backfill' — pass đang chạy */
 var gBackfillIdx=-1;   /* index vị trí đang backfill multipv=2 THẬT (xem _needsMultiPVBackfill) */
 var gAnWatchdogTimer=null; /* setTimeout id — hủy nếu vị trí hiện tại tính quá lâu (search explosion do chuỗi chiếu liên tục) */
@@ -5289,7 +6199,18 @@ var gAnClsCache=[];    /* classifyMove() cache cho từng nước, dùng cho scr
    song song, mỗi worker đảm nhận 1 đoạn liên tiếp các vị trí (chunk). Vẫn giữ
    nguyên depth 12 + luồng shallow→main→mpv_backfill như bản 1-worker cũ, chỉ
    khác là chạy N bản sao đó song song. Xem anPoolEnsure()/startAnalysis(). */
-var ANALYSIS_WORKERS=4; /* số worker chạy song song khi phân tích PGN hàng loạt (đã giảm từ 6→4 để mỗi worker được nhiều hash + CPU hơn, cân bằng tốc độ/độ chính xác) */
+var ANALYSIS_WORKERS=6;          /* ĐÃ CHỐT CỐ ĐỊNH — KHÔNG đổi số này nữa. Vì TT tích luỹ
+   suốt 1 cụm (không xoá giữa chừng, xem _anSlotAnalyzeNext), đổi số worker sẽ đổi ranh
+   giới chia cụm (per=ceil(total/n)) → đổi lịch sử tích luỹ TT của từng vị trí → đổi
+   luôn kết quả phân loại (đã xác nhận thực tế: Brilliant/Best/Inaccuracy nhảy qua lại
+   khi đổi 4↔6 worker dù mọi thứ khác giữ nguyên). Toàn bộ ngưỡng phân loại (đặc biệt
+   BRILLIANT_SHALLOW_MIN_CP) được canh chỉnh RIÊNG cho đúng 6 worker này — đổi số worker
+   mà không tinh chỉnh lại ngưỡng sẽ làm sai lệch kết quả phân loại của MỌI ván. */
+var ANALYSIS_HASH_TOTAL_MB=576;  /* ĐÃ CHỐT CỐ ĐỊNH cùng với ANALYSIS_WORKERS ở trên —
+   576/6=96MB mỗi worker. Nếu sau này thật sự cần đổi 1 trong 2 số này (worker hoặc
+   Hash), PHẢI đo lại và tinh chỉnh lại toàn bộ ngưỡng Classify (xem classifyMoveCore)
+   trên 1 bộ nhiều ván mẫu, không chỉ 1 ván — tránh lặp lại vòng luẩn quẩn đã gặp khi
+   chỉnh riêng lẻ từng ngưỡng theo đúng 1 ván test. */
 var gAnPool=[];          /* [{worker,id,ready,_active,phase,cur,shallowCur,shallowResult,pos,chunkStart,chunkEnd,backfillIdx,watchdogTimer,watchdogGen}] */
 var gAnResultsMap={};    /* idx (số) → kết quả 1 vị trí — nơi các worker ghi song song; gAnScores chỉ build từ đây SAU KHI xong toàn bộ */
 var gAnDoneCount=0;      /* số vị trí đã phân tích xong (không tính riêng backfill) */
@@ -5378,6 +6299,18 @@ function newGame(){
   if(typeof randomizeContempt==='function') randomizeContempt();
   if(typeof randomizeBookSeed==='function') randomizeBookSeed();
   if(typeof coachReset==='function') coachReset();
+  /* [Luyện tập] Nếu đang hiện panel "Xem lại sau ván" (coach-layer-review,
+     hiện lên sau khi ván kết thúc rồi bấm Phân tích trận đấu) thì bấm
+     "Ván mới" phải trả cột bên phải về đúng màn hình Chess Coach với 3
+     nút Gợi ý/Kiểm tra/Tự do (coach-layer-normal) — không được giữ
+     nguyên panel review cũ của ván đã xong. Chỉ áp dụng ở tab Luyện tập
+     (tab Phân tích tự quản 2 layer này theo luồng riêng). */
+  if(typeof gAppTab==='undefined' || gAppTab!=='analysis'){
+    var _clRev=document.getElementById('coach-layer-review');
+    var _clNorm=document.getElementById('coach-layer-normal');
+    if(_clRev) _clRev.style.display='none';
+    if(_clNorm){ _clNorm.style.display='-webkit-flex'; _clNorm.style.display='flex'; }
+  }
   renderBoard(); setStatus();
   var _isAn = (typeof gAppTab!=='undefined' && gAppTab==='analysis');
   if(!_isAn && gPC===B) setTimeout(aiMove,80);
@@ -5547,6 +6480,37 @@ function renderBoard(){
       var cell=document.createElement('div');
       cell.className=cls.trim();
       cell.setAttribute('data-s',s);
+      /* Vân đá dạng gradient cũ (nếu theme có, xem gBoardTextureVariants —
+         hiện không theme nào dùng) + lớp nhiễu hạt phủ thêm (nếu theme
+         có, xem gNoiseOverlayActive — hiện chỉ gỗ) — gộp thành nhiều lớp
+         background-image trên CHÍNH Ô này (đè lên trên background-color
+         đặc ở CSS .sq.lite/.sq.dark) nên luôn hiện rõ. Lớp nhiễu hạt vẫn
+         dùng 1 tile nhỏ lặp lại ở kích thước CSS px cố định — luôn nét dù
+         bàn cờ to/nhỏ. (Vân mây của đá xanh dương KHÔNG còn gán per-cell
+         ở đây nữa — xem gCloudTextureActive ở setBoardTheme(), ảnh lớn
+         giờ gán 1 LẦN DUY NHẤT lên #board, ô để trong suốt lộ ra, tránh
+         lag do phải crop/scale/blend lại 64 ô mỗi lần renderBoard() chạy
+         khi đi quân — đúng bài học từ lần tối ưu vân gỗ trước đây.) */
+      var _bgImgs=[], _bgSizes=[], _bgPositions=[], _bgBlends=[];
+      if(gBoardTextureVariants){
+        var _texIdx=(dr*3+dc*5)%gBoardTextureVariants.length;
+        _bgImgs.push(gBoardTextureVariants[_texIdx]);
+        _bgSizes.push('auto');
+        _bgPositions.push('0% 0%');
+        _bgBlends.push('normal');
+      }
+      if(gNoiseOverlayActive){
+        _bgImgs.push('url('+getNoiseTileURL()+')');
+        _bgSizes.push(BOARD_NOISE_TILE_CSS_PX+'px '+BOARD_NOISE_TILE_CSS_PX+'px');
+        _bgPositions.push('0% 0%');
+        _bgBlends.push('overlay');
+      }
+      if(_bgImgs.length){
+        cell.style.backgroundImage=_bgImgs.join(',');
+        cell.style.backgroundSize=_bgSizes.join(',');
+        cell.style.backgroundPosition=_bgPositions.join(',');
+        cell.style.backgroundBlendMode=_bgBlends.join(',');
+      }
       /* Nhãn tọa độ: số hàng (1-8) ở góc TRÊN-TRÁI của CỘT ĐẦU TIÊN bên
          trái (dc===0), chữ cột (a-h) ở góc DƯỚI-PHẢI của HÀNG CUỐI CÙNG
          bên dưới (dr===7) — đúng chuẩn hiển thị bàn cờ (lichess/chess.com).
@@ -5782,6 +6746,13 @@ function setStatus(){
 }
 
 function showAnalyzeBtn(){
+  /* Ván đã kết thúc (mọi đường kết thúc — chiếu hết/hòa/xin thua đều gọi
+     hàm này): ẩn ngay nút "Xin thua" để "Ván mới" (btn-pgn) tự giãn về
+     full độ rộng như cũ, không chờ _syncResignLink() (hàm đó chỉ được
+     gọi lại sau nước đi kế tiếp của máy, tức là KHÔNG BAO GIỜ chạy nữa
+     một khi ván đã kết thúc). */
+  var _rb=document.getElementById('btn-resign');
+  if(_rb) _rb.style.display='none';
   if(typeof gAppTab!=='undefined' && gAppTab==='analysis') return; /* tab Phân tích tự quản nút này */
   var cb=document.getElementById('clr-toggle');
   if(!cb) return;
@@ -5898,7 +6869,18 @@ function execMove(mv){
 
   gSel=-1; gLegal=[];
   gMoveSeq++;
-  renderBoard(); setStatus();
+  /* QUAN TRỌNG: KHÔNG vẽ lại bàn cờ/status khi đang replay hàng loạt PGN
+     (gIsReplayingPgn — dán PGN / phân tích ván chess.com / đồng bộ PGN từ
+     ô lịch sử). 3 luồng đó chạy execMove() liên tục trong 1 vòng lặp
+     ĐỒNG BỘ rồi mới startAnalysis() (nhảy về nước đầu) sau 1 setTimeout —
+     nếu vẫn renderBoard() mỗi nước, trình duyệt chỉ kịp SƠN 1 lần duy
+     nhất lên màn hình đúng lúc vòng lặp vừa xong (tức là đang ở NƯỚC CUỐI
+     ván), và người dùng sẽ thấy "nháy" sang thế cờ cuối đó trong khoảng
+     chờ trước khi startAnalysis() nhảy về đầu — đây chính là bug đã gặp.
+     Bỏ qua render/status trong lúc replay thì bàn cờ giữ nguyên đúng thế
+     cờ bắt đầu (do newGame() đã vẽ lúc đầu luồng) suốt quá trình, không
+     có gì để "nháy" cả. */
+  if(!gIsReplayingPgn){ renderBoard(); setStatus(); }
 
   /* Coach post-move (bỏ qua khi đang replay hàng loạt PGN — xem comment ở nhánh coachTrigger bên dưới) */
   if(_coachWasPlayer && typeof coachOnPlayerMove==='function' && !gIsReplayingPgn) {
@@ -6513,8 +7495,10 @@ function flipBoardOnly() {
 function _tryAutoSearchLastUsername() {
   var saved = (typeof lastUsernameLoad === 'function') ? lastUsernameLoad() : '';
   if (!saved) return false;
-  var hel2 = document.getElementById('history');
-  if (hel2) hel2.textContent = saved;
+  /* KHÔNG điền chữ thật vào ô #history nữa — để trống, placeholder mờ sẽ
+     tự hiện qua analyzerPlaceholderText()/data-placeholder (đã set sẵn
+     username lưu ở đây), và sau khi tìm xong, analyzerFetchGamesByUser()
+     sẽ tự gọi _showUsernameAsPlaceholder() để giữ đúng trạng thái này. */
   analyzerFetchGamesByUser(saved);
   return true;
 }
@@ -6793,6 +7777,19 @@ function analyzerIsBotGame(game, targetUser) {
   return false;
 }
 
+/* Sau khi tìm THÀNH CÔNG danh sách trận đấu của 1 username (dù do gõ tay
+   rồi bấm Phân tích, hay tự động lúc mở/refresh trang): xoá nội dung
+   THẬT trong ô PGN và chuyển username đó thành CHỮ MỜ GỢI Ý (placeholder,
+   dùng lại đúng cơ chế CSS "pgn-empty-hint:empty:before" có sẵn) — để
+   người dùng vẫn biết đang xem kết quả của username nào, nhưng không cần
+   xoá gì cả nếu muốn gõ/dán username khác hoặc PGN khác vào ngay. */
+function _showUsernameAsPlaceholder(username){
+  var hel = document.getElementById('history');
+  if(!hel) return;
+  hel.textContent = '';
+  hel.setAttribute('data-placeholder', username);
+  hel.classList.add('pgn-empty-hint');
+}
 function analyzerFetchGamesByUser(username) {
   analyzerSetStatus('\u0110ang t\u00ecm tr\u1eadn \u0111\u1ea5u g\u1ea7n nh\u1ea5t c\u1ee7a "' + username + '"...', '#2196F3');
   window._analyzerLastUsername = username;
@@ -6812,6 +7809,7 @@ function analyzerFetchGamesByUser(username) {
       if (!games.length) throw new Error('Kh\u00f4ng t\u00ecm th\u1ea5y tr\u1eadn \u0111\u1ea5u th\u1ef1c n\u00e0o g\u1ea7n \u0111\u00e2y.');
       analyzerSetStatus('T\u00ecm th\u1ea5y ' + games.length + ' tr\u1eadn g\u1ea7n nh\u1ea5t c\u1ee7a "' + username + '". Ch\u1ecdn 1 tr\u1eadn \u0111\u1ec3 ph\u00e2n t\u00edch:', '#4CAF50');
       analyzerRenderGameList(games);
+      _showUsernameAsPlaceholder(username);
     }).catch(function (err) {
       analyzerSetStatus('L\u1ed7i: ' + err.message, '#c00');
     });
@@ -6823,6 +7821,32 @@ function analyzerFormatDateTime(epochSeconds) {
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
   return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear()
        + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+}
+
+/* Icon minh hoạ cho từng thể loại cờ (time_class trả về từ chess.com API:
+   'bullet'/'blitz'/'rapid'/'daily') — chỉ để dễ nhìn, không có ý nghĩa gì
+   khác. 3 loại sau dùng emoji Unicode sẵn có; riêng "bullet" không có
+   emoji Unicode nào giống hình viên đạn (🔫 là khẩu súng, không phải viên
+   đạn) nên vẽ tay 1 icon SVG nhỏ (viên đạn màu vàng/gold, dáng tròn đầu +
+   thân trụ, giống icon gốc của chess.com) thay cho emoji. */
+var ANALYZER_BULLET_SVG = '<svg width="10" height="10" viewBox="0 0 16 16" style="vertical-align:-1px;margin-right:2px"><path d="M8 1 C11 1 12.5 3 12.5 5.5 L12.5 10 C12.5 12.5 10.5 14.5 8 14.5 C5.5 14.5 3.5 12.5 3.5 10 L3.5 5.5 C3.5 3 5 1 8 1 Z" fill="#e0a92a" stroke="#a8791a" stroke-width="0.5"/><ellipse cx="8" cy="5" rx="3.2" ry="1.6" fill="#f3c65a"/></svg>';
+function analyzerTimeClassIcon(timeClass){
+  switch(String(timeClass||'').toLowerCase()){
+    case 'bullet': return ANALYZER_BULLET_SVG;
+    case 'blitz':  return '\u26A1 ';     /* ⚡ tia chớp */
+    case 'rapid':  return '\u{1F551} ';  /* 🕑 đồng hồ */
+    case 'daily':  return '\u2600\uFE0F '; /* ☀️ mặt trời — cờ hàng ngày (chơi trong nhiều ngày) */
+    default: return '';
+  }
+}
+/* Ván đấu có phải diễn ra HÔM NAY không (theo giờ máy người dùng, khớp
+   đúng cách analyzerFormatDateTime() hiển thị ngày/giờ) — dùng để tô màu
+   xanh dương cho dễ nhận ra ván mới. */
+function analyzerIsToday(epochSeconds){
+  if(!epochSeconds) return false;
+  var d = new Date(epochSeconds*1000);
+  var now = new Date();
+  return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth() && d.getDate()===now.getDate();
 }
 
 function analyzerRenderGameList(games) {
@@ -6842,10 +7866,13 @@ function analyzerRenderGameList(games) {
     if (whiteWon) whiteHtml = '<b>' + whiteHtml + '</b>';
     if (blackWon) blackHtml = '<b>' + blackHtml + '</b>';
     var dt = analyzerFormatDateTime(g.end_time);
+    var icon = analyzerTimeClassIcon(g.time_class);
+    var isToday = analyzerIsToday(g.end_time);
+    var metaColor = isToday ? '#2196F3' : '#888'; /* ván hôm nay tô xanh dương để dễ nhận ra là ván mới */
     html += '<div class="analyzer-game-card" onclick="analyzerPickGame(' + i + ')" '
       + 'style="border:1px solid #ccc;border-radius:4px;padding:6px 8px;margin-bottom:5px;cursor:pointer;background:#fff;font-size:0.68rem;line-height:1.4">'
       + whiteHtml + ' vs ' + blackHtml + '<br>'
-      + '<span style="color:#888">' + dt + (g.time_class ? (' | ' + g.time_class) : '') + '</span>'
+      + '<span style="color:' + metaColor + (isToday ? ';font-weight:bold' : '') + '">' + dt + (g.time_class ? (' | ' + icon + g.time_class) : '') + '</span>'
       + '</div>';
   }
   box.innerHTML = html;
@@ -7307,19 +8334,19 @@ setTimeout(function(){
 switchAppTab('analysis');
 evaluateMobileLayout();
 
+/* Áp dụng giao diện màu bàn cờ đã lưu từ lần trước (mặc định 'current'
+   nếu chưa từng đổi) — setBoardTheme() tự set CSS variable + đánh dấu
+   .active cho đúng hạt, không cần chờ vẽ bàn cờ vì màu dùng CSS variable
+   sẽ tự áp dụng cho mọi ô ngay khi renderBoard() chạy. */
+if (typeof setBoardTheme === 'function') setBoardTheme(boardThemeLoad());
+
 /* Lúc mở trang/refresh: nếu đã có username tìm kiếm gần nhất lưu trong
-   localStorage, hiện luôn username đó làm chữ mờ gợi ý trong ô PGN (thay
-   cho dòng hướng dẫn mặc định) — để người dùng biết trước username nào
-   sẽ được tự động tìm nếu bấm "Phân tích" mà không gõ gì. Đặt SAU
-   switchAppTab() ở trên vì chính hàm đó set lại placeholder mặc định. */
-(function(){
-  var _savedU = (typeof lastUsernameLoad === 'function') ? lastUsernameLoad() : '';
-  if (!_savedU) return;
-  var _h = document.getElementById('history');
-  if (_h && _h.getAttribute('data-placeholder') !== null) {
-    _h.setAttribute('data-placeholder', _savedU);
-  }
-})();
+   localStorage, TỰ ĐỘNG tìm kiếm luôn danh sách trận đấu của username đó
+   (dùng lại đúng hàm _tryAutoSearchLastUsername() đã có sẵn cho nút
+   "Phân tích lại") — không cần người dùng gõ lại/bấm gì cả. Đặt SAU
+   switchAppTab() ở trên vì chính hàm đó set lại placeholder mặc định,
+   và vì tab "Phân tích" cần đang hiện sẵn để danh sách hiện đúng chỗ. */
+if (typeof _tryAutoSearchLastUsername === 'function') _tryAutoSearchLastUsername();
 
 </script>
 <script>
@@ -8762,8 +9789,23 @@ function uci2san(uci, board, turn) {
     if (tf-ff ===-2) return 'O-O-O';
   }
   var san = '';
-  if (pt > 1) san += PNM_C[pt];
-  if (cap || (pt===1 && ff!==tf)) san += FLS[ff]+'x';
+  if (pt > 1) {
+    /* Quân KHÔNG PHẢI Tốt: chỉ ghép chữ cái quân + "x" nếu ăn quân — TUYỆT
+       ĐỐI không chèn thêm chữ cái cột xuất phát ở đây. BUG ĐÃ SỬA: trước
+       đây điều kiện "cap" đứng riêng (không kèm pt===1) nên áp dụng luôn
+       quy tắc "thêm chữ cột khi ăn quân" (vốn CHỈ dành cho Tốt, vd "exd5")
+       sang cả Hậu/Xe/Tượng/Mã — khiến 1 Hậu duy nhất ăn quân trên bàn cờ
+       vẫn bị hiển thị thừa disambiguator (vd "Qexa6" thay vì "Qxa6" dù chỉ
+       có đúng 1 Hậu, không hề có quân nào khác cần phân biệt). Hàm này
+       KHÔNG bao giờ tự thêm disambiguator thật (file/rank khi có nhiều
+       quân cùng loại tới cùng ô) — nếu cần phân biệt thật sự thì đó là
+       việc của addHistory() (dùng để ghi nước ĐÃ ĐI), không phải hàm này. */
+    san += PNM_C[pt];
+    if (cap) san += 'x';
+  } else {
+    /* Tốt: LUÔN cần chữ cái cột xuất phát khi ăn quân hoặc bắt tốt qua đường. */
+    if (cap || ff!==tf) san += FLS[ff]+'x';
+  }
   san += FLS[tf]+(tr2+1);
   if (promo) san += '='+promo;
   return san;
@@ -8865,9 +9907,21 @@ function drawArrow(from, to, color) {
 
   var markMap = {green:'arr-grn',blue:'arr-blu',red:'arr-red',purple:'arr-pur',teal:'arr-teal',pinkorange:'arr-pinkorange'};
   var markId  = markMap[color] || 'arr-grn';
-  var stroke  = {green:'rgba(26,122,26,0.20)',blue:'rgba(26,95,168,0.20)',
-                 red:'rgba(190,20,20,0.20)',purple:'rgba(120,26,154,0.20)',
-                 teal:'rgba(0,150,136,0.24)',pinkorange:'rgba(255,111,71,0.28)'}[color]||'rgba(26,122,26,0.20)';
+  /* Màu ĐẶC (alpha=1) cho cả que lẫn đầu mũi tên (marker, khai báo ở
+     <defs> phía trên) — độ trong suốt áp qua "opacity" của path bên dưới
+     (KHÔNG dùng alpha trong màu rgba nữa). Lý do: opacity của SVG gộp
+     TOÀN BỘ phần tử (que + marker gắn vào nó) thành 1 lớp duy nhất rồi
+     mới tính trong suốt 1 LẦN, nên chỗ que và đầu mũi tên chồng lên nhau
+     không bị lặp 2 lớp alpha (vệt đậm bất thường đã gặp trước đây khi
+     que dùng rgba() riêng, marker dùng rgba() riêng — 2 lớp bán trong
+     suốt chồng nhau tại chỗ giao nhau). */
+  var stroke  = {green:'rgb(26,122,26)',blue:'rgb(26,95,168)',
+                 red:'rgb(190,20,20)',purple:'rgb(120,26,154)',
+                 teal:'rgb(0,150,136)',pinkorange:'rgb(255,111,71)'}[color]||'rgb(26,122,26)';
+  /* Độ trong suốt tổng thể của cả mũi tên (que+đầu) — tăng 50% so với
+     trước (0.20→0.30, 0.24→0.36, 0.28→0.42) theo yêu cầu vì bản cũ hơi
+     khó nhìn. */
+  var arrowOpacity = {green:0.30,blue:0.30,red:0.30,purple:0.30,teal:0.36,pinkorange:0.42}[color]||0.30;
 
   var path = document.createElementNS('http://www.w3.org/2000/svg','path');
   /* Use straight line for very short moves to avoid curve artifact */
@@ -8879,6 +9933,7 @@ function drawArrow(from, to, color) {
   path.setAttribute('stroke-width', String(sw));
   path.setAttribute('fill', 'none');
   path.setAttribute('marker-end', 'url(#'+markId+')');
+  path.setAttribute('opacity', String(arrowOpacity));
   g.appendChild(path);
 }
 
@@ -9319,7 +10374,7 @@ function renderEvalChart() {
 
   svg.innerHTML =
     '<path d="' + areaPathBlack + '" fill="#555" opacity="0.5"/>'
-    + '<path d="' + areaPath + '" fill="#d4edda" opacity="0.95"/>'
+    + '<path d="' + areaPath + '" style="fill:var(--board-eval-white,#d4edda)" opacity="0.95"/>'
     + phaseLines
     + '<path d="' + linePath + '" fill="none" stroke="#e8780a" stroke-width="1.1" stroke-linejoin="round" stroke-linecap="round"/>'
     + hoverLine + hoverDot + hitAreas;
