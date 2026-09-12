@@ -7869,9 +7869,10 @@ function analyzerRenderGameList(games) {
     var icon = analyzerTimeClassIcon(g.time_class);
     var isToday = analyzerIsToday(g.end_time);
     var metaColor = isToday ? '#2196F3' : '#888'; /* ván hôm nay tô xanh dương để dễ nhận ra là ván mới */
+    var namesHtml = isToday ? ('<span style="color:' + metaColor + '">' + whiteHtml + ' vs ' + blackHtml + '</span>') : (whiteHtml + ' vs ' + blackHtml);
     html += '<div class="analyzer-game-card" onclick="analyzerPickGame(' + i + ')" '
       + 'style="border:1px solid #ccc;border-radius:4px;padding:6px 8px;margin-bottom:5px;cursor:pointer;background:#fff;font-size:0.68rem;line-height:1.4">'
-      + whiteHtml + ' vs ' + blackHtml + '<br>'
+      + namesHtml + '<br>'
       + '<span style="color:' + metaColor + (isToday ? ';font-weight:bold' : '') + '">' + dt + (g.time_class ? (' | ' + icon + g.time_class) : '') + '</span>'
       + '</div>';
   }
