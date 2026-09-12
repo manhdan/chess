@@ -7873,7 +7873,7 @@ function analyzerRenderGameList(games) {
     html += '<div class="analyzer-game-card" onclick="analyzerPickGame(' + i + ')" '
       + 'style="border:1px solid #ccc;border-radius:4px;padding:6px 8px;margin-bottom:5px;cursor:pointer;background:#fff;font-size:0.68rem;line-height:1.4">'
       + namesHtml + '<br>'
-      + '<span style="color:' + metaColor + (isToday ? ';font-weight:bold' : '') + '">' + dt + (g.time_class ? (' | ' + icon + g.time_class) : '') + '</span>'
+      + '<span style="color:' + metaColor + '">' + dt + (g.time_class ? (' | ' + icon + g.time_class) : '') + '</span>'
       + '</div>';
   }
   box.innerHTML = html;
