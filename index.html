@@ -3294,6 +3294,8 @@ function classifyMoveCore(data) {
   var isImmediateCheckmate = data.isImmediateCheckmate; /* true = ván kết thúc ngay (Rd8# kiểu), false/undefined = chiếu ép còn tiếp diễn (Qe2+ kiểu) */
 
   var numGoodAlternatives = data.numGoodAlternatives;
+  var nextOpponentCaptureCp = data.nextOpponentCaptureCp || 0; /* quân đối phương ăn được ở nước sau — dùng cho brilliantAllowsCapture */
+  var ownCaptureCp = data.ownCaptureCp || 0; /* quân mình ăn được ở chính nước này — dùng kèm để xét badTradePattern theo loại quân */
 
   var inOpeningBook = data.inOpeningBook;
   var ratingHint    = data.ratingHint;
@@ -3455,6 +3457,40 @@ function classifyMoveCore(data) {
   var brilliantIndirect = isNearBest && isSacrifice && cpLoss <= 20 * strictness
     && evalDelta >= BRILLIANT_SAC_MIN_CP * strictness && Math.abs(evalBefore) < 800;
 
+  /* brilliantAllowsCapture: Brilliant "hy sinh gián tiếp qua nước sau" — KHÁC
+     brilliantIndirect (vẫn cần isSacrifice tại CHÍNH nước i, chỉ khác ở chỗ
+     SEE không đo đủ). Nhánh này dành cho case tổn thất nằm ở Ô KHÁC, xảy ra
+     ở NƯỚC KHÁC (đối phương ăn quân lớn ngay sau) — SEE tại ô của nước i
+     không thể thấy được vì đơn giản là không liên quan tới ô đó.
+     ── Case gốc: 11.axb4!! (ván bẫy Légal's Mate biến thể) — Tốt ăn Tượng
+     sạch sẽ tại b4 (isSacrifice=false ĐÚNG, không hy sinh tại chỗ), nhưng mở
+     cột a cho 11...Qxa1+ ăn Xe NGAY SAU. Trước khi sửa bug capVal (case
+     10.Bxf6), materialLostCp bị tính sai thành 100 (dương tính giả) nên vô
+     tình lọt qua brilliantIndirect — sau khi sửa đúng bug đó, axb4 rơi về
+     Great vì không còn isSacrifice, mất hẳn khả năng lên Brilliant.
+     Điều kiện dùng nextOpponentCaptureCp (gMoveInfo[i+1].capVal, dựa luật cờ
+     thuần tuý — không phải SEE, không thể bị lỗi capVal như bug vừa sửa):
+     nước tiếp theo đối phương ăn được quân LỚN (>=400, tương đương Xe) mà
+     bản thân nước i không hề mất gì tại chỗ + eval vẫn tăng vọt như thường
+     — đây là dấu hiệu "chấp nhận cho ăn 1 quân lớn để đổi lấy lợi thế lớn
+     hơn", đúng bản chất Brilliant mà brilliantIndirect (yêu cầu isSacrifice
+     tại chỗ) không bắt được.
+     ── CẬP NHẬT: thay ngưỡng cp thô (>=400) bằng tiêu chí THEO LOẠI QUÂN ──
+     Người chơi cảm nhận "hy sinh" theo LOẠI quân đổi, không phải hiệu số cp
+     thô: Xe/Hậu đổi Tượng/Mã/Tốt, hoặc Tượng/Mã đổi CHỈ Tốt, đều là "đổi lỗ"
+     rõ rệt — trong khi ví dụ Hậu(900) đổi Xe(500) dù cp thô cũng lớn (400)
+     nhưng KHÔNG phải dạng "hy sinh" điển hình theo cảm nhận thông thường.
+     nextOpponentCaptureCp = quân mình MẤT ở nước sau; ownCaptureCp = quân
+     mình ĂN được ở chính nước i. */
+  function _isMajorPVAL(v){ return v===500 || v===900; }              /* Xe/Hậu */
+  function _isMinorOrPawnPVAL(v){ return v===100 || v===320 || v===330; } /* Tượng/Mã/Tốt */
+  var badTradePattern =
+    (_isMajorPVAL(nextOpponentCaptureCp) && _isMinorOrPawnPVAL(ownCaptureCp)) ||
+    ((nextOpponentCaptureCp===320 || nextOpponentCaptureCp===330) && ownCaptureCp===100);
+  var brilliantAllowsCapture = isBest && cpLoss <= 20 * strictness
+    && badTradePattern
+    && evalDelta >= BRILLIANT_SAC_MIN_CP * strictness && Math.abs(evalBefore) < 800;
+
   /* bestGap: chênh lệch eval giữa nước tốt nhất và nước tốt-nhì (evalBest -
      eval2ndBest) — vốn dùng để đảm bảo Brilliant là "lối đi RÕ RỆT DUY
      NHẤT", không phải "1 trong vài nước đều ổn ổn". YÊU CẦU NÀY BỎ QUA khi
@@ -3480,10 +3516,11 @@ function classifyMoveCore(data) {
       evalBefore: evalBefore, shallowLooksBad: shallowLooksBad,
       cpLossShallow: cpLossShallow, brilliantBase: brilliantBase,
       evalDelta: evalDelta, brilliantIndirect: brilliantIndirect,
+      brilliantAllowsCapture: brilliantAllowsCapture, nextOpponentCaptureCp: nextOpponentCaptureCp,
       bestGap: bestGap, bestGapOk: bestGapOk
     });
   }
-  if ((brilliantBase || brilliantIndirect) && bestGapOk) return "Brilliant";
+  if ((brilliantBase || brilliantIndirect || brilliantAllowsCapture) && bestGapOk) return "Brilliant";
 
   /* isUniqueGoodMove — dùng cho Great Defense và Great Move
      170→220: Great hiện ra hơi nhiều (4/3 so với chess.com 1/4) — siết nhẹ lại.
@@ -3757,6 +3794,22 @@ function _buildClassifyInput(i){
   var best    = anCP(si.s1, si.m1);      /* eval tốt nhất tại vị trí trước nước i (góc nhìn người đi nước i) */
   var afterCP = anCP(sn.s1, sn.m1);      /* eval tại vị trí sau nước i (góc nhìn đối thủ) */
   var played  = -afterCP;                /* quy về góc nhìn người đi nước i */
+
+  /* ── FIX BUG CC9 (case 9.Qd8+ trong ván Caro-Kann trap) ──
+     Root-exclusion multipv (mpv_backfill) đôi khi tìm ra PV2 (si.s2/si.m2)
+     TỐT HƠN HẲN PV1 (kể cả phát hiện mate mà PV1 không thấy) — đây là dữ
+     liệu THẬT, cùng depth với PV1, không phải artifact/nhiễu. Nếu nước
+     THỰC TẾ đã chơi trùng PV2 (si.uci2) chứ không phải PV1 (si.bestUci),
+     dùng s2/m2 làm cơ sở "best" cho CHÍNH nước này — vì PV2 mới là đánh
+     giá đúng của việc chơi nước đó, PV1 (nước khác) không liên quan.
+     Không đổi si.bestUci (vẫn giữ nguyên ý nghĩa "nước engine xếp hạng 1
+     chung cho vị trí"), chỉ đổi "best" (baseline so sánh) cục bộ cho phép
+     tính của riêng nước i này. */
+  var _playedMatchesPV2 = !!(si.uci2 && gUciHist && gUciHist[i] && si.uci2 === gUciHist[i] && si.s2 !== null && si.s2 !== undefined);
+  if (_playedMatchesPV2) {
+    best = anCP(si.s2, si.m2);
+  }
+
   /* evalBest = max(best, played): nếu played > best do MultiPV artifact (si.s1 underestimate),
      dùng played làm baseline để cpLoss = 0 (không phạt nước tốt hơn engine dự đoán) */
   var evalBest = Math.max(best, played);
@@ -3766,9 +3819,15 @@ function _buildClassifyInput(i){
   var evalBeforeCP = (si.m1 !== null) ? Math.min(si.s1, 1500) : si.s1;
 
   /* eval2ndBest: ưu tiên s2nd từ Pass C (banned search — chính xác nhất),
-     fallback về s2 từ MultiPV=4 nếu Pass C chưa chạy cho nước này */
+     fallback về s2 từ MultiPV=4 nếu Pass C chưa chạy cho nước này.
+     FIX BUG CC9: khi _playedMatchesPV2, "best" đã được gán = anCP(s2,m2) ở
+     trên (case Qd8+) — nếu eval2ndBest vẫn tính từ s2/m2 như bình thường sẽ
+     trùng HỆT với best (vô nghĩa, "phương án nhì" lại là chính nước vừa
+     chơi). Lúc này PV1 (si.s1/m1, nước KHÁC) mới đúng là phương án nhì. */
   var eval2ndBest;
-  if (typeof si.s2nd === 'number' && si.s2nd !== null) {
+  if (_playedMatchesPV2) {
+    eval2ndBest = anCP(si.s1, si.m1);
+  } else if (typeof si.s2nd === 'number' && si.s2nd !== null) {
     eval2ndBest = anCP(si.s2nd, si.m2nd);
   } else {
     eval2ndBest = (si.s2 !== null) ? anCP(si.s2, si.m2) : null;
@@ -3854,8 +3913,10 @@ function _buildClassifyInput(i){
 
   var numGoodAlternatives = _countGoodAlternatives(si);
 
-  /* isBest: nước đi thực tế trùng với nước engine đề xuất */
-  var isBest = !!(si.bestUci && gUciHist && gUciHist[i] && si.bestUci === gUciHist[i]);
+  /* isBest: nước đi thực tế trùng với nước engine đề xuất (PV1), HOẶC trùng
+     PV2 khi PV2 thấy tốt hơn PV1 thật (xem _playedMatchesPV2 ở trên — case
+     Qd8+, root-exclusion multipv tìm ra mate mà PV1 không thấy). */
+  var isBest = !!((si.bestUci && gUciHist && gUciHist[i] && si.bestUci === gUciHist[i]) || _playedMatchesPV2);
 
   /* BUG ĐÃ SỬA: khi isBest===true (nước đã chơi CHÍNH LÀ bestUci mà si đã
      đề xuất tại vị trí này), cpLoss BẮT BUỘC phải = 0 tuyệt đối — không
@@ -3938,6 +3999,18 @@ function _buildClassifyInput(i){
     givesCheck: givesCheck,
 
     numGoodAlternatives: numGoodAlternatives,
+
+    /* nextOpponentCaptureCp: giá trị quân đối phương ăn được ở nước NGAY SAU
+       (thực tế đã chơi) — dựa thuần trên luật cờ (gMoveInfo), không phụ thuộc
+       SEE tại ô của chính nước i. Dùng cho nhánh Brilliant "hy sinh gián tiếp
+       qua nước sau" (case 11.axb4!! — Tốt ăn Tượng sạch sẽ tại chỗ, nhưng mở
+       cột a cho Qxa1+ ăn Xe ngay sau; SEE tại b4 không thấy được vì tổn thất
+       nằm ở ô khác, xảy ra ở nước khác). */
+    nextOpponentCaptureCp: (gMoveInfo[i+1] ? (gMoveInfo[i+1].capVal || 0) : 0),
+    /* ownCaptureCp: giá trị quân MÌNH ăn được ở CHÍNH nước i (nếu có) — dùng
+       kèm nextOpponentCaptureCp để xét badTradePattern theo LOẠI quân (Xe/Hậu
+       đổi Tượng/Mã/Tốt, hoặc Tượng/Mã đổi chỉ Tốt) thay vì hiệu số cp thô. */
+    ownCaptureCp: (info.capVal || 0),
 
     inOpeningBook: _isBookMove(i),
     ratingHint: elo
@@ -4249,6 +4322,11 @@ function _handleAnSlotMsg(slot, msg){
       slot.cur.d2=dep;
       if(matM){ var _mN2=parseInt(matM[1]); slot.cur.s2=_mateToS(_mN2); slot.cur.m2=_mN2; }
       else if(cpM){ slot.cur.s2=parseInt(cpM[1]); slot.cur.m2=null; }
+      /* DEBUG TẠM THỜI: bắt nước UCI đầu tiên của dòng PV2 để xác minh nó
+         tương ứng nước nào — dùng để điều tra case Qd8+ (ván Caro-Kann trap),
+         xoá sau khi điều tra xong nếu không cần dùng lâu dài. */
+      var pvMoveM2 = msg.match(/\bpv (\S+)/);
+      slot.cur.uci2 = pvMoveM2 ? pvMoveM2[1] : null;
     }
     if(pv===3&&dep>=slot.cur.d3){
       slot.cur.d3=dep;
@@ -4276,6 +4354,7 @@ function _handleAnSlotMsg(slot, msg){
           _bfEntry.s2 = slot.cur.d2>0?slot.cur.s2:null; _bfEntry.m2 = slot.cur.m2;
           _bfEntry.s3 = slot.cur.d3>0?slot.cur.s3:null; _bfEntry.m3 = slot.cur.m3;
           _bfEntry.s4 = slot.cur.d4>0?slot.cur.s4:null; _bfEntry.m4 = slot.cur.m4;
+          _bfEntry.uci2 = slot.cur.uci2 || null; /* DEBUG TẠM: nước UCI của PV2, dùng điều tra case Qd8+ */
         }
       }
       slot.backfillIdx = -1;
@@ -4322,9 +4401,42 @@ function _handleAnSlotMsg(slot, msg){
       _armAnSlotWatchdog(slot, _anWatchdogMs(8000, 1));
       return;
     } else if(slot.cur.d1===0){
-      var fallbackCp = materialCpFromFen(gAnFens[slot.pos], slot.cur.side);
+      /* ── FIX BUG CC9 (phát hiện qua case 27.Qg2+ và 16.Qb8+ — vị trí CHỈ CÓ
+         ĐÚNG 1 NƯỚC HỢP LỆ khiến Lozza không in bất kỳ dòng "info depth ...
+         score ..." nào, kể cả sau khi thử lại ở depth 1 — vì không có gì để
+         tìm kiếm/so sánh, Lozza trả thẳng bestmove) ──
+         Nguyên nhân: fallback cũ dùng materialCpFromFen() — chỉ đếm vật chất
+         THÔ trên bàn cờ, hoàn toàn bỏ qua yếu tố chiến thuật (ví dụ đang bị
+         ép vào 1 chuỗi mate). Case cụ thể: sau 27...Qg2+ (chiếu, Trắng CHỈ
+         có đúng 1 nước 28.Ke1), thế cờ thực tế đang thua nặng (-637cp từ
+         nước trước) nhưng fallback cũ trả về "0" (coi như cân bằng), sai
+         lệch hoàn toàn.
+         Fix: kế thừa trực tiếp eval của vị trí LIỀN TRƯỚC (đã có kết quả tìm
+         kiếm thật), chỉ đảo góc nhìn (đổi lượt) — vì đây là nước BẮT BUỘC
+         DUY NHẤT, bản chất thế cờ không đổi đáng kể so với ngay trước đó.
+         Chỉ fallback về materialCpFromFen() khi KHÔNG có dữ liệu vị trí
+         trước để kế thừa (ví dụ vị trí đầu tiên của cả ván).
+         ── CẬP NHẬT THÊM (case 10.Kxd8 sau 9.Qd8+!!, ván Caro-Kann trap) ──
+         Nếu nước dẫn tới vị trí này (gUciHist[slot.pos-1]) trùng PV2
+         (uci2) của vị trí TRƯỚC — chứ không phải PV1 (s1/m1, vốn không
+         thấy mate) — thì phải kế thừa từ s2/m2 (đã thấy mate) thay vì
+         s1/m1, mới phản ánh đúng thế cờ thật. */
+      var _prevRes = gAnResultsMap[slot.pos - 1];
+      var _prevMoveUci = (typeof gUciHist !== 'undefined' && gUciHist) ? gUciHist[slot.pos - 1] : null;
+      var _prevMatchesPV2 = !!(_prevRes && _prevRes.uci2 && _prevMoveUci && _prevRes.uci2 === _prevMoveUci
+                               && _prevRes.s2 !== null && _prevRes.s2 !== undefined);
+      var fallbackCp, fallbackM1 = null;
+      if (_prevMatchesPV2) {
+        fallbackCp = -_prevRes.s2;
+        if (_prevRes.m2 !== null && _prevRes.m2 !== undefined) fallbackM1 = -_prevRes.m2;
+      } else if (_prevRes && _prevRes.s1 !== null && _prevRes.s1 !== undefined) {
+        fallbackCp = -_prevRes.s1;
+        if (_prevRes.m1 !== null && _prevRes.m1 !== undefined) fallbackM1 = -_prevRes.m1;
+      } else {
+        fallbackCp = materialCpFromFen(gAnFens[slot.pos], slot.cur.side);
+      }
       gAnResultsMap[slot.pos]={
-        s1: fallbackCp, m1: null,
+        s1: fallbackCp, m1: fallbackM1,
         s2:null, m2:null, s3:null, m3:null, s4:null, m4:null,
         side:slot.cur.side,
         bestUci: slot.cur._pendingBestUci || bm,
@@ -5289,6 +5401,42 @@ function _finishAnalysisRender(){
     }
     evalPcts.push(pct);
   }
+  /* ── FIX BUG CC9 (phát hiện qua case 16.Qb8+!! trong ván Legall's Mate —
+     đồ thị/cột cp tụt từ ~99% xuống ~62% ngay sau nước Brilliant, gây hiểu
+     lầm là nước tệ dù nhãn chữ đã đúng "Brilliant") ──
+     Nguyên nhân: evalPcts[i] tính TRỰC TIẾP từ gAnScores[i] (search ĐỘC LẬP
+     tại đúng vị trí i) — không đi qua công thức evalBest=max(best,played) mà
+     _buildClassifyInput dùng để xử lý đúng vấn đề "2 search độc lập lệch
+     nhau" (đã gặp nhiều lần suốt phiên). Case cụ thể: gAnScores[30] (trước
+     Qb8+) đã biết mate-in-1 (m1=1) qua Pass A khi phân tích TUẦN TỰ cả ván,
+     nhưng gAnScores[31] (sau Qb8+) là 1 lần search ĐỘC LẬP khác tại đúng vị
+     trí đó, chưa kịp nhìn xuyên suốt nhánh ép buộc duy nhất (Nxb8 bắt buộc
+     → Rd8#) nên chỉ ra cp=120 thường, không thấy mate — evalPcts tụt sai dù
+     bản chất thế cờ vẫn đang mate hoàn toàn.
+     Fix: nếu vị trí i đã biết mate (m1 khác null/0) VÀ nước THỰC TẾ đã chơi
+     đúng là bestUci tại vị trí đó (tức đi đúng nhánh mate, không phải chơi
+     sai làm mất mate) → evalPcts[i+1] KẾ THỪA giá trị bão hoà của evalPcts[i]
+     thay vì tin vào search độc lập (có thể) chưa đủ sâu tại i+1. */
+  for (var _mi = 0; _mi < gUciHist.length && _mi+1 < evalPcts.length; _mi++){
+    var _siMate = gAnScores[_mi];
+    if (_siMate && _siMate.m1 !== null && _siMate.m1 !== 0 &&
+        _siMate.bestUci === gUciHist[_mi]) {
+      evalPcts[_mi+1] = evalPcts[_mi];
+    }
+    /* CẬP NHẬT THÊM (case 9.Qd8+!! — root-exclusion multipv tìm ra PV2 tốt
+       hơn PV1 hẳn, xem uci2 ở _handleAnSlotMsg): nếu nước THỰC TẾ đã chơi
+       trùng PV2 (không phải PV1/bestUci) và PV2 thấy mate, evalPcts[_mi]
+       (vị trí TRƯỚC nước này) tự nó cũng cần phản ánh đúng theo PV2 — vì
+       PV2 mới là đánh giá đúng của thế cờ đó (PV1 đơn giản là chưa tìm ra
+       do giới hạn tìm kiếm/thứ tự duyệt nước, không phải PV2 "kém hơn"). */
+    if (_siMate && _siMate.uci2 && _siMate.uci2 === gUciHist[_mi] &&
+        _siMate.m2 !== null && _siMate.m2 !== undefined && _siMate.m2 !== 0) {
+      var _mW2 = (_siMate.side === W) ? _siMate.m2 : -_siMate.m2;
+      var _pct2 = _mW2 >= 0 ? 98 : 2;
+      evalPcts[_mi]   = _pct2;
+      evalPcts[_mi+1] = _pct2;
+    }
+  }
   for(var i=0;i<gMoveTexts.length;i++){
     var si=gAnScores[i], sn=gAnScores[i+1];
     if(!si||!sn){ cpLosses.push(null); continue; }
@@ -5503,6 +5651,21 @@ function _finishAnalysisRender(){
   function _evalCpWhite(i){
     var sn = gAnScores[i+1];
     if(!sn) return null;
+    /* FIX BUG CC9 (đồng bộ với fix evalPcts ở trên, case 16.Qb8+!!): nếu vị
+       trí TRƯỚC (i) đã biết mate và nước THỰC TẾ đã chơi đúng là bestUci tại
+       đó, kế thừa hướng mate đã biết thay vì tin search độc lập tại i+1 (có
+       thể chưa đủ sâu để thấy tiếp mate). */
+    var si = gAnScores[i];
+    if (si && si.m1 !== null && si.m1 !== 0 && si.bestUci === gUciHist[i]) {
+      var mateInN0 = (si.side === W) ? si.m1 : -si.m1;
+      return mateInN0 >= 0 ? (9999 - Math.abs(mateInN0)) : -(9999 - Math.abs(mateInN0));
+    }
+    /* CẬP NHẬT THÊM (case 9.Qd8+!!): nước chơi trùng PV2 (uci2) chứ không
+       phải PV1 — dùng m2 thay vì m1, đồng bộ với fix evalPcts ở trên. */
+    if (si && si.uci2 && si.uci2 === gUciHist[i] && si.m2 !== null && si.m2 !== undefined && si.m2 !== 0) {
+      var mateInN2 = (si.side === W) ? si.m2 : -si.m2;
+      return mateInN2 >= 0 ? (9999 - Math.abs(mateInN2)) : -(9999 - Math.abs(mateInN2));
+    }
     if(sn.m1 !== null && sn.m1 !== 0){
       /* m1 > 0: side-to-move chiếu hết đối thủ trong m1 nước.
          m1 < 0: side-to-move bị chiếu hết trong |m1| nước.
