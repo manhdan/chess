@@ -3786,21 +3786,37 @@ function _buildClassifyInput(i){
   var netLoss = (info.movedVal||0) - (info.capVal||0);
   /* isSacrifice via SEE (Static Exchange Evaluation):
      Chạy chuỗi exchange trên ô đích: nếu kết quả net âm (mất quân) → sacrifice thật sự.
-     Tốt hơn logic cũ "chỉ check ô đích có bị tấn công" mà bỏ qua "quân mình có được bảo vệ". */
+     Tốt hơn logic cũ "chỉ check ô đích có bị tấn công" mà bỏ qua "quân mình có được bảo vệ".
+     ── FIX BUG CC9 NGHIÊM TRỌNG (phát hiện qua case 10.Bxf6 — đổi Tượng lấy Mã
+     ngang giá bình thường, bị gán nhầm Brilliant vì tưởng "hy sinh 330cp") ──
+     Nguyên nhân: seeOnSquare() CHỈ tính phần đối ứng SAU khi quân ta đã ăn xong
+     (giá trị đổi lại của riêng quân ta vừa đưa tới ô đó) — nó KHÔNG bao gồm giá
+     trị quân đã ăn được ở CHÍNH nước khởi đầu (info.capVal). Với Bxf6: ăn Mã
+     (capVal=320, lãi ngay) rồi Tượng bị Tượng g7 ăn lại (seeVal=-330) — net
+     THẬT = capVal(320) + seeVal(-330) = -10 (gần như ngang giá), nhưng code cũ
+     lấy THẲNG seeVal(-330) làm materialLostCp=330, bỏ quên hẳn phần capVal đã
+     ăn được, khiến MỌI nước ăn-quân-rồi-bị-ăn-lại (kể cả đổi ngang giá hoàn
+     toàn bình thường) bị tính nhầm thành "mất toàn bộ giá trị quân mình" — bug
+     hệ thống, không riêng gì case Bxf6.
+     Fix: cộng lại info.capVal vào seeVal trước khi dùng, để materialLostCp
+     phản ánh đúng NET THẬT của toàn bộ chuỗi đổi quân (từ nước khởi đầu tới
+     hết đối ứng), không chỉ riêng phần "sau khi ăn". */
   var seeVal = 0;
+  var seeValNet = 0; /* = seeVal + capVal đã ăn ở nước khởi đầu — net THẬT của cả chuỗi đổi quân */
   var isSacrifice = false;
   if(info.intoAttack && info.boardAfter != null){
     /* Dùng boardAfter (board SAU khi đi): quân ta đã ở toSq, SEE tính exchange từ đó */
     seeVal = seeOnSquare(info.boardAfter, info.toSq, info.movedVal, info.side);
-    isSacrifice = (seeVal <= -50);
+    seeValNet = seeVal + (info.capVal || 0);
+    isSacrifice = (seeValNet <= -50);
   } else if(info.intoAttack){
     /* Fallback: không có boardAfter (legacy data) */
     isSacrifice = (info.capVal === 0) || (netLoss > 100);
   }
   var materialLostCp = 0;
   if (isSacrifice) {
-    /* SEE âm = thua vật chất trong exchange → sacrifice thật, dùng SEE */
-    materialLostCp = Math.max(0, -seeVal);
+    /* SEE âm = thua vật chất trong exchange → sacrifice thật, dùng SEE (đã cộng capVal) */
+    materialLostCp = Math.max(0, -seeValNet);
   } else if (info.intoAttack && netLoss > 0) {
     /* Đi vào ô bị tấn công VÀ mất vật chất thực (netLoss > 0) nhưng SEE cho kết quả
        không âm đủ (ví dụ SEE=0 khi bảo vệ vừa đủ): đây là sacrifice biên (borderline).
@@ -3831,7 +3847,7 @@ function _buildClassifyInput(i){
      data, không chạy SEE được). */
   var intoAttackLoss;
   if (info.intoAttack && info.boardAfter != null) {
-    intoAttackLoss = Math.max(0, -seeVal);
+    intoAttackLoss = Math.max(0, -seeValNet); /* dùng seeValNet (đã cộng capVal) thay vì seeVal thô — đồng bộ với fix case 10.Bxf6 ở trên */
   } else {
     intoAttackLoss = (info.intoAttack && netLoss > 0) ? Math.max(0, netLoss) : 0;
   }
