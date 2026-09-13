@@ -4906,11 +4906,64 @@ function closeReviewPanel(){
 
 
 /* ══════════════════════════════════════════════════════════════
+   FIX BUG CC9: tactical/positional cho missed_win/missed_mate phải xét
+   nước TỐT NHẤT (bị bỏ lỡ) chứ không phải nước ĐÃ CHƠI — vì bản chất
+   "bỏ lỡ tactic" là bỏ lỡ 1 nước ăn quân/chiếu, không phải nước đã chơi
+   có ăn/chiếu hay không (nước đã chơi thường yên tĩnh, không liên quan). */
+function _bestMoveTacticalInfo(idx){
+  var sc = gAnScores[idx];
+  if(!sc || !sc.bestUci || sc.bestUci.length<4) return {isCapture:false, isCheck:false};
+  var fenIdx = gAnFens[idx];
+  if(!fenIdx) return {isCapture:false, isCheck:false};
+  var parsed = boardArrayFromFen(fenIdx);
+  var board = parsed.board, turn = parsed.turn;
+  var uci = sc.bestUci;
+  var ff = FLS.indexOf(uci.charAt(0));
+  var fr = parseInt(uci.charAt(1),10) - 1;
+  var tf = FLS.indexOf(uci.charAt(2));
+  var tr2 = parseInt(uci.charAt(3),10) - 1;
+  if (ff<0||tf<0) return {isCapture:false, isCheck:false};
+  var fromSq = sq(fr,ff), toSq = sq(tr2,tf);
+  var isCapture = !!board[toSq];
+  /* Mô phỏng nhanh để biết nước này có chiếu không: di chuyển quân, tìm Vua
+     đối phương, kiểm tra có bị tấn công không (dùng lại attacked() có sẵn
+     trong seeOnSquare/inCheck) — không xử lý en-passant/nhập thành vì 2
+     trường hợp đó hiếm khi là "nước tốt nhất bị bỏ lỡ" đáng chú ý ở đây. */
+  var nb = board.slice();
+  nb[toSq] = nb[fromSq];
+  nb[fromSq] = 0;
+  var mySide = turn;
+  var oppKing = -mySide*6;
+  var kingSq = -1;
+  for (var s=0; s<64; s++) if (nb[s]===oppKing) { kingSq = s; break; }
+  var isCheck = (kingSq>=0) ? attacked(nb, kingSq, mySide) : false;
+  return {isCapture:isCapture, isCheck:isCheck};
+}
+
+/* ══════════════════════════════════════════════════════════════
    BÁO CÁO PHÂN TÍCH SAU TRẬN (học từ ChessTour.html)
    ══════════════════════════════════════════════════════════════ */
 function buildMoveReport(cls, cpLosses, evalPcts) {
   /* Trả về {topHtml, summaryHtml} — topHtml render NGAY DƯỚI chart, summaryHtml render SAU đó */
   var BAD_TYPES = {mistake:1, blunder:1, missed_win:1, missed_mate:1};
+  /* FIX BUG CC9 (2): bucket giai đoạn giờ SUY RA TRỰC TIẾP từ cls[i] (nhãn
+     chính thức, giống hệt bảng kết quả) thay vì tính lại từ ngưỡng cpLoss
+     thô (30/100/300) — trước đây 2 cách tính độc lập cho ra SỐ LƯỢNG BLUNDER
+     KHÁC NHAU giữa bảng "Giai đoạn" và bảng kết quả chính, gây mất lòng tin.
+     ok: mọi nhãn "tốt" (forced/book/best/brilliant/great_defense/great/
+     excellent/good/
+     normal); inaccuracy/mistake: khớp thẳng; blunder: gộp cả blunder THẬT
+     lẫn missed_win/missed_mate (đúng theo BAD_TYPES đã dùng ở nơi khác). */
+  var CLS_TO_BUCKET = {
+    forced:'ok', book:'ok', best:'ok', brilliant:'ok', great_defense:'ok',
+    great:'ok', excellent:'ok', good:'ok', normal:'ok',
+    inaccuracy:'inaccuracy', mistake:'mistake',
+    blunder:'blunder', missed_win:'blunder', missed_mate:'blunder'
+  };
+  var CPLOSS_CAP_FOR_ACPL = 1000; /* FIX BUG CC9 (1): trần cpLoss khi cộng vào ACPL — tránh 1 nước cpLoss cực đoan
+     (800-4600+, đã thấy ở nhiều ván tàn cuộc trong phiên này) làm méo trung bình, không phản ánh đúng
+     "độ chính xác chung" theo cảm nhận thông thường (thắng/thua đã ngã ngũ, thua thêm bao nhiêu không
+     còn ý nghĩa thực dụng — cùng tinh thần với fix escalation Blunder trước đó). */
   var phaseCount = {
     opening:    {ok:0, inaccuracy:0, mistake:0, blunder:0},
     middlegame: {ok:0, inaccuracy:0, mistake:0, blunder:0},
@@ -4924,19 +4977,25 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
     var loss = cpLosses[i];
     var info = gMoveInfo[i] || {};
     var phase = phaseOf(info.materialPct !== undefined ? info.materialPct : 1);
-    var bucket;
-    if (loss === null || loss <= 30) bucket = 'ok';
-    else if (loss <= 100) bucket = 'inaccuracy';
-    else if (loss <= 300) bucket = 'mistake';
-    else bucket = 'blunder';
+    var bucket = CLS_TO_BUCKET[cls[i]] || 'ok';
     if (phaseCount[phase]) phaseCount[phase][bucket]++;
 
-    if (loss !== null) { sumCpLoss += loss; lossCount++; }
+    if (loss !== null) { sumCpLoss += Math.min(loss, CPLOSS_CAP_FOR_ACPL); lossCount++; }
 
     /* Chỉ xét tactical/positional cho nước thực sự mistake/blunder (loại bỏ forced) */
     if (cls[i] === 'mistake' || cls[i] === 'blunder' || cls[i] === 'missed_win' || cls[i] === 'missed_mate') {
-      var isCapture = (info.capVal || 0) > 0;
-      var isCheck   = !!info.givesCheck;
+      var isCapture, isCheck;
+      if (cls[i] === 'missed_win' || cls[i] === 'missed_mate') {
+        /* FIX BUG CC9 (3): missed_win/missed_mate = bỏ lỡ 1 nước TỐT HƠN —
+           phải xét nước TỐT NHẤT (bestUci, bị bỏ lỡ), không phải nước đã
+           chơi (thường yên tĩnh, không liên quan tới bản chất lỗi). */
+        var bestInfo = _bestMoveTacticalInfo(i);
+        isCapture = bestInfo.isCapture;
+        isCheck = bestInfo.isCheck;
+      } else {
+        isCapture = (info.capVal || 0) > 0;
+        isCheck   = !!info.givesCheck;
+      }
       var tacticalType;
       if (isCapture || isCheck) tacticalType = 'tactical';
       else tacticalType = 'positional';
