@@ -312,7 +312,7 @@ body {
   padding:0; margin-left:2px; min-width:70px;
   font-family:'Courier New',monospace; -webkit-flex-shrink:0; flex-shrink:0;
 }
-.an-row-active { background: rgba(99,158,86,0.35) !important; border-left:3px solid rgba(60,130,50,0.8); }
+.an-row-active { background: var(--board-eval-white, #d4edda) !important; border-left:3px solid rgba(60,130,50,0.8); }
 
 /* ── PROMO DIALOG ── */
 .promo-bg {
@@ -1174,13 +1174,13 @@ html.mp-mode #mobile-stack #eval-chart-svg { height: 101px !important; }
     </div>
 
     <!-- Highlight ván đấu (bước ngoặt): NGAY TRÊN Top nước đáng chú ý -->
-    <div id="lc-report-highlights" style="display:none;border-top:1px solid #ddd;padding:6px 6px 0"></div>
+    <div id="lc-report-highlights" style="display:none;border-top:1px solid #ddd;padding:6px 6px 10px;-webkit-user-select:text;-moz-user-select:text;user-select:text"></div>
 
     <!-- Top nước đáng chú ý: NGAY DƯỚI chart -->
-    <div id="lc-report-top" style="display:none;border-top:1px solid #ddd;padding:6px 6px 0"></div>
+    <div id="lc-report-top" style="display:none;border-top:1px solid #ddd;padding:6px 6px 0;-webkit-user-select:text;-moz-user-select:text;user-select:text"></div>
 
     <!-- Tóm tắt / Giai đoạn / Insights: XUỐNG DƯỚI cùng -->
-    <div id="lc-report-summary" style="display:none;border-top:1px solid #ddd;padding:0 6px"></div>
+    <div id="lc-report-summary" style="display:none;border-top:1px solid #ddd;padding:0 6px;-webkit-user-select:text;-moz-user-select:text;user-select:text"></div>
 
   </div><!-- end #lc-scroll-wrap -->
 
@@ -4176,7 +4176,7 @@ function startAnalysis(){
   gAnBackfillCount=0;
 
   var cb=document.getElementById('clr-toggle');
-  if(cb){cb.disabled=false;cb.innerHTML='\u{1F4CA} \u0110ang ph\u00e2n t\u00edch 0/'+gAnTotalCount+'...';cb.style.visibility='visible';}
+  if(cb){cb.disabled=false;cb.innerHTML='\u{1F4CA} Analyzing 0/'+gAnTotalCount+'...';cb.style.visibility='visible';}
 
   /* Đang chạy phân tích: thay nội dung hướng dẫn ở cột phải bằng thông báo
      đang phân tích, ẩn tiêu đề + các khối trống (chỉ hiện khi có kết quả). */
@@ -4465,7 +4465,7 @@ function _anSlotPositionDone(slot){
   slot.pos++;
   gAnDoneCount++;
   var cb=document.getElementById('clr-toggle');
-  if(cb) cb.innerHTML='\u{1F4CA} \u0110ang ph\u00e2n t\u00edch '+gAnDoneCount+'/'+gAnTotalCount+'...';
+  if(cb) cb.innerHTML='\u{1F4CA} Analyzing '+gAnDoneCount+'/'+gAnTotalCount+'...';
 }
 
 function _anSlotAdvance(slot){
@@ -4812,7 +4812,7 @@ function _recoverFromWatchdog(){
 function _advanceAfterPosition(){
   var total=gAnFens.length;
   var cb=document.getElementById('clr-toggle');
-  if(cb) cb.innerHTML='\u{1F4CA} \u0110ang ph\u00e2n t\u00edch '+gAnIdx+'/'+total+'...';
+  if(cb) cb.innerHTML='\u{1F4CA} Analyzing '+gAnIdx+'/'+total+'...';
 
   var _prevIdx = gAnIdx - 2;
 
@@ -4941,11 +4941,67 @@ function _bestMoveTacticalInfo(idx){
 }
 
 /* ══════════════════════════════════════════════════════════════
+   FIX BUG CC9: phát hiện bên nào là "người chơi thật" để báo cáo ACPL chỉ
+   hiện đúng bên đó (thay vì luôn hiện cả 2 bên) — tái sử dụng ĐÚNG logic
+   phát hiện đã có sẵn cho auto-flip (AUTO_FLIP_BLACK_NAMES + username đã
+   lưu) và phát hiện bot (analyzerIsBotGame), áp dụng cho cả Trắng lẫn Đen
+   thay vì chỉ riêng Đen như applyAutoFlipForPgnNames.
+   Trả về 'white'/'black' nếu xác định được, null nếu không (ván 2 người lạ
+   với nhau, không khớp tên đã biết nào) — khi đó báo cáo vẫn hiện đủ 2 bên. */
+function _detectPlayerSide(pgnNames){
+  if (!pgnNames) return null;
+  var wLower = String(pgnNames.white||'').toLowerCase();
+  var bLower = String(pgnNames.black||'').toLowerCase();
+  if (!wLower && !bLower) return null;
+
+  function matchesKnown(n){
+    for (var k=0;k<AUTO_FLIP_BLACK_NAMES.length;k++){
+      if (n.indexOf(AUTO_FLIP_BLACK_NAMES[k]) !== -1) return true;
+    }
+    return false;
+  }
+  function isBotName(n){
+    return n.indexOf('bot') !== -1 || n.indexOf('computer') !== -1 || n.indexOf('coach-') === 0;
+  }
+
+  var wKnown = matchesKnown(wLower), bKnown = matchesKnown(bLower);
+  if (wKnown && !bKnown) return 'white';
+  if (bKnown && !wKnown) return 'black';
+
+  var wBot = isBotName(wLower), bBot = isBotName(bLower);
+  if (wBot && !bBot) return 'black';  /* đối thủ là bot → bên kia là người chơi thật */
+  if (bBot && !wBot) return 'white';
+
+  if (typeof lastUsernameLoad === 'function') {
+    var saved = String(lastUsernameLoad()||'').toLowerCase();
+    if (saved) {
+      var wSaved = wLower.indexOf(saved) !== -1;
+      var bSaved = bLower.indexOf(saved) !== -1;
+      if (wSaved && !bSaved) return 'white';
+      if (bSaved && !wSaved) return 'black';
+    }
+  }
+  return null;
+}
+
+/* ══════════════════════════════════════════════════════════════
    BÁO CÁO PHÂN TÍCH SAU TRẬN (học từ ChessTour.html)
    ══════════════════════════════════════════════════════════════ */
 function buildMoveReport(cls, cpLosses, evalPcts) {
   /* Trả về {topHtml, summaryHtml} — topHtml render NGAY DƯỚI chart, summaryHtml render SAU đó */
   var BAD_TYPES = {mistake:1, blunder:1, missed_win:1, missed_mate:1};
+  var _pgnNamesForReport = (typeof gPgnPlayerNames !== 'undefined' && gPgnPlayerNames) ? gPgnPlayerNames : null;
+  var _whiteLabel = (_pgnNamesForReport && _pgnNamesForReport.white) ? _pgnNamesForReport.white : 'Trắng';
+  var _blackLabel = (_pgnNamesForReport && _pgnNamesForReport.black) ? _pgnNamesForReport.black : 'Đen';
+  /* ── NGUYÊN TẮC THỐNG NHẤT (tổ chức lại báo cáo) ──
+     Khi xác định được người chơi thật (_detectedSide), TOÀN BỘ báo cáo
+     (Tóm tắt, bảng Giai đoạn, tactical/positional, timing sớm/muộn...) đều
+     CHỈ TÍNH RIÊNG bên người chơi đó — không còn tình trạng "chỗ gộp 2 bên,
+     chỗ lọc riêng" như trước (gây mâu thuẫn số liệu, ví dụ Tóm tắt nói
+     "Tổng 8 lỗi" nhưng insight lại nói "Tổng 3 lỗi" mà không giải thích).
+     Không xác định được (2 người lạ) → giữ nguyên gộp cả 2 bên như cũ. */
+  var _detectedSide = _detectPlayerSide(_pgnNamesForReport);
+  var _sideFilterMod = (_detectedSide === 'white') ? 0 : (_detectedSide === 'black') ? 1 : null; /* null = không lọc, lấy cả 2 bên */
   /* FIX BUG CC9 (2): bucket giai đoạn giờ SUY RA TRỰC TIẾP từ cls[i] (nhãn
      chính thức, giống hệt bảng kết quả) thay vì tính lại từ ngưỡng cpLoss
      thô (30/100/300) — trước đây 2 cách tính độc lập cho ra SỐ LƯỢNG BLUNDER
@@ -4971,19 +5027,27 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
   };
   var tacticalMisses = 0, positionalErrors = 0;
   var topMistakes = [];   /* {moveIdx, moveNum, side, san, cpLoss, tacticalType, phase} */
-  var sumCpLoss = 0, lossCount = 0;
+  /* FIX BUG CC9: ACPL PHẢI tách riêng theo từng bên — gộp chung 2 bên vào 1 con số
+     làm sai lệch hoàn toàn ý nghĩa "độ chính xác của người chơi" (1 bên chơi rất tốt
+     bị kéo tụt bởi bên kia chơi kém, và ngược lại) — đúng như bảng "Kết quả phân tích"
+     chính đã tách riêng % Accuracy theo Trắng/Đen, ACPL cũng phải tách y hệt để nhất quán. */
+  var sumCpLoss = {white:0, black:0}, lossCount = {white:0, black:0};
 
   for (var i = 0; i < cls.length; i++) {
     var loss = cpLosses[i];
     var info = gMoveInfo[i] || {};
     var phase = phaseOf(info.materialPct !== undefined ? info.materialPct : 1);
     var bucket = CLS_TO_BUCKET[cls[i]] || 'ok';
-    if (phaseCount[phase]) phaseCount[phase][bucket]++;
+    var _sideKey = (i % 2 === 0) ? 'white' : 'black';
+    var _isPlayerMove = (_sideFilterMod === null) || ((i % 2) === _sideFilterMod);
 
-    if (loss !== null) { sumCpLoss += Math.min(loss, CPLOSS_CAP_FOR_ACPL); lossCount++; }
+    /* phaseCount CHỈ tính cho bên người chơi khi đã xác định (nếu không, gộp cả 2 bên như cũ) */
+    if (_isPlayerMove && phaseCount[phase]) phaseCount[phase][bucket]++;
 
-    /* Chỉ xét tactical/positional cho nước thực sự mistake/blunder (loại bỏ forced) */
-    if (cls[i] === 'mistake' || cls[i] === 'blunder' || cls[i] === 'missed_win' || cls[i] === 'missed_mate') {
+    if (loss !== null) { sumCpLoss[_sideKey] += Math.min(loss, CPLOSS_CAP_FOR_ACPL); lossCount[_sideKey]++; }
+
+    /* Chỉ xét tactical/positional cho nước thực sự mistake/blunder (loại bỏ forced), VÀ chỉ bên người chơi nếu đã xác định */
+    if (_isPlayerMove && (cls[i] === 'mistake' || cls[i] === 'blunder' || cls[i] === 'missed_win' || cls[i] === 'missed_mate')) {
       var isCapture, isCheck;
       if (cls[i] === 'missed_win' || cls[i] === 'missed_mate') {
         /* FIX BUG CC9 (3): missed_win/missed_mate = bỏ lỡ 1 nước TỐT HƠN —
@@ -5013,33 +5077,64 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
     }
   }
 
-  var avgCpLoss = lossCount ? (sumCpLoss / lossCount) : 0;
+  var avgCpLossWhite = lossCount.white ? (sumCpLoss.white / lossCount.white) : 0;
+  var avgCpLossBlack = lossCount.black ? (sumCpLoss.black / lossCount.black) : 0;
   var totalMoves = cls.length;
 
   var html = '';   /* summary: Tóm tắt + Giai đoạn + Insights */
+  var insights = [];
 
-  /* ── Tóm tắt ── */
-  html += '<div style="font-size:0.75rem;line-height:1.5;margin:8px 0;padding:8px 10px;background:#f7f7f7;border-radius:4px">';
-  html += '<b>Tóm tắt:</b> ' + totalMoves + ' nước, ACPL trung bình <b>' + avgCpLoss.toFixed(1) + ' cp</b>.<br>';
-
-  var totalBad = tacticalMisses + positionalErrors;
-  if (totalBad > 0) {
-    var tacPct = Math.round(tacticalMisses / totalBad * 100);
-    var posPct = Math.round(positionalErrors / totalBad * 100);
-    html += '<b>Phân loại sai lầm/blunder:</b> ';
-    html += '<b style="color:#c62828">' + tacticalMisses + ' tactical</b> (' + tacPct + '%) — bỏ lỡ ăn quân/chiếu; ';
-    html += '<b style="color:#1565c0">' + positionalErrors + ' positional</b> (' + posPct + '%) — lỗi đánh giá thế trận.<br>';
-    if (tacticalMisses > positionalErrors) {
-      html += '→ Bạn hay <b>bỏ lỡ tactic rõ ràng</b> (ăn quân/chiếu) — cần luyện quan sát kỹ hơn trước khi đi.';
-    } else if (positionalErrors > tacticalMisses) {
-      html += '→ Lỗi chủ yếu là <b>positional</b> — nên chú ý cấu trúc tốt, an toàn vua, hoạt động quân.';
-    } else {
-      html += '→ Tactical và positional xấp xỉ nhau.';
-    }
+  /* ── ACPL judgment: tính TRƯỚC Tóm tắt, để quyết định Tóm tắt có cần hiện
+     số ACPL hay không — tránh trùng lặp (nếu insight đã hiện số + nhận định,
+     Tóm tắt không cần nhắc lại số đó lần nữa). */
+  function _acplJudgment(v){
+    if (v > 120) return {tag:'rất cao', sev:'high', icon:'📉',
+      hint:'Nhiều sai lầm lớn — nên chậm lại, kiểm tra kỹ trước khi đi quân, đặc biệt các nước ăn quân/chiếu của đối thủ.'};
+    if (v > 60) return {tag:'khá cao', sev:'medium', icon:'📉',
+      hint:'Còn nhiều dư địa cải thiện — tập trung giảm số nước "Thiếu chính xác" và "Sai lầm".'};
+    if (v > 0 && v <= 30) return {tag:'tốt', sev:'low', icon:'✅',
+      hint:'Chơi khá chính xác trong ván này!'};
+    return null; /* vùng 30-60: trung bình, không cần insight riêng để tránh nhiễu */
   }
-  html += '</div>';
+  var jW = _acplJudgment(avgCpLossWhite);
+  var jB = _acplJudgment(avgCpLossBlack);
+  var jWApplies = jW && (_detectedSide === null || _detectedSide === 'white');
+  var jBApplies = jB && (_detectedSide === null || _detectedSide === 'black');
+  /* Tên chỉ cần ghi rõ khi KHÔNG xác định được người chơi (2 insight riêng
+     biệt cho 2 bên, cần phân biệt) — nếu đã biết rõ là ai, bỏ hẳn phần tên,
+     đi thẳng vào nội dung ngay sau dấu ":". */
+  if (jWApplies) {
+    insights.push({icon:jW.icon, sev:jW.sev, text:
+      (_detectedSide === null ? ('<b>' + _whiteLabel + ' (Trắng)</b>: ') : '')
+      + '<b>ACPL = ' + avgCpLossWhite.toFixed(1) + ' (' + jW.tag + ')</b>. ' + jW.hint});
+  }
+  if (jBApplies) {
+    insights.push({icon:jB.icon, sev:jB.sev, text:
+      (_detectedSide === null ? ('<b>' + _blackLabel + ' (Đen)</b>: ') : '')
+      + '<b>ACPL = ' + avgCpLossBlack.toFixed(1) + ' (' + jB.tag + ')</b>. ' + jB.hint});
+  }
 
-  /* ── Bảng giai đoạn ── */
+  /* ── Tóm tắt: chỉ còn ACPL khi insight tương ứng CHƯA hiện nó (tránh trùng lặp).
+     Bỏ hẳn "Tóm tắt: N nước." (thừa, không mang thông tin hữu ích). Nếu không có
+     phần ACPL nào cần hiện (mọi bên đã có insight riêng), bỏ luôn cả khung này. */
+  var _tomTatParts = [];
+  if (_detectedSide === 'white') {
+    if (!jWApplies) _tomTatParts.push('ACPL: ' + avgCpLossWhite.toFixed(1) + ' cp.');
+  } else if (_detectedSide === 'black') {
+    if (!jBApplies) _tomTatParts.push('ACPL: ' + avgCpLossBlack.toFixed(1) + ' cp.');
+  } else {
+    var acplParts = [];
+    if (!jWApplies) acplParts.push(_whiteLabel + ' (Trắng): ' + avgCpLossWhite.toFixed(1) + ' cp');
+    if (!jBApplies) acplParts.push(_blackLabel + ' (Đen): ' + avgCpLossBlack.toFixed(1) + ' cp');
+    if (acplParts.length) _tomTatParts.push('ACPL — ' + acplParts.join(', ') + '.');
+  }
+  if (_tomTatParts.length) {
+    html += '<div style="font-size:0.75rem;line-height:1.5;margin:8px 0;padding:8px 10px;background:#f7f7f7;border-radius:4px">';
+    html += _tomTatParts.join(' ');
+    html += '</div>';
+  }
+
+  /* ── Bảng giai đoạn (CHỈ bên người chơi nếu đã xác định — xem _isPlayerMove ở vòng lặp trên) ── */
   var phaseLabelMap = {opening:'Khai cuộc', middlegame:'Trung cuộc', endgame:'Tàn cuộc'};
   var worst = null, worstRate = -1;
   ['opening','middlegame','endgame'].forEach(function(ph) {
@@ -5051,7 +5146,7 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
   });
 
   html += '<table class="an-phase-table" style="width:100%;border-collapse:collapse;font-size:0.68rem;margin-bottom:8px">';
-  html += '<thead><tr style="background:#000;color:#fff">'
+  html += '<thead><tr style="background:#666;color:#fff">'
         + '<th style="padding:3px 4px;text-align:left">Giai đoạn</th>'
         + '<th style="padding:3px 4px">OK</th><th style="padding:3px 4px">Thiếu c.xác</th>'
         + '<th style="padding:3px 4px">Sai lầm</th><th style="padding:3px 4px">Blunder</th>'
@@ -5061,7 +5156,11 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
     var tot = d.ok + d.inaccuracy + d.mistake + d.blunder;
     var bad = d.mistake + d.blunder;
     var pct = tot ? Math.round(bad/tot*100) + '%' : '—';
-    html += '<tr style="border-bottom:1px solid #eee">'
+    /* Thay cho dòng text "Giai đoạn nhiều sai lầm nhất" riêng — highlight
+       ngay dòng bảng bằng màu vùng Trắng của đồ thị eval (đồng bộ trực quan). */
+    var isWorstRow = (worst && worst.rate > 0 && ph === worst.ph);
+    var rowBg = isWorstRow ? 'background:var(--board-eval-white,#d4edda);' : '';
+    html += '<tr style="border-bottom:1px solid #eee;' + rowBg + '">'
           + '<td style="padding:3px 4px"><b>' + phaseLabelMap[ph] + '</b></td>'
           + '<td style="padding:3px 4px;text-align:center">' + d.ok + '</td>'
           + '<td style="padding:3px 4px;text-align:center">' + d.inaccuracy + '</td>'
@@ -5071,14 +5170,12 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
   });
   html += '</tbody></table>';
 
-  if (worst && worst.rate > 0) {
-    html += '<div style="font-size:0.68rem;color:#555;margin:-4px 0 10px">'
-          + 'Giai đoạn nhiều sai lầm nhất: <b>' + phaseLabelMap[worst.ph] + '</b> ('
-          + worst.bad + '/' + worst.tot + ' nước, ' + Math.round(worst.rate*100) + '%).</div>';
-  }
-
-  /* ── Insights tự động (pattern lỗi lặp lại) ── */
-  var insights = [];
+  /* ── Insights tự động (pattern lỗi lặp lại) ──
+     Không còn prefix tên người chơi: các insight dưới đây (tactical/
+     positional, phase-focus, timing sớm/muộn) là 1 THỐNG KÊ DUY NHẤT (không
+     tách cặp 2 bên) dù đã lọc riêng theo người chơi hay gộp cả 2 bên — không
+     cần ghi tên, đi thẳng vào nội dung theo yêu cầu. */
+  var totalBad = tacticalMisses + positionalErrors;
   if (totalBad >= 3) {
     if (tacticalMisses / totalBad >= 0.55) {
       insights.push({icon:'⚔', sev:'high', text:
@@ -5113,15 +5210,136 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
         + 'Gợi ý: luyện tập tàn cuộc — đây có thể là điểm yếu chính.'});
     }
   }
-  if (avgCpLoss > 120) {
-    insights.push({icon:'📉', sev:'high', text:
-      '<b>ACPL = ' + Math.round(avgCpLoss) + ' (rất cao)</b>. Nhiều sai lầm lớn — nên chậm lại, kiểm tra kỹ trước khi đi quân, đặc biệt các nước ăn quân/chiếu của đối thủ.'});
-  } else if (avgCpLoss > 60) {
-    insights.push({icon:'📉', sev:'medium', text:
-      '<b>ACPL = ' + Math.round(avgCpLoss) + ' (khá cao)</b>. Còn nhiều dư địa cải thiện — tập trung giảm số nước "Thiếu chính xác" và "Sai lầm".'});
-  } else if (avgCpLoss > 0 && avgCpLoss <= 30) {
-    insights.push({icon:'✅', sev:'low', text:
-      '<b>ACPL = ' + avgCpLoss.toFixed(1) + ' (tốt)</b>. Bạn chơi khá chính xác trong ván này!'});
+
+  /* ── #1: Quản lý thời gian (dựa %clk trong PGN, nếu có) ──
+     Đối chiếu thời điểm mắc sai lầm/blunder với thời gian còn lại trên đồng
+     hồ tại thời điểm đó — kiểm chứng giả thuyết "hết thời gian nên mắc lỗi"
+     bằng dữ liệu thật thay vì suy đoán. Bỏ qua hoàn toàn (không hiện insight)
+     nếu PGN không có %clk hoặc số lượng clock không khớp số nước (dữ liệu
+     không đáng tin cậy). */
+  (function(){
+    var clocks = extractPgnClockSeconds(gLastRawPgnText);
+    if (!clocks.length || clocks.length !== cls.length) return;
+    var tcMatch = gLastRawPgnText.match(/\[TimeControl\s+"(\d+)(?:\+\d+)?"\]/);
+    var baseTime = tcMatch ? parseInt(tcMatch[1], 10) : null;
+    if (!baseTime) return;
+
+    var timeSpent = [];
+    for (var ti = 0; ti < clocks.length; ti++) {
+      var before = (ti >= 2 && clocks[ti-2] != null) ? clocks[ti-2] : baseTime;
+      var after = clocks[ti];
+      timeSpent[ti] = (after != null) ? Math.max(0, before - after) : null;
+    }
+
+    var lowTimeThreshold = Math.max(20, baseTime * 0.10);
+    var badMovesInLowTime = 0, badMovesTotal = 0, lowTimeMoveCount = 0;
+    for (var ti2 = 0; ti2 < cls.length; ti2++) {
+      var isBadMove = BAD_TYPES[cls[ti2]];
+      var remaining = clocks[ti2];
+      if (remaining != null && remaining <= lowTimeThreshold) {
+        lowTimeMoveCount++;
+        if (isBadMove) badMovesInLowTime++;
+      }
+      if (isBadMove) badMovesTotal++;
+    }
+
+    var earlySpent = [], lateSpent = [];
+    for (var ti3 = 0; ti3 < timeSpent.length; ti3++) {
+      if (timeSpent[ti3] == null) continue;
+      var moveNumHalf = Math.floor(ti3 / 2);
+      if (moveNumHalf < 10) earlySpent.push(timeSpent[ti3]); else lateSpent.push(timeSpent[ti3]);
+    }
+    var avgEarly = earlySpent.length ? earlySpent.reduce(function(a,b){return a+b;},0)/earlySpent.length : null;
+    var avgLate  = lateSpent.length ? lateSpent.reduce(function(a,b){return a+b;},0)/lateSpent.length : null;
+
+    /* Chỉ hiện insight khi THẬT SỰ có vấn đề (tương quan rõ giữa thời gian
+       thấp và sai lầm) — nếu ổn hoặc không đủ dữ liệu để kết luận, im lặng
+       hoàn toàn, không cần báo "tốt" (theo yêu cầu, tránh nhiễu báo cáo). */
+    if (badMovesTotal >= 3 && lowTimeMoveCount >= 2) {
+      var pctBadInLowTime = Math.round(badMovesInLowTime / badMovesTotal * 100);
+      if (pctBadInLowTime >= 35) {
+        insights.push({icon:'⏱', sev:'high', text:
+          pctBadInLowTime + '% (' + badMovesInLowTime + '/' + badMovesTotal + ') sai lầm xảy ra khi đồng hồ dưới '
+          + Math.round(lowTimeThreshold) + 's — thiếu thời gian ảnh hưởng chất lượng nước đi.'
+          + (avgEarly && avgLate && avgEarly > avgLate * 1.5
+             ? ' Tốn ' + avgEarly.toFixed(1) + 's/nước ở 10 nước đầu, chỉ ' + avgLate.toFixed(1) + 's/nước về sau — nên phân bổ đều hơn.'
+             : '')});
+      }
+    }
+  })();
+
+  /* ── #3: Dạng lỗi thường gặp (thay cho "loại quân"/"độ khó vị trí" cũ —
+     không phản ánh đúng NGUYÊN NHÂN lỗi theo phản hồi thực tế) ──
+     Phân loại theo bản chất lỗi, dùng dữ liệu đã có sẵn từ classify:
+       - "Bỏ sót quân bị treo": nước này không tự sacrifice, nhưng ĐỐI
+         PHƯƠNG ăn được quân đáng kể NGAY SAU (gMoveInfo[i+1].capVal lớn) —
+         tức có quân bị treo/dễ bị bắt mà không xử lý, dù bản thân nước vừa
+         đi không phải nguyên nhân trực tiếp (ví dụ đi Tượng bình thường
+         nhưng bỏ quên Xe đang bị treo, mất Xe ngay nước sau).
+       - "Tự đưa quân vào ô nguy hiểm": chính nước đó LÀ 1 sacrifice thật
+         (SEE âm) — chủ động đưa quân vào ô bị mất ngay tại nước này.
+       - "Bỏ lỡ chiến thuật thắng/chiếu hết": missed_win/missed_mate.
+       - Còn lại: "Lỗi đánh giá thế trận" (không rõ dạng cụ thể).
+     CHỈ thống kê bên NGƯỜI CHƠI nếu xác định được; không thì tách riêng 2
+     bên (cùng quy tắc như trước). */
+  function _errorPatternInsight(sideFilterIdxMod, label){
+    var HANGING_MIN_CP = 200; /* tối thiểu ~giá trị 1 Mã/Tượng bị mất ngay sau mới tính "treo quân" */
+    var cats = {hanging:{count:0,ex:null}, selfSac:{count:0,ex:null}, missed:{count:0,ex:null}, other:{count:0,ex:null}};
+    var total = 0;
+    for (var ei = 0; ei < cls.length; ei++) {
+      if ((ei % 2) !== sideFilterIdxMod) continue;
+      if (!BAD_TYPES[cls[ei]]) continue;
+      total++;
+      var moveNum = Math.floor(ei/2) + 1;
+      var exStr = moveNum + (sideFilterIdxMod===0?'.':'...') + (gMoveTexts[ei] || '');
+      var cat;
+      if (cls[ei] === 'missed_win' || cls[ei] === 'missed_mate') {
+        cat = 'missed';
+      } else {
+        var ci3 = _buildClassifyInput(ei);
+        if (ci3 && ci3.isSacrifice) {
+          cat = 'selfSac';
+        } else {
+          var nextCap = (gMoveInfo[ei+1] && gMoveInfo[ei+1].capVal) || 0;
+          cat = (nextCap >= HANGING_MIN_CP) ? 'hanging' : 'other';
+        }
+      }
+      cats[cat].count++;
+      if (!cats[cat].ex) cats[cat].ex = exStr;
+    }
+    if (total < 3) return null;
+    var order = ['hanging','selfSac','missed','other'];
+    order.sort(function(a,b){ return cats[b].count - cats[a].count; });
+    var top = order[0];
+    if (cats[top].count < 2) return null;
+    var LABELS = {
+      hanging: 'bỏ sót quân bị treo',
+      selfSac: 'tự đưa quân vào nguy hiểm',
+      missed:  'bỏ lỡ chiến thuật thắng/chiếu hết',
+      other:   'lỗi đánh giá thế trận'
+    };
+    var present = order.filter(function(k){ return cats[k].count > 0; });
+    var breakdown;
+    if (present.length === 1) {
+      breakdown = LABELS[top] + ' chiếm 100%';
+    } else {
+      breakdown = present.map(function(k){
+        return LABELS[k] + ' ' + Math.round(cats[k].count/total*100) + '%';
+      }).join(', ');
+    }
+    return {icon:'🔎', sev:'medium', text: (label ? (label + ': ') : '') + 'Tổng ' + total + ' lỗi, ' + breakdown + '.'};
+  }
+  if (_detectedSide === 'white') {
+    var ep = _errorPatternInsight(0, '');
+    if (ep) insights.push(ep);
+  } else if (_detectedSide === 'black') {
+    var ep2 = _errorPatternInsight(1, '');
+    if (ep2) insights.push(ep2);
+  } else {
+    var epW = _errorPatternInsight(0, _whiteLabel + ' (Trắng)');
+    if (epW) insights.push(epW);
+    var epB = _errorPatternInsight(1, _blackLabel + ' (Đen)');
+    if (epB) insights.push(epB);
   }
 
   if (insights.length) {
@@ -5213,7 +5431,7 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
   if (mergedList.length) {
     highlightHtml += '<div style="font-size:0.90rem;font-weight:bold;margin:6px 0 5px">\u2b50 Highlight v\u00e1n \u0111\u1ea5u:</div>';
     highlightHtml += '<table style="width:100%;border-collapse:collapse;font-size:.68rem">';
-    highlightHtml += '<thead><tr style="background:#000;color:#fff">'
+    highlightHtml += '<thead><tr style="background:#666;color:#fff">'
           + '<th style="padding:2px 4px">N\u01b0\u1edbc</th><th style="padding:2px 4px">B\u00ean</th>'
           + '<th style="padding:2px 4px">\u0110\u00e3 \u0111i</th><th style="padding:2px 4px">cpLoss</th>'
           + '<th style="padding:2px 4px">Lo\u1ea1i</th><th style="padding:2px 4px">G.\u0111o\u1ea1n</th>'
@@ -7348,15 +7566,18 @@ var gPgnPlayerNames = null; /* {white, black} trích từ PGN header khi import,
    bên khi username đó cầm quân Đen, không ảnh hưởng gì nếu cầm Trắng. */
 var AUTO_FLIP_BLACK_NAMES = ['samackhat', 'hoaian2014', 'manhdan86'];
 function applyAutoFlipForPgnNames(pgnNames){
-  if(!pgnNames || !pgnNames.black) return;
-  var blackLower = String(pgnNames.black).toLowerCase();
-  for(var i=0;i<AUTO_FLIP_BLACK_NAMES.length;i++){
-    if(blackLower.indexOf(AUTO_FLIP_BLACK_NAMES[i]) !== -1){ gFlip = true; return; }
-  }
-  if(typeof lastUsernameLoad==='function'){
-    var savedUser = String(lastUsernameLoad()||'').toLowerCase();
-    if(savedUser && blackLower.indexOf(savedUser) !== -1){ gFlip = true; return; }
-  }
+  /* FIX BUG CC9: trước đây chỉ set gFlip=TRUE khi phát hiện người chơi cầm
+     Đen, không bao giờ set lại gFlip=FALSE khi cầm Trắng — khiến giá trị
+     gFlip=true còn sót lại từ ván trước (hoặc do người dùng tự bấm đổi bên)
+     không được reset, board vẫn hiển thị sai hướng dù ván mới người chơi
+     cầm Trắng. Fix: LUÔN xác định rõ ràng cả 2 chiều (Trắng→gFlip=false,
+     Đen→gFlip=true), dùng chung logic phát hiện với _detectPlayerSide (tên
+     đã biết + username đã lưu + đối thủ là bot) để nhất quán với báo cáo
+     phân tích. Không xác định được (2 người lạ) → giữ nguyên gFlip hiện tại,
+     không đoán. */
+  var side = (typeof _detectPlayerSide === 'function') ? _detectPlayerSide(pgnNames) : null;
+  if (side === 'black') gFlip = true;
+  else if (side === 'white') gFlip = false;
 }
 
 /* Nút dưới-trái "Phân tích" và dưới-phải "Đi lại" — CỐ ĐỊNH, dùng chung cho cả 2 tab */
@@ -7783,6 +8004,7 @@ function analyzeTabRun() {
 }
 
 function _analyzeTabRunWithText(raw) {
+  gLastRawPgnText = raw; /* lưu lại PGN thô (có %clk) để buildMoveReport dùng cho phân tích quản lý thời gian */
   var ucis = parsePgnToUcis(raw);
   if (ucis && ucis.length) {
     /* Nếu quá trình đọc PGN dừng giữa chừng (gặp nước không nhận dạng được),
@@ -8255,6 +8477,8 @@ function extractPgnResultToken(pgn){
    tuyến tính từng ký tự, đếm độ sâu ngoặc {} và () riêng biệt — khi đang ở
    trong 1 trong 2 loại ngoặc đó (độ sâu > 0) thì bỏ qua ký tự, không copy
    ra kết quả. */
+var gLastRawPgnText = ''; /* PGN thô gần nhất (giữ nguyên %clk...) — dùng cho phân tích quản lý thời gian trong báo cáo */
+
 function stripPgnCommentsAndVariations(s) {
   var out = '';
   var braceDepth = 0, parenDepth = 0;
@@ -8269,6 +8493,54 @@ function stripPgnCommentsAndVariations(s) {
     out += ch;
   }
   return out;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Trích xuất %clk (thời gian còn lại SAU mỗi nước) từ PGN thô, khớp
+   theo thứ tự ply với gUciHist. Dùng cho insight "#1 quản lý thời gian"
+   trong báo cáo phân tích. Chỉ dùng comment {[%clk H:MM:SS]} chuẩn của
+   chess.com/lichess — bỏ qua variation () như parsePgnToUcis, nhưng
+   GIỮ LẠI comment {} (khác parsePgnToUcis, vốn xoá hết cả 2).
+   Trả về mảng clocks[] (giây còn lại sau ply i, hoặc null nếu không rõ);
+   nếu length không khớp gUciHist, coi như không tin cậy — caller tự bỏ qua. */
+function extractPgnClockSeconds(pgn) {
+  if (!pgn) return [];
+  var moveStartMatch = pgn.match(/1\.\s*(?=[A-Za-zO])/);
+  var body = moveStartMatch ? pgn.slice(moveStartMatch.index) : pgn;
+  body = body.replace(/[\u2010-\u2015\u2212]/g, '-');
+  body = body.replace(/[\u00A0\u2000-\u200B\u202F\u205F\u3000]/g, ' ');
+  /* Chỉ bỏ variation trong (), GIỮ NGUYÊN {} để đọc %clk sau */
+  var noVar = '', parenDepth = 0;
+  for (var i = 0; i < body.length; i++) {
+    var ch = body.charAt(i);
+    if (ch === '(') { parenDepth++; continue; }
+    if (ch === ')') { if (parenDepth > 0) parenDepth--; continue; }
+    if (parenDepth > 0) continue;
+    noVar += ch;
+  }
+  var clocks = [];
+  var moveCount = 0;
+  var re = /\{[^}]*\}|\S+/g;
+  var m;
+  while ((m = re.exec(noVar)) !== null) {
+    var tok = m[0];
+    if (tok.charAt(0) === '{') {
+      var clkM = tok.match(/%clk\s+(\d+):(\d+):([\d.]+)/);
+      if (clkM && moveCount > 0) {
+        var secs = parseInt(clkM[1], 10) * 3600 + parseInt(clkM[2], 10) * 60 + parseFloat(clkM[3]);
+        clocks[moveCount - 1] = secs;
+      }
+      continue;
+    }
+    if (/^\$\d+$/.test(tok)) continue;
+    if (/^(1-0|0-1|1\/2-1\/2|\u00bd-\u00bd|\*)$/.test(tok)) continue;
+    if (/^\d+\.(\.\.)?$/.test(tok)) continue;
+    var cleanTok = tok.replace(/^\d+\.(\.\.)?/, '');
+    if (!cleanTok) continue;
+    clocks[moveCount] = clocks[moveCount] || null;
+    moveCount++;
+  }
+  return clocks;
 }
 
 function parsePgnToUcis(pgn) {
