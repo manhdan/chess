@@ -11,7 +11,7 @@ gtag('config', 'G-YJ1J2MJLZT');
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Chess Coach 9</title>
+<title>ChessCoach10</title>
 <style>
 :root {
   /* Màu ô bàn cờ — đổi qua setBoardTheme(), lưu localStorage để nhớ lựa
@@ -458,7 +458,7 @@ body {
   font-family: 'Courier New', monospace;
   overflow-y: auto; color: #444; word-break: break-all;
   -webkit-flex: 0 0 auto; flex: 0 0 auto;
-  height: 12vh; max-height: 12vh;
+  height: 9vh; max-height: 9vh; /* ĐÃ SỬA: giảm còn 75% so với trước (12vh -> 9vh) */
 }
 
 /* ── Top row: 3 equal-width controls ── */
@@ -1165,11 +1165,15 @@ html.mp-mode #mobile-stack #eval-chart-svg { height: 101px !important; }
     <!-- Danh sách trận đấu gần nhất khi gõ tên user chess.com -->
     <div id="analyzer-gamelist" style="display:none;max-height:26vh;overflow-y:auto;padding:4px 6px;border-top:1px solid #ddd"></div>
 
-    <!-- Eval chart: top-align ngay dưới history, cao 135px (75% của 180px trước) -->
-    <div id="lc-eval-chart" style="display:none;padding:6px 6px 4px;-webkit-flex-shrink:0;flex-shrink:0;display:-webkit-flex;display:flex;-webkit-flex-direction:column;flex-direction:column;-webkit-align-items:stretch;align-items:stretch">
-      <div id="eval-chart-label" style="font-size:0.68rem;color:#888;margin-bottom:3px;-webkit-flex-shrink:0;flex-shrink:0">Eval (góc Trắng, ±600cp)</div>
+    <!-- Eval chart: top-align ngay dưới history, cao 108px (ĐÃ SỬA: giảm còn 80% so với trước, 135px -> 108px).
+         ĐÃ THÊM: position:sticky để khi cuộn #lc-scroll-wrap, đồ thị eval "dính" lại ngay khi đỉnh
+         của nó chạm mép trên khung cuộn — phần PGN phía trên cuộn khuất bình thường, phần báo cáo
+         phía dưới cũng cuộn bình thường bên dưới đồ thị, chỉ riêng đồ thị luôn hiện. background trùng
+         màu nền .left-col (#f5f5f0) để nội dung cuộn qua bên dưới không bị lộ/đè lên nhìn xuyên qua. -->
+    <div id="lc-eval-chart" style="display:none;padding:6px 6px 4px;-webkit-flex-shrink:0;flex-shrink:0;display:-webkit-flex;display:flex;-webkit-flex-direction:column;flex-direction:column;-webkit-align-items:stretch;align-items:stretch;position:-webkit-sticky;position:sticky;top:0;z-index:5;background:#f5f5f0">
+      <div id="eval-chart-label" style="display:none;font-size:0.68rem;color:#888;margin-bottom:3px;-webkit-flex-shrink:0;flex-shrink:0">Eval (góc Trắng, ±600cp)</div>
       <svg id="eval-chart-svg" viewBox="0 0 600 120" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"
-        style="width:100%;height:135px;display:block;border:1px solid #ccc;border-radius:8px;overflow:hidden;background:#fafafa;cursor:crosshair;shape-rendering:geometricPrecision">
+        style="width:100%;height:108px;display:block;border:1px solid #ccc;border-radius:8px;overflow:hidden;background:#fafafa;cursor:crosshair;shape-rendering:geometricPrecision">
       </svg>
     </div>
 
@@ -1217,6 +1221,7 @@ html.mp-mode #mobile-stack #eval-chart-svg { height: 101px !important; }
   <div class="board-outer">
     <div class="board" id="board"></div>
   </div>
+  <div id="lc-watermark" style="position:fixed;left:50%;bottom:4px;transform:translateX(-50%);font-size:0.7rem;color:#000;opacity:0.18;pointer-events:none;z-index:1;white-space:nowrap;user-select:none">update 20/09/2026</div>
   <svg id="coach-svg" viewBox="0 0 8 8" preserveAspectRatio="none">
     <defs>
       <marker id="arr-grn" markerWidth="2.2" markerHeight="2.2" refX="1.5" refY="1.1" orient="auto">
@@ -1337,6 +1342,269 @@ html.mp-mode #mobile-stack #eval-chart-svg { height: 101px !important; }
   </div>
 </div>
 
+<script>
+/* ==== chess-opening-detector_LITE.js (nhung truc tiep, khong goi mang) ==== */
+/*!
+ * chess-opening-detector.js (ban rut gon - chi khai cuoc pho bien)
+ * Nhan dien ten khai cuoc tu chuoi nuoc di, thuan JavaScript ES5.
+ * Khong phu thuoc thu vien ngoai -> chay duoc tren trinh duyet WebKit cu
+ * (vd. Kindle Paperwhite 3) lan trinh duyet PC hien dai.
+ *
+ * NOI DUNG: 31 khai cuoc pho bien nhat (Sicilian, Ruy Lopez, Italian Game,
+ * French, Caro-Kann, Queen's Gambit, King's Indian, Nimzo-Indian, Grunfeld,
+ * English, Scandinavian, Pirc, Alekhine, Vienna, King's Gambit, Scotch,
+ * Four Knights, Petrov, Dutch, Benoni, Queen's Indian, Bird, Reti,
+ * King's Indian Attack, Catalan, Philidor, Center Game, London System...),
+ * moi khai cuoc kem 3-7 bien the noi tieng nhat (vd Italian Game: Giuoco
+ * Piano, Giuoco Pianissimo, Two Knights Defense, Evans Gambit, Hungarian
+ * Defense) - tong cong 132 dong, thay vi toan bo ~3.800 dong ECO day du,
+ * de file nhe va danh sach de doc hon. Du lieu goc: lichess-org/chess-
+ * openings (CC0), da chuyen SAN -> UCI bang chess.js.
+ * Muon them/bot khai cuoc: chinh mang ECO_OPENINGS va FEN_BOOK ben duoi
+ * (moi dong la mot mang [family, eco, ten, 'nuoc1 nuoc2 ...']).
+ *
+ * HAI CACH NHAN DIEN - dung cho 2 muc dich khac nhau:
+ *
+ * 1) analyzeMoves(uciMoves) - so khop CHUOI NUOC DI (dung Trie, giu nguyen
+ *    thu tu). Nhanh (O(so nuoc)), khong can tinh FEN, phu hop de hien thi
+ *    tien do 'con trong sach ly thuyet / da ra khoi sach' theo tung nuoc
+ *    NHU NGUOI CHOI DA DI. Nhuoc diem: nhay thu tu nuoc di, KHONG tu nhan
+ *    ra chuyen vi (transposition) - vd di Ruy Lopez nhung theo thu tu nuoc
+ *    khac thuong se khong khop dung dong da liet ke.
+ *
+ * 2) analyzePosition(uciMoves, fromPly, toPly) - so khop THEO THE CO (FEN,
+ *    4 truong dau: vi tri quan + luot di + quyen nhap thanh + o bat qua
+ *    duong), TRONG KHOANG NUOC TU fromPly DEN toPly. Vi day la so khop
+ *    theo VI TRI THUC TE tren ban co (khong phai theo thu tu chuoi ky tu),
+ *    no TU NHIEN CHAP NHAN DAO VI TRI NUOC DI (transposition): hai van co
+ *    di khac thu tu nhung ra cung 1 the co van duoc nhan dung ten. Ham nay
+ *    tu tinh FEN tai moi nuoc bang mot bo cap nhat ban co toi gian di kem
+ *    (MiniBoard, khong phai bo sinh nuoc day du - no CHI ap dung lai cac
+ *    nuoc hop le da duoc choi, khong tu kiem tra luat co).
+ *
+ *    Vi du dung khoang fromPly-toPly: neu ban chi muon kiem tra 'nguoi
+ *    choi co dang o trong 1 khai cuoc da biet nao khong, tinh tu nuoc 6
+ *    den nuoc 14' (bo qua vai nuoc dau/vai nuoc cuoi), goi:
+ *      ChessOpeningBook.analyzePosition(moves, 6, 14)
+ *
+ * Ca hai ham dung chung 1 CSDL 132 dong (ECO_OPENINGS cho Trie, FEN_BOOK
+ * cho tra cuu theo the co - FEN_BOOK duoc tinh san luc build tu chinh
+ * ECO_OPENINGS nen luon dong nhat voi nhau).
+ *
+ * VI DU:
+ *   var moves = ['e2e4','e7e5','g1f3','b8c6','f1b5','a7a6'];
+ *   ChessOpeningBook.analyzeMoves(moves).current;
+ *   // -> { eco:'C78', name:'Ruy Lopez: Morphy Defense', family:'Ruy Lopez', ply:6 }
+ *
+ *   ChessOpeningBook.analyzePosition(moves, 1, 6).current;
+ *   // -> ket qua tuong tu, nhung tinh qua FEN nen van dung ngay ca khi
+ *   // (gia du) nguoi choi den the co nay bang mot thu tu nuoc khac.
+ *
+ *   ChessOpeningBook.getOpeningName(moves); // 'Ruy Lopez: Morphy Defense (C78)'
+ */
+(function (global) {
+  'use strict';
+
+  // Moi phan tu: [family, eco, ten, 'nuoc1 nuoc2 ...' (UCI, cach nhau boi dau cach)]
+  var ECO_OPENINGS = [["Sicilian Defense","B20","Sicilian Defense","e2e4 c7c5"],["Sicilian Defense","B95","Sicilian Defense: Najdorf Variation","e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6 b1c3 a7a6 c1g5 e7e6"],["Sicilian Defense","B72","Sicilian Defense: Dragon Variation","e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6 b1c3 g7g6 c1e3"],["Sicilian Defense","B80","Sicilian Defense: Scheveningen Variation","e2e4 c7c5 g1f3 e7e6 d2d4 c5d4 f3d4 g8f6 b1c3 d7d6"],["Sicilian Defense","B33","Sicilian Defense: Lasker-Pelikan Variation, Sveshnikov Variation","e2e4 c7c5 g1f3 b8c6 d2d4 c5d4 f3d4 g8f6 b1c3 e7e5 d4b5 d7d6 c1g5 a7a6 b5a3 b7b5"],["Sicilian Defense","B23","Sicilian Defense: Closed","e2e4 c7c5 b1c3 e7e6 g2g3"],["Sicilian Defense","B22","Sicilian Defense: Alapin Variation","e2e4 c7c5 c2c3"],["Ruy Lopez","C60","Ruy Lopez","e2e4 e7e5 g1f3 b8c6 f1b5"],["Ruy Lopez","C78","Ruy Lopez: Morphy Defense","e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4 g8f6 e1g1"],["Ruy Lopez","C65","Ruy Lopez: Berlin Defense","e2e4 e7e5 g1f3 b8c6 f1b5 g8f6 e1g1"],["Ruy Lopez","C88","Ruy Lopez: Closed","e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4 g8f6 e1g1 f8e7 f1e1 b7b5 a4b3 e8g8"],["Ruy Lopez","C68","Ruy Lopez: Exchange Variation","e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5c6"],["Ruy Lopez","C89","Ruy Lopez: Marshall Attack","e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4 g8f6 e1g1 f8e7 f1e1 b7b5 a4b3 e8g8 c2c3 d7d5"],["Ruy Lopez","C63","Ruy Lopez: Schliemann Defense","e2e4 e7e5 g1f3 b8c6 f1b5 f7f5"],["Italian Game","C50","Italian Game","e2e4 e7e5 g1f3 b8c6 f1c4"],["Italian Game","C50","Italian Game: Giuoco Piano","e2e4 e7e5 g1f3 b8c6 f1c4 f8c5"],["Italian Game","C50","Italian Game: Giuoco Pianissimo","e2e4 e7e5 g1f3 b8c6 f1c4 g8f6 e1g1 f8c5 b1c3 d7d6 d2d3"],["Italian Game","C55","Italian Game: Two Knights Defense","e2e4 e7e5 g1f3 b8c6 f1c4 g8f6 e1g1 f8c5 d2d4 c5d4 f3d4 c6d4 c1g5 d7d6"],["Italian Game","C51","Italian Game: Evans Gambit Declined","e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 b2b4 c5b6"],["Italian Game","C50","Italian Game: Hungarian Defense","e2e4 e7e5 g1f3 b8c6 f1c4 f8e7"],["French Defense","C00","French Defense","e2e4 e7e6"],["French Defense","C15","French Defense: Winawer Variation","e2e4 e7e6 d2d4 d7d5 b1c3 f8b4"],["French Defense","C13","French Defense: Classical Variation","e2e4 e7e6 d2d4 d7d5 b1c3 g8f6 c1g5 d5e4 c3e4 f8e7"],["French Defense","C03","French Defense: Tarrasch Variation","e2e4 e7e6 d2d4 d7d5 b1d2"],["French Defense","C02","French Defense: Advance Variation","e2e4 e7e6 d2d4 d7d5 e4e5 c7c5 c2c3"],["French Defense","C01","French Defense: Exchange Variation","e2e4 e7e6 d2d4 d7d5 e4d5 e6d5 g1f3"],["Caro-Kann Defense","B10","Caro-Kann Defense","e2e4 c7c6"],["Caro-Kann Defense","B12","Caro-Kann Defense: Advance Variation","e2e4 c7c6 d2d4 d7d5 e4e5"],["Caro-Kann Defense","B19","Caro-Kann Defense: Classical Variation","e2e4 c7c6 d2d4 d7d5 b1d2 d5e4 d2e4 c8f5 e4g3 f5g6 h2h4 h7h6 g1f3 b8d7"],["Caro-Kann Defense","B13","Caro-Kann Defense: Exchange Variation","e2e4 c7c6 d2d4 d7d5 e4d5 c6d5 c1f4"],["Caro-Kann Defense","B13","Caro-Kann Defense: Panov Attack","e2e4 c7c6 d2d4 d7d5 e4d5 c6d5 c2c4 g8f6 b1c3"],["Caro-Kann Defense","B10","Caro-Kann Defense: Two Knights Attack","e2e4 c7c6 b1c3 d7d5 g1f3"],["Queen's Gambit Declined","D30","Queen's Gambit Declined","d2d4 d7d5 c2c4 e7e6"],["Queen's Gambit Declined","D60","Queen's Gambit Declined: Orthodox Defense","d2d4 g8f6 c2c4 e7e6 g1f3 d7d5 b1c3 f8e7 c1g5 e8g8 e2e3 b8d7"],["Queen's Gambit Declined","D35","Queen's Gambit Declined: Exchange Variation","d2d4 g8f6 c2c4 e7e6 g1f3 d7d5 e2e3 b7b6 b1c3 f8d6 c4d5 e6d5"],["Queen's Gambit Declined","D58","Queen's Gambit Declined: Tartakower Defense","d2d4 g8f6 c2c4 e7e6 g1f3 d7d5 b1c3 f8e7 c1g5 h7h6 g5h4 e8g8 e2e3 b7b6"],["Queen's Gambit Declined","D52","Queen's Gambit Declined: Cambridge Springs Defense","d2d4 d7d5 c2c4 c7c6 g1f3 g8f6 b1c3 e7e6 c1g5 b8d7 e2e3 d8a5 c4d5"],["Queen's Gambit Declined","D56","Queen's Gambit Declined: Lasker Defense","d2d4 d7d5 c2c4 e7e6 b1c3 f8e7 g1f3 g8f6 c1g5 h7h6 g5h4 e8g8 e2e3 f6e4"],["Queen's Gambit Accepted","D20","Queen's Gambit Accepted","d2d4 d7d5 c2c4 d5c4"],["Queen's Gambit Accepted","D20","Queen's Gambit Accepted: Old Variation","d2d4 d7d5 c2c4 d5c4 e2e3"],["Queen's Gambit Accepted","D25","Queen's Gambit Accepted: Normal Variation","d2d4 d7d5 c2c4 d5c4 g1f3 g8f6 e2e3"],["Queen's Gambit Accepted","D26","Queen's Gambit Accepted: Classical Defense","d2d4 d7d5 c2c4 d5c4 g1f3 g8f6 e2e3 e7e6 f1c4 c7c5"],["Slav Defense","D10","Slav Defense","d2d4 d7d5 c2c4 c7c6"],["Slav Defense","D13","Slav Defense: Exchange Variation","d2d4 d7d5 c2c4 c7c6 g1f3 g8f6 c4d5 c6d5"],["Slav Defense","D17","Slav Defense: Czech Variation","d2d4 d7d5 c2c4 c7c6 g1f3 g8f6 b1c3 d5c4 a2a4 c8f5"],["Semi-Slav Defense","D43","Semi-Slav Defense","d2d4 d7d5 c2c4 c7c6 g1f3 g8f6 b1c3 e7e6"],["Semi-Slav Defense","D47","Semi-Slav Defense: Meran Variation","d2d4 d7d5 c2c4 c7c6 b1c3 g8f6 e2e3 e7e6 g1f3 b8d7 f1d3 d5c4 d3c4 b7b5"],["Semi-Slav Defense","D44","Semi-Slav Defense: Botvinnik Variation","d2d4 d7d5 c2c4 c7c6 g1f3 g8f6 b1c3 e7e6 c1g5 d5c4 e2e4"],["Semi-Slav Defense","D31","Semi-Slav Defense: Noteboom Variation","d2d4 d7d5 c2c4 e7e6 b1c3 c7c6 g1f3 d5c4"],["King's Indian Defense","E61","King's Indian Defense","d2d4 g8f6 c2c4 g7g6 b1c3"],["King's Indian Defense","E61","King's Indian Defense: Semi-Classical Variation","d2d4 g8f6 c2c4 g7g6 b1c3 f8g7 g1f3 e8g8 e2e3 d7d6 f1e2"],["King's Indian Defense","E60","King's Indian Defense: Fianchetto Variation","d2d4 g8f6 c2c4 g7g6 g1f3 f8g7 g2g3"],["King's Indian Defense","E86","King's Indian Defense: Sämisch Variation","d2d4 g8f6 c2c4 g7g6 b1c3 f8g7 e2e4 d7d6 f2f3 e8g8 c1e3 e7e5 g1e2 c7c6"],["King's Indian Defense","E77","King's Indian Defense: Four Pawns Attack","d2d4 g8f6 c2c4 g7g6 b1c3 f8g7 e2e4 d7d6 f1e2 e8g8 f2f4"],["King's Indian Defense","E73","King's Indian Defense: Averbakh Variation","d2d4 g8f6 c2c4 g7g6 b1c3 f8g7 e2e4 d7d6 f1e2 e8g8 c1g5"],["Nimzo-Indian Defense","E20","Nimzo-Indian Defense","d2d4 g8f6 c2c4 e7e6 b1c3 f8b4"],["Nimzo-Indian Defense","E32","Nimzo-Indian Defense: Classical Variation","d2d4 g8f6 c2c4 e7e6 b1c3 f8b4 d1c2"],["Nimzo-Indian Defense","E28","Nimzo-Indian Defense: Sämisch Variation","d2d4 g8f6 c2c4 e7e6 b1c3 f8b4 e2e3 e8g8 a2a3 b4c3 b2c3"],["Nimzo-Indian Defense","E42","Nimzo-Indian Defense: Rubinstein System, Rubinstein Variation, Main Line","d2d4 g8f6 c2c4 e7e6 b1c3 f8b4 e2e3 c7c5 g1e2 c5d4 e3d4 e8g8 a2a3"],["Nimzo-Indian Defense","E30","Nimzo-Indian Defense: Leningrad Variation","d2d4 g8f6 c2c4 e7e6 b1c3 f8b4 c1g5"],["Grünfeld Defense","D80","Grünfeld Defense","d2d4 g8f6 c2c4 g7g6 b1c3 d7d5"],["Grünfeld Defense","D85","Grünfeld Defense: Exchange Variation","d2d4 g8f6 c2c4 g7g6 b1c3 d7d5 c4d5 f6d5"],["Grünfeld Defense","D97","Grünfeld Defense: Russian Variation","d2d4 g8f6 c2c4 g7g6 b1c3 d7d5 g1f3 f8g7 d1b3 d5c4 b3c4 e8g8 e2e4"],["Grünfeld Defense","D90","Grünfeld Defense: Three Knights Variation","d2d4 g8f6 c2c4 g7g6 b1c3 d7d5 g1f3"],["English Opening","A10","English Opening","c2c4"],["English Opening","A35","English Opening: Symmetrical Variation","c2c4 c7c5 b1c3 g8f6 g1f3 e7e5"],["English Opening","A21","English Opening: King's English Variation, Reversed Sicilian","c2c4 e7e5 b1c3"],["English Opening","A29","English Opening: King's English Variation, Four Knights Variation, Fianchetto Line, with .. d6","c2c4 e7e5 b1c3 g8f6 g1f3 b8c6 g2g3 f8c5 d2d3 d7d6 f1g2"],["English Opening","A13","English Opening: Agincourt Defense","c2c4 e7e6 g1f3 d7d5"],["Scandinavian Defense","B01","Scandinavian Defense","e2e4 d7d5"],["Scandinavian Defense","B01","Scandinavian Defense: Main Line","e2e4 d7d5 e4d5 d8d5 b1c3 d5a5"],["Scandinavian Defense","B01","Scandinavian Defense: Modern Variation","e2e4 d7d5 e4d5 g8f6 d2d4"],["Pirc Defense","B00","Pirc Defense","e2e4 d7d6"],["Pirc Defense","B08","Pirc Defense: Classical Variation","e2e4 d7d6 d2d4 g8f6 b1c3 g7g6 g1f3 f8g7"],["Pirc Defense","B09","Pirc Defense: Austrian Attack","e2e4 d7d6 d2d4 g8f6 b1c3 g7g6 f2f4 f8g7 g1f3 e8g8"],["Pirc Defense","B07","Pirc Defense: Byrne Variation","e2e4 d7d6 d2d4 g8f6 b1c3 g7g6 c1g5"],["Alekhine Defense","B02","Alekhine Defense","e2e4 g8f6"],["Alekhine Defense","B03","Alekhine Defense: Four Pawns Attack","e2e4 g8f6 e4e5 f6d5 d2d4 d7d6 c2c4 d5b6 f2f4"],["Alekhine Defense","B03","Alekhine Defense: Exchange Variation","e2e4 g8f6 e4e5 f6d5 d2d4 d7d6 c2c4 d5b6 e5d6"],["Alekhine Defense","B04","Alekhine Defense: Modern Variation","e2e4 g8f6 e4e5 f6d5 d2d4 d7d6 g1f3"],["Vienna Game","C25","Vienna Game","e2e4 e7e5 b1c3"],["Vienna Game","C29","Vienna Game: Vienna Gambit","e2e4 e7e5 b1c3 g8f6 f2f4"],["Vienna Game","C25","Vienna Game: Anderssen Defense","e2e4 e7e5 b1c3 f8c5"],["King's Gambit Accepted","C33","King's Gambit Accepted","e2e4 e7e5 f2f4 e5f4"],["King's Gambit Accepted","C39","King's Gambit Accepted: Kieseritzky Gambit","e2e4 e7e5 f2f4 e5f4 g1f3 g7g5 h2h4 g5g4 f3e5"],["King's Gambit Accepted","C33","King's Gambit Accepted: Bishop's Gambit","e2e4 e7e5 f2f4 e5f4 f1c4"],["King's Gambit Accepted","C36","King's Gambit Accepted: Modern Defense","e2e4 e7e5 f2f4 e5f4 g1f3 d7d5 e4d5"],["Scotch Game","C44","Scotch Game","e2e4 e7e5 g1f3 b8c6 d2d4"],["Scotch Game","C45","Scotch Game: Classical Variation","e2e4 e7e5 g1f3 b8c6 d2d4 e5d4 f3d4 f8c5"],["Scotch Game","C45","Scotch Game: Mieses Variation","e2e4 e7e5 g1f3 b8c6 d2d4 e5d4 f3d4 g8f6 d4c6 b7c6 e4e5"],["Scotch Game","C44","Scotch Game: Scotch Gambit","e2e4 e7e5 g1f3 b8c6 d2d4 e5d4 f1c4"],["Four Knights Game","C47","Four Knights Game","e2e4 e7e5 g1f3 b8c6 b1c3 g8f6"],["Four Knights Game","C49","Four Knights Game: Spanish Variation","e2e4 e7e5 g1f3 b8c6 b1c3 g8f6 f1b5 f8b4 e1g1 e8g8 d2d3 b4c3"],["Four Knights Game","C47","Four Knights Game: Scotch Variation Accepted","e2e4 e7e5 g1f3 b8c6 b1c3 g8f6 d2d4 e5d4"],["Four Knights Game","C50","Four Knights Game: Italian Variation","e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 b1c3 g8f6"],["Petrov's Defense","C42","Petrov's Defense","e2e4 e7e5 g1f3 g8f6"],["Petrov's Defense","C42","Petrov's Defense: Classical Attack","e2e4 e7e5 g1f3 g8f6 f3e5 d7d6 e5f3 f6e4 d2d4"],["Petrov's Defense","C42","Petrov's Defense: Three Knights Game","e2e4 e7e5 g1f3 g8f6 b1c3"],["Petrov's Defense","C43","Petrov's Defense: Modern Attack, Steinitz Variation","e2e4 e7e5 g1f3 g8f6 d2d4 e5d4 e4e5 f6e4 d1e2"],["Dutch Defense","A80","Dutch Defense","d2d4 f7f5"],["Dutch Defense","A86","Dutch Defense: Leningrad Variation","d2d4 f7f5 c2c4 g8f6 g2g3 g7g6"],["Dutch Defense","A95","Dutch Defense: Stonewall Variation","d2d4 f7f5 c2c4 g8f6 g2g3 e7e6 f1g2 f8e7 g1f3 e8g8 e1g1 d7d5 b1c3 c7c6"],["Dutch Defense","A90","Dutch Defense: Classical Variation","d2d4 f7f5 c2c4 g8f6 g2g3 e7e6 f1g2 d7d5 g1f3"],["Benoni Defense","A56","Benoni Defense","d2d4 g8f6 c2c4 c7c5"],["Benoni Defense","A60","Benoni Defense: Modern Variation","d2d4 g8f6 c2c4 c7c5 d4d5 e7e6"],["Benoni Defense","A72","Benoni Defense: Classical Variation","d2d4 g8f6 c2c4 c7c5 d4d5 e7e6 b1c3 e6d5 c4d5 d7d6 e2e4 g7g6 g1f3 f8g7 f1e2 e8g8"],["Benoni Defense","A62","Benoni Defense: Fianchetto Variation","d2d4 g8f6 c2c4 e7e6 g2g3 c7c5 d4d5 e6d5 c4d5 d7d6 b1c3 g7g6 f1g2 f8g7 g1f3 e8g8"],["Queen's Indian Defense","E12","Queen's Indian Defense","d2d4 g8f6 c2c4 e7e6 g1f3 b7b6"],["Queen's Indian Defense","E15","Queen's Indian Defense: Fianchetto Variation","d2d4 g8f6 c2c4 e7e6 g1f3 b7b6 g2g3"],["Queen's Indian Defense","E17","Queen's Indian Defense: Classical Variation","d2d4 g8f6 c2c4 e7e6 g1f3 b7b6 g2g3 c8b7 f1g2 f8e7 e1g1"],["Queen's Indian Defense","E12","Queen's Indian Defense: Kasparov-Petrosian Variation","d2d4 g8f6 c2c4 e7e6 g1f3 b7b6 a2a3 c8b7 b1c3"],["Bird Opening","A02","Bird Opening","f2f4"],["Bird Opening","A02","Bird Opening: From's Gambit","f2f4 e7e5"],["Bird Opening","A03","Bird Opening: Dutch Variation","f2f4 d7d5"],["Réti Opening","A09","Réti Opening","g1f3 d7d5 c2c4"],["Réti Opening","A09","Réti Opening: Advance Variation","g1f3 d7d5 c2c4 d5d4"],["King's Indian Attack","A07","King's Indian Attack","g1f3 d7d5 g2g3"],["King's Indian Attack","A05","King's Indian Attack: Spassky Variation","g1f3 g8f6 g2g3 b7b5"],["King's Indian Attack","A07","King's Indian Attack: Keres Variation","g1f3 d7d5 g2g3 c8g4"],["King's Indian Attack","A08","King's Indian Attack: Sicilian Variation","g1f3 d7d5 g2g3 c7c5 f1g2"],["Catalan Opening","E00","Catalan Opening","d2d4 g8f6 c2c4 e7e6 g2g3"],["Catalan Opening","E04","Catalan Opening: Open Defense","d2d4 g8f6 c2c4 e7e6 g2g3 d7d5 f1g2 d5c4 g1f3"],["Catalan Opening","E08","Catalan Opening: Closed","d2d4 g8f6 c2c4 e7e6 g2g3 d7d5 f1g2 f8e7 g1f3 e8g8 e1g1 b8d7 d1c2"],["Philidor Defense","C41","Philidor Defense","e2e4 e7e5 g1f3 d7d6"],["Philidor Defense","C41","Philidor Defense: Exchange Variation","e2e4 e7e5 g1f3 d7d6 d2d4 e5d4 f3d4"],["Philidor Defense","C41","Philidor Defense: Hanham Variation","e2e4 e7e5 g1f3 d7d6 d2d4 b8d7"],["Center Game","C20","Center Game","e2e4 e7e5 d2d4"],["Center Game","C22","Center Game: Normal Variation","e2e4 e7e5 d2d4 e5d4 d1d4 b8c6"],["London System","A48","London System","d2d4 g8f6 g1f3 g7g6 c1f4"],["London System","A45","Indian Defense: Accelerated London System","d2d4 g8f6 c1f4"],["London System","A46","Indian Defense: London System","d2d4 g8f6 g1f3 e7e6 c1f4"],["London System","D02","London System: Poisoned Pawn Variation","d2d4 g8f6 g1f3 d7d5 c1f4 c7c5 e2e3 d8b6 b1c3"]];
+
+  // Tra cuu theo THE CO: khoa la chuoi FEN rut gon (4 truong dau), gia tri la
+  // [eco, ten, family, soPly] cua dong khai cuoc ket thuc dung tai the co do.
+  // Duoc tinh san luc build tu chinh ECO_OPENINGS (xem chu thich dau file).
+  var FEN_BOOK = {"rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6":["B20","Sicilian Defense","Sicilian Defense",2],"rnbqkb1r/1p3ppp/p2ppn2/6B1/3NP3/2N5/PPP2PPP/R2QKB1R w KQkq -":["B95","Sicilian Defense: Najdorf Variation","Sicilian Defense",12],"rnbqkb1r/pp2pp1p/3p1np1/8/3NP3/2N1B3/PPP2PPP/R2QKB1R b KQkq -":["B72","Sicilian Defense: Dragon Variation","Sicilian Defense",11],"rnbqkb1r/pp3ppp/3ppn2/8/3NP3/2N5/PPP2PPP/R1BQKB1R w KQkq -":["B80","Sicilian Defense: Scheveningen Variation","Sicilian Defense",10],"r1bqkb1r/5ppp/p1np1n2/1p2p1B1/4P3/N1N5/PPP2PPP/R2QKB1R w KQkq b6":["B33","Sicilian Defense: Lasker-Pelikan Variation, Sveshnikov Variation","Sicilian Defense",16],"rnbqkbnr/pp1p1ppp/4p3/2p5/4P3/2N3P1/PPPP1P1P/R1BQKBNR b KQkq -":["B23","Sicilian Defense: Closed","Sicilian Defense",5],"rnbqkbnr/pp1ppppp/8/2p5/4P3/2P5/PP1P1PPP/RNBQKBNR b KQkq -":["B22","Sicilian Defense: Alapin Variation","Sicilian Defense",3],"r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq -":["C60","Ruy Lopez","Ruy Lopez",5],"r1bqkb1r/1ppp1ppp/p1n2n2/4p3/B3P3/5N2/PPPP1PPP/RNBQ1RK1 b kq -":["C78","Ruy Lopez: Morphy Defense","Ruy Lopez",9],"r1bqkb1r/pppp1ppp/2n2n2/1B2p3/4P3/5N2/PPPP1PPP/RNBQ1RK1 b kq -":["C65","Ruy Lopez: Berlin Defense","Ruy Lopez",7],"r1bq1rk1/2ppbppp/p1n2n2/1p2p3/4P3/1B3N2/PPPP1PPP/RNBQR1K1 w - -":["C88","Ruy Lopez: Closed","Ruy Lopez",14],"r1bqkbnr/1ppp1ppp/p1B5/4p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq -":["C68","Ruy Lopez: Exchange Variation","Ruy Lopez",7],"r1bq1rk1/2p1bppp/p1n2n2/1p1pp3/4P3/1BP2N2/PP1P1PPP/RNBQR1K1 w - d6":["C89","Ruy Lopez: Marshall Attack","Ruy Lopez",16],"r1bqkbnr/pppp2pp/2n5/1B2pp2/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq f6":["C63","Ruy Lopez: Schliemann Defense","Ruy Lopez",6],"r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq -":["C50","Italian Game","Italian Game",5],"r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq -":["C50","Italian Game: Giuoco Piano","Italian Game",6],"r1bqk2r/ppp2ppp/2np1n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQ1RK1 b kq -":["C50","Italian Game: Giuoco Pianissimo","Italian Game",11],"r1bqk2r/ppp2ppp/3p1n2/4p1B1/2BnP3/8/PPP2PPP/RN1Q1RK1 w kq -":["C55","Italian Game: Two Knights Defense","Italian Game",14],"r1bqk1nr/pppp1ppp/1bn5/4p3/1PB1P3/5N2/P1PP1PPP/RNBQK2R w KQkq -":["C51","Italian Game: Evans Gambit Declined","Italian Game",8],"r1bqk1nr/ppppbppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq -":["C50","Italian Game: Hungarian Defense","Italian Game",6],"rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -":["C00","French Defense","French Defense",2],"rnbqk1nr/ppp2ppp/4p3/3p4/1b1PP3/2N5/PPP2PPP/R1BQKBNR w KQkq -":["C15","French Defense: Winawer Variation","French Defense",6],"rnbqk2r/ppp1bppp/4pn2/6B1/3PN3/8/PPP2PPP/R2QKBNR w KQkq -":["C13","French Defense: Classical Variation","French Defense",10],"rnbqkbnr/ppp2ppp/4p3/3p4/3PP3/8/PPPN1PPP/R1BQKBNR b KQkq -":["C03","French Defense: Tarrasch Variation","French Defense",5],"rnbqkbnr/pp3ppp/4p3/2ppP3/3P4/2P5/PP3PPP/RNBQKBNR b KQkq -":["C02","French Defense: Advance Variation","French Defense",7],"rnbqkbnr/ppp2ppp/8/3p4/3P4/5N2/PPP2PPP/RNBQKB1R b KQkq -":["C01","French Defense: Exchange Variation","French Defense",7],"rnbqkbnr/pp1ppppp/2p5/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -":["B10","Caro-Kann Defense","Caro-Kann Defense",2],"rnbqkbnr/pp2pppp/2p5/3pP3/3P4/8/PPP2PPP/RNBQKBNR b KQkq -":["B12","Caro-Kann Defense: Advance Variation","Caro-Kann Defense",5],"r2qkbnr/pp1nppp1/2p3bp/8/3P3P/5NN1/PPP2PP1/R1BQKB1R w KQkq -":["B19","Caro-Kann Defense: Classical Variation","Caro-Kann Defense",14],"rnbqkbnr/pp2pppp/8/3p4/3P1B2/8/PPP2PPP/RN1QKBNR b KQkq -":["B13","Caro-Kann Defense: Exchange Variation","Caro-Kann Defense",7],"rnbqkb1r/pp2pppp/5n2/3p4/2PP4/2N5/PP3PPP/R1BQKBNR b KQkq -":["B13","Caro-Kann Defense: Panov Attack","Caro-Kann Defense",9],"rnbqkbnr/pp2pppp/2p5/3p4/4P3/2N2N2/PPPP1PPP/R1BQKB1R b KQkq -":["B10","Caro-Kann Defense: Two Knights Attack","Caro-Kann Defense",5],"rnbqkbnr/ppp2ppp/4p3/3p4/2PP4/8/PP2PPPP/RNBQKBNR w KQkq -":["D30","Queen's Gambit Declined","Queen's Gambit Declined",4],"r1bq1rk1/pppnbppp/4pn2/3p2B1/2PP4/2N1PN2/PP3PPP/R2QKB1R w KQ -":["D60","Queen's Gambit Declined: Orthodox Defense","Queen's Gambit Declined",12],"rnbqk2r/p1p2ppp/1p1b1n2/3p4/3P4/2N1PN2/PP3PPP/R1BQKB1R w KQkq -":["D35","Queen's Gambit Declined: Exchange Variation","Queen's Gambit Declined",12],"rnbq1rk1/p1p1bpp1/1p2pn1p/3p4/2PP3B/2N1PN2/PP3PPP/R2QKB1R w KQ -":["D58","Queen's Gambit Declined: Tartakower Defense","Queen's Gambit Declined",14],"r1b1kb1r/pp1n1ppp/2p1pn2/q2P2B1/3P4/2N1PN2/PP3PPP/R2QKB1R b KQkq -":["D52","Queen's Gambit Declined: Cambridge Springs Defense","Queen's Gambit Declined",13],"rnbq1rk1/ppp1bpp1/4p2p/3p4/2PPn2B/2N1PN2/PP3PPP/R2QKB1R w KQ -":["D56","Queen's Gambit Declined: Lasker Defense","Queen's Gambit Declined",14],"rnbqkbnr/ppp1pppp/8/8/2pP4/8/PP2PPPP/RNBQKBNR w KQkq -":["D20","Queen's Gambit Accepted","Queen's Gambit Accepted",4],"rnbqkbnr/ppp1pppp/8/8/2pP4/4P3/PP3PPP/RNBQKBNR b KQkq -":["D20","Queen's Gambit Accepted: Old Variation","Queen's Gambit Accepted",5],"rnbqkb1r/ppp1pppp/5n2/8/2pP4/4PN2/PP3PPP/RNBQKB1R b KQkq -":["D25","Queen's Gambit Accepted: Normal Variation","Queen's Gambit Accepted",7],"rnbqkb1r/pp3ppp/4pn2/2p5/2BP4/4PN2/PP3PPP/RNBQK2R w KQkq c6":["D26","Queen's Gambit Accepted: Classical Defense","Queen's Gambit Accepted",10],"rnbqkbnr/pp2pppp/2p5/3p4/2PP4/8/PP2PPPP/RNBQKBNR w KQkq -":["D10","Slav Defense","Slav Defense",4],"rnbqkb1r/pp2pppp/5n2/3p4/3P4/5N2/PP2PPPP/RNBQKB1R w KQkq -":["D13","Slav Defense: Exchange Variation","Slav Defense",8],"rn1qkb1r/pp2pppp/2p2n2/5b2/P1pP4/2N2N2/1P2PPPP/R1BQKB1R w KQkq -":["D17","Slav Defense: Czech Variation","Slav Defense",10],"rnbqkb1r/pp3ppp/2p1pn2/3p4/2PP4/2N2N2/PP2PPPP/R1BQKB1R w KQkq -":["D43","Semi-Slav Defense","Semi-Slav Defense",8],"r1bqkb1r/p2n1ppp/2p1pn2/1p6/2BP4/2N1PN2/PP3PPP/R1BQK2R w KQkq b6":["D47","Semi-Slav Defense: Meran Variation","Semi-Slav Defense",14],"rnbqkb1r/pp3ppp/2p1pn2/6B1/2pPP3/2N2N2/PP3PPP/R2QKB1R b KQkq e3":["D44","Semi-Slav Defense: Botvinnik Variation","Semi-Slav Defense",11],"rnbqkbnr/pp3ppp/2p1p3/8/2pP4/2N2N2/PP2PPPP/R1BQKB1R w KQkq -":["D31","Semi-Slav Defense: Noteboom Variation","Semi-Slav Defense",8],"rnbqkb1r/pppppp1p/5np1/8/2PP4/2N5/PP2PPPP/R1BQKBNR b KQkq -":["E61","King's Indian Defense","King's Indian Defense",5],"rnbq1rk1/ppp1ppbp/3p1np1/8/2PP4/2N1PN2/PP2BPPP/R1BQK2R b KQ -":["E61","King's Indian Defense: Semi-Classical Variation","King's Indian Defense",11],"rnbqk2r/ppppppbp/5np1/8/2PP4/5NP1/PP2PP1P/RNBQKB1R b KQkq -":["E60","King's Indian Defense: Fianchetto Variation","King's Indian Defense",7],"rnbq1rk1/pp3pbp/2pp1np1/4p3/2PPP3/2N1BP2/PP2N1PP/R2QKB1R w KQ -":["E86","King's Indian Defense: Sämisch Variation","King's Indian Defense",14],"rnbq1rk1/ppp1ppbp/3p1np1/8/2PPPP2/2N5/PP2B1PP/R1BQK1NR b KQ f3":["E77","King's Indian Defense: Four Pawns Attack","King's Indian Defense",11],"rnbq1rk1/ppp1ppbp/3p1np1/6B1/2PPP3/2N5/PP2BPPP/R2QK1NR b KQ -":["E73","King's Indian Defense: Averbakh Variation","King's Indian Defense",11],"rnbqk2r/pppp1ppp/4pn2/8/1bPP4/2N5/PP2PPPP/R1BQKBNR w KQkq -":["E20","Nimzo-Indian Defense","Nimzo-Indian Defense",6],"rnbqk2r/pppp1ppp/4pn2/8/1bPP4/2N5/PPQ1PPPP/R1B1KBNR b KQkq -":["E32","Nimzo-Indian Defense: Classical Variation","Nimzo-Indian Defense",7],"rnbq1rk1/pppp1ppp/4pn2/8/2PP4/P1P1P3/5PPP/R1BQKBNR b KQ -":["E28","Nimzo-Indian Defense: Sämisch Variation","Nimzo-Indian Defense",11],"rnbq1rk1/pp1p1ppp/4pn2/8/1bPP4/P1N5/1P2NPPP/R1BQKB1R b KQ -":["E42","Nimzo-Indian Defense: Rubinstein System, Rubinstein Variation, Main Line","Nimzo-Indian Defense",13],"rnbqk2r/pppp1ppp/4pn2/6B1/1bPP4/2N5/PP2PPPP/R2QKBNR b KQkq -":["E30","Nimzo-Indian Defense: Leningrad Variation","Nimzo-Indian Defense",7],"rnbqkb1r/ppp1pp1p/5np1/3p4/2PP4/2N5/PP2PPPP/R1BQKBNR w KQkq d6":["D80","Grünfeld Defense","Grünfeld Defense",6],"rnbqkb1r/ppp1pp1p/6p1/3n4/3P4/2N5/PP2PPPP/R1BQKBNR w KQkq -":["D85","Grünfeld Defense: Exchange Variation","Grünfeld Defense",8],"rnbq1rk1/ppp1ppbp/5np1/8/2QPP3/2N2N2/PP3PPP/R1B1KB1R b KQ e3":["D97","Grünfeld Defense: Russian Variation","Grünfeld Defense",13],"rnbqkb1r/ppp1pp1p/5np1/3p4/2PP4/2N2N2/PP2PPPP/R1BQKB1R b KQkq -":["D90","Grünfeld Defense: Three Knights Variation","Grünfeld Defense",7],"rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq c3":["A10","English Opening","English Opening",1],"rnbqkb1r/pp1p1ppp/5n2/2p1p3/2P5/2N2N2/PP1PPPPP/R1BQKB1R w KQkq e6":["A35","English Opening: Symmetrical Variation","English Opening",6],"rnbqkbnr/pppp1ppp/8/4p3/2P5/2N5/PP1PPPPP/R1BQKBNR b KQkq -":["A21","English Opening: King's English Variation, Reversed Sicilian","English Opening",3],"r1bqk2r/ppp2ppp/2np1n2/2b1p3/2P5/2NP1NP1/PP2PPBP/R1BQK2R b KQkq -":["A29","English Opening: King's English Variation, Four Knights Variation, Fianchetto Line, with .. d6","English Opening",11],"rnbqkbnr/ppp2ppp/4p3/3p4/2P5/5N2/PP1PPPPP/RNBQKB1R w KQkq d6":["A13","English Opening: Agincourt Defense","English Opening",4],"rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq d6":["B01","Scandinavian Defense","Scandinavian Defense",2],"rnb1kbnr/ppp1pppp/8/q7/8/2N5/PPPP1PPP/R1BQKBNR w KQkq -":["B01","Scandinavian Defense: Main Line","Scandinavian Defense",6],"rnbqkb1r/ppp1pppp/5n2/3P4/3P4/8/PPP2PPP/RNBQKBNR b KQkq d3":["B01","Scandinavian Defense: Modern Variation","Scandinavian Defense",5],"rnbqkbnr/ppp1pppp/3p4/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -":["B00","Pirc Defense","Pirc Defense",2],"rnbqk2r/ppp1ppbp/3p1np1/8/3PP3/2N2N2/PPP2PPP/R1BQKB1R w KQkq -":["B08","Pirc Defense: Classical Variation","Pirc Defense",8],"rnbq1rk1/ppp1ppbp/3p1np1/8/3PPP2/2N2N2/PPP3PP/R1BQKB1R w KQ -":["B09","Pirc Defense: Austrian Attack","Pirc Defense",10],"rnbqkb1r/ppp1pp1p/3p1np1/6B1/3PP3/2N5/PPP2PPP/R2QKBNR b KQkq -":["B07","Pirc Defense: Byrne Variation","Pirc Defense",7],"rnbqkb1r/pppppppp/5n2/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -":["B02","Alekhine Defense","Alekhine Defense",2],"rnbqkb1r/ppp1pppp/1n1p4/4P3/2PP1P2/8/PP4PP/RNBQKBNR b KQkq f3":["B03","Alekhine Defense: Four Pawns Attack","Alekhine Defense",9],"rnbqkb1r/ppp1pppp/1n1P4/8/2PP4/8/PP3PPP/RNBQKBNR b KQkq -":["B03","Alekhine Defense: Exchange Variation","Alekhine Defense",9],"rnbqkb1r/ppp1pppp/3p4/3nP3/3P4/5N2/PPP2PPP/RNBQKB1R b KQkq -":["B04","Alekhine Defense: Modern Variation","Alekhine Defense",7],"rnbqkbnr/pppp1ppp/8/4p3/4P3/2N5/PPPP1PPP/R1BQKBNR b KQkq -":["C25","Vienna Game","Vienna Game",3],"rnbqkb1r/pppp1ppp/5n2/4p3/4PP2/2N5/PPPP2PP/R1BQKBNR b KQkq f3":["C29","Vienna Game: Vienna Gambit","Vienna Game",5],"rnbqk1nr/pppp1ppp/8/2b1p3/4P3/2N5/PPPP1PPP/R1BQKBNR w KQkq -":["C25","Vienna Game: Anderssen Defense","Vienna Game",4],"rnbqkbnr/pppp1ppp/8/8/4Pp2/8/PPPP2PP/RNBQKBNR w KQkq -":["C33","King's Gambit Accepted","King's Gambit Accepted",4],"rnbqkbnr/pppp1p1p/8/4N3/4PppP/8/PPPP2P1/RNBQKB1R b KQkq -":["C39","King's Gambit Accepted: Kieseritzky Gambit","King's Gambit Accepted",9],"rnbqkbnr/pppp1ppp/8/8/2B1Pp2/8/PPPP2PP/RNBQK1NR b KQkq -":["C33","King's Gambit Accepted: Bishop's Gambit","King's Gambit Accepted",5],"rnbqkbnr/ppp2ppp/8/3P4/5p2/5N2/PPPP2PP/RNBQKB1R b KQkq -":["C36","King's Gambit Accepted: Modern Defense","King's Gambit Accepted",7],"r1bqkbnr/pppp1ppp/2n5/4p3/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq d3":["C44","Scotch Game","Scotch Game",5],"r1bqk1nr/pppp1ppp/2n5/2b5/3NP3/8/PPP2PPP/RNBQKB1R w KQkq -":["C45","Scotch Game: Classical Variation","Scotch Game",8],"r1bqkb1r/p1pp1ppp/2p2n2/4P3/8/8/PPP2PPP/RNBQKB1R b KQkq -":["C45","Scotch Game: Mieses Variation","Scotch Game",11],"r1bqkbnr/pppp1ppp/2n5/8/2BpP3/5N2/PPP2PPP/RNBQK2R b KQkq -":["C44","Scotch Game: Scotch Gambit","Scotch Game",7],"r1bqkb1r/pppp1ppp/2n2n2/4p3/4P3/2N2N2/PPPP1PPP/R1BQKB1R w KQkq -":["C47","Four Knights Game","Four Knights Game",6],"r1bq1rk1/pppp1ppp/2n2n2/1B2p3/4P3/2bP1N2/PPP2PPP/R1BQ1RK1 w - -":["C49","Four Knights Game: Spanish Variation","Four Knights Game",12],"r1bqkb1r/pppp1ppp/2n2n2/8/3pP3/2N2N2/PPP2PPP/R1BQKB1R w KQkq -":["C47","Four Knights Game: Scotch Variation Accepted","Four Knights Game",8],"r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/2N2N2/PPPP1PPP/R1BQK2R w KQkq -":["C50","Four Knights Game: Italian Variation","Four Knights Game",8],"rnbqkb1r/pppp1ppp/5n2/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq -":["C42","Petrov's Defense","Petrov's Defense",4],"rnbqkb1r/ppp2ppp/3p4/8/3Pn3/5N2/PPP2PPP/RNBQKB1R b KQkq d3":["C42","Petrov's Defense: Classical Attack","Petrov's Defense",9],"rnbqkb1r/pppp1ppp/5n2/4p3/4P3/2N2N2/PPPP1PPP/R1BQKB1R b KQkq -":["C42","Petrov's Defense: Three Knights Game","Petrov's Defense",5],"rnbqkb1r/pppp1ppp/8/4P3/3pn3/5N2/PPP1QPPP/RNB1KB1R b KQkq -":["C43","Petrov's Defense: Modern Attack, Steinitz Variation","Petrov's Defense",9],"rnbqkbnr/ppppp1pp/8/5p2/3P4/8/PPP1PPPP/RNBQKBNR w KQkq f6":["A80","Dutch Defense","Dutch Defense",2],"rnbqkb1r/ppppp2p/5np1/5p2/2PP4/6P1/PP2PP1P/RNBQKBNR w KQkq -":["A86","Dutch Defense: Leningrad Variation","Dutch Defense",6],"rnbq1rk1/pp2b1pp/2p1pn2/3p1p2/2PP4/2N2NP1/PP2PPBP/R1BQ1RK1 w - -":["A95","Dutch Defense: Stonewall Variation","Dutch Defense",14],"rnbqkb1r/ppp3pp/4pn2/3p1p2/2PP4/5NP1/PP2PPBP/RNBQK2R b KQkq -":["A90","Dutch Defense: Classical Variation","Dutch Defense",9],"rnbqkb1r/pp1ppppp/5n2/2p5/2PP4/8/PP2PPPP/RNBQKBNR w KQkq c6":["A56","Benoni Defense","Benoni Defense",4],"rnbqkb1r/pp1p1ppp/4pn2/2pP4/2P5/8/PP2PPPP/RNBQKBNR w KQkq -":["A60","Benoni Defense: Modern Variation","Benoni Defense",6],"rnbq1rk1/pp3pbp/3p1np1/2pP4/4P3/2N2N2/PP2BPPP/R1BQK2R w KQ -":["A72","Benoni Defense: Classical Variation","Benoni Defense",16],"rnbq1rk1/pp3pbp/3p1np1/2pP4/8/2N2NP1/PP2PPBP/R1BQK2R w KQ -":["A62","Benoni Defense: Fianchetto Variation","Benoni Defense",16],"rnbqkb1r/p1pp1ppp/1p2pn2/8/2PP4/5N2/PP2PPPP/RNBQKB1R w KQkq -":["E12","Queen's Indian Defense","Queen's Indian Defense",6],"rnbqkb1r/p1pp1ppp/1p2pn2/8/2PP4/5NP1/PP2PP1P/RNBQKB1R b KQkq -":["E15","Queen's Indian Defense: Fianchetto Variation","Queen's Indian Defense",7],"rn1qk2r/pbppbppp/1p2pn2/8/2PP4/5NP1/PP2PPBP/RNBQ1RK1 b kq -":["E17","Queen's Indian Defense: Classical Variation","Queen's Indian Defense",11],"rn1qkb1r/pbpp1ppp/1p2pn2/8/2PP4/P1N2N2/1P2PPPP/R1BQKB1R b KQkq -":["E12","Queen's Indian Defense: Kasparov-Petrosian Variation","Queen's Indian Defense",9],"rnbqkbnr/pppppppp/8/8/5P2/8/PPPPP1PP/RNBQKBNR b KQkq f3":["A02","Bird Opening","Bird Opening",1],"rnbqkbnr/pppp1ppp/8/4p3/5P2/8/PPPPP1PP/RNBQKBNR w KQkq e6":["A02","Bird Opening: From's Gambit","Bird Opening",2],"rnbqkbnr/ppp1pppp/8/3p4/5P2/8/PPPPP1PP/RNBQKBNR w KQkq d6":["A03","Bird Opening: Dutch Variation","Bird Opening",2],"rnbqkbnr/ppp1pppp/8/3p4/2P5/5N2/PP1PPPPP/RNBQKB1R b KQkq c3":["A09","Réti Opening","Réti Opening",3],"rnbqkbnr/ppp1pppp/8/8/2Pp4/5N2/PP1PPPPP/RNBQKB1R w KQkq -":["A09","Réti Opening: Advance Variation","Réti Opening",4],"rnbqkbnr/ppp1pppp/8/3p4/8/5NP1/PPPPPP1P/RNBQKB1R b KQkq -":["A07","King's Indian Attack","King's Indian Attack",3],"rnbqkb1r/p1pppppp/5n2/1p6/8/5NP1/PPPPPP1P/RNBQKB1R w KQkq b6":["A05","King's Indian Attack: Spassky Variation","King's Indian Attack",4],"rn1qkbnr/ppp1pppp/8/3p4/6b1/5NP1/PPPPPP1P/RNBQKB1R w KQkq -":["A07","King's Indian Attack: Keres Variation","King's Indian Attack",4],"rnbqkbnr/pp2pppp/8/2pp4/8/5NP1/PPPPPPBP/RNBQK2R b KQkq -":["A08","King's Indian Attack: Sicilian Variation","King's Indian Attack",5],"rnbqkb1r/pppp1ppp/4pn2/8/2PP4/6P1/PP2PP1P/RNBQKBNR b KQkq -":["E00","Catalan Opening","Catalan Opening",5],"rnbqkb1r/ppp2ppp/4pn2/8/2pP4/5NP1/PP2PPBP/RNBQK2R b KQkq -":["E04","Catalan Opening: Open Defense","Catalan Opening",9],"r1bq1rk1/pppnbppp/4pn2/3p4/2PP4/5NP1/PPQ1PPBP/RNB2RK1 b - -":["E08","Catalan Opening: Closed","Catalan Opening",13],"rnbqkbnr/ppp2ppp/3p4/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq -":["C41","Philidor Defense","Philidor Defense",4],"rnbqkbnr/ppp2ppp/3p4/8/3NP3/8/PPP2PPP/RNBQKB1R b KQkq -":["C41","Philidor Defense: Exchange Variation","Philidor Defense",7],"r1bqkbnr/pppn1ppp/3p4/4p3/3PP3/5N2/PPP2PPP/RNBQKB1R w KQkq -":["C41","Philidor Defense: Hanham Variation","Philidor Defense",6],"rnbqkbnr/pppp1ppp/8/4p3/3PP3/8/PPP2PPP/RNBQKBNR b KQkq d3":["C20","Center Game","Center Game",3],"r1bqkbnr/pppp1ppp/2n5/8/3QP3/8/PPP2PPP/RNB1KBNR w KQkq -":["C22","Center Game: Normal Variation","Center Game",6],"rnbqkb1r/pppppp1p/5np1/8/3P1B2/5N2/PPP1PPPP/RN1QKB1R b KQkq -":["A48","London System","London System",5],"rnbqkb1r/pppppppp/5n2/8/3P1B2/8/PPP1PPPP/RN1QKBNR b KQkq -":["A45","Indian Defense: Accelerated London System","London System",3],"rnbqkb1r/pppp1ppp/4pn2/8/3P1B2/5N2/PPP1PPPP/RN1QKB1R b KQkq -":["A46","Indian Defense: London System","London System",5],"rnb1kb1r/pp2pppp/1q3n2/2pp4/3P1B2/2N1PN2/PPP2PPP/R2QKB1R b KQkq -":["D02","London System: Poisoned Pawn Variation","London System",9]};
+
+  // ================= Phan 1: Trie cho analyzeMoves() =================
+  var ROOT = {};
+  (function buildTrie() {
+    var i, j, entry, moves, node, mv;
+    for (i = 0; i < ECO_OPENINGS.length; i++) {
+      entry = ECO_OPENINGS[i];
+      moves = entry[3].split(' ');
+      node = ROOT;
+      for (j = 0; j < moves.length; j++) {
+        mv = moves[j];
+        if (!node[mv]) { node[mv] = {}; }
+        node = node[mv];
+      }
+      node.__eco = entry[1];
+      node.__name = entry[2];
+      node.__family = entry[0];
+    }
+  })();
+
+  function normalizeMove(mv) {
+    if (!mv) { return ''; }
+    return String(mv).toLowerCase().replace(/[^a-h1-8qrbn]/g, '');
+  }
+
+  // So khop chuoi nuoc di (thu tu chinh xac). Xem chu thich dau file.
+  function analyzeMoves(uciMoves) {
+    var node = ROOT;
+    var lastMatch = null;
+    var plies = [];
+    var i, mv;
+    for (i = 0; i < uciMoves.length; i++) {
+      mv = normalizeMove(uciMoves[i]);
+      if (node && node[mv]) {
+        node = node[mv];
+        if (node.__name) {
+          lastMatch = { eco: node.__eco, name: node.__name, family: node.__family, ply: i + 1 };
+        }
+        plies.push({ ply: i + 1, move: mv, inBook: true, opening: lastMatch });
+      } else {
+        node = null;
+        plies.push({ ply: i + 1, move: mv, inBook: false, opening: lastMatch });
+      }
+    }
+    return { current: lastMatch, plies: plies };
+  }
+
+  // ================= Phan 2: MiniBoard (chi de suy ra FEN) =================
+  // Ban co toi gian: CHI ap dung lai 1 nuoc di UCI da hop le (tu, den, phong
+  // cap) va cap nhat trang thai (quan co, luot di, quyen nhap thanh, o bat
+  // qua duong, dem nua-nuoc). KHONG kiem tra luat/tinh hop le - no gia dinh
+  // nuoc di dau vao da duoc kiem tra hop le boi noi khac (vd engine cua ban).
+  function sqToRF(sq) {
+    return { file: sq.charCodeAt(0) - 97, rank: sq.charCodeAt(1) - 49 };
+  }
+  function rfToSq(rank, file) {
+    return String.fromCharCode(97 + file) + String.fromCharCode(49 + rank);
+  }
+  function clearRookRight(rank, file, castling) {
+    if (rank === 0 && file === 0) { castling.Q = false; }
+    if (rank === 0 && file === 7) { castling.K = false; }
+    if (rank === 7 && file === 0) { castling.q = false; }
+    if (rank === 7 && file === 7) { castling.k = false; }
+  }
+
+  function MiniBoard() { this.reset(); }
+
+  MiniBoard.prototype.reset = function () {
+    var b = [], j;
+    for (var i = 0; i < 8; i++) { b.push([null, null, null, null, null, null, null, null]); }
+    var backRank = ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'];
+    for (j = 0; j < 8; j++) {
+      b[0][j] = backRank[j];
+      b[1][j] = 'P';
+      b[6][j] = 'p';
+      b[7][j] = backRank[j].toLowerCase();
+    }
+    this.board = b;
+    this.turn = 'w';
+    this.castling = { K: true, Q: true, k: true, q: true };
+    this.epSquare = null;
+    this.halfmove = 0;
+    this.fullmove = 1;
+  };
+
+  MiniBoard.prototype.applyMove = function (uci) {
+    var from = uci.slice(0, 2), to = uci.slice(2, 4);
+    var promo = uci.length > 4 ? uci.slice(4, 5) : null;
+    var fr = sqToRF(from), tr = sqToRF(to);
+    var piece = this.board[fr.rank][fr.file];
+    if (!piece) { return false; }
+    var isWhite = piece === piece.toUpperCase();
+    var pieceType = piece.toUpperCase();
+    var isCapture = this.board[tr.rank][tr.file] !== null;
+    var isEnPassant = pieceType === 'P' && to === this.epSquare && !isCapture && fr.file !== tr.file;
+    var isCastle = pieceType === 'K' && Math.abs(tr.file - fr.file) === 2;
+    if (isCastle) {
+      var rank = isWhite ? 0 : 7;
+      if (tr.file > fr.file) { this.board[rank][5] = this.board[rank][7]; this.board[rank][7] = null; }
+      else { this.board[rank][3] = this.board[rank][0]; this.board[rank][0] = null; }
+    }
+    this.board[tr.rank][tr.file] = promo ? (isWhite ? promo.toUpperCase() : promo.toLowerCase()) : piece;
+    this.board[fr.rank][fr.file] = null;
+    if (isEnPassant) { this.board[fr.rank][tr.file] = null; }
+    if (pieceType === 'K') {
+      if (isWhite) { this.castling.K = false; this.castling.Q = false; }
+      else { this.castling.k = false; this.castling.q = false; }
+    }
+    clearRookRight(fr.rank, fr.file, this.castling);
+    clearRookRight(tr.rank, tr.file, this.castling);
+    if (pieceType === 'P' && Math.abs(tr.rank - fr.rank) === 2) {
+      this.epSquare = rfToSq((fr.rank + tr.rank) / 2, fr.file);
+    } else {
+      this.epSquare = null;
+    }
+    if (pieceType === 'P' || isCapture || isEnPassant) { this.halfmove = 0; } else { this.halfmove++; }
+    if (this.turn === 'b') { this.fullmove++; }
+    this.turn = this.turn === 'w' ? 'b' : 'w';
+    return true;
+  };
+
+  MiniBoard.prototype.toNormalizedFEN = function () {
+    var rows = [], r, f, run, piece, row;
+    for (r = 7; r >= 0; r--) {
+      row = ''; run = 0;
+      for (f = 0; f < 8; f++) {
+        piece = this.board[r][f];
+        if (piece === null) { run++; }
+        else { if (run > 0) { row += run; run = 0; } row += piece; }
+      }
+      if (run > 0) { row += run; }
+      rows.push(row);
+    }
+    var castling = (this.castling.K ? 'K' : '') + (this.castling.Q ? 'Q' : '') +
+      (this.castling.k ? 'k' : '') + (this.castling.q ? 'q' : '');
+    if (castling === '') { castling = '-'; }
+    return rows.join('/') + ' ' + this.turn + ' ' + castling + ' ' + (this.epSquare || '-');
+  };
+
+  // ================= Phan 3: analyzePosition() dung MiniBoard + FEN_BOOK =================
+  // Choi lai toan bo van co bang MiniBoard, lay FEN rut gon sau MOI nuoc,
+  // roi kiem tra tung nuoc trong khoang [fromPly, toPly] xem co khop 1 the
+  // co da biet trong FEN_BOOK khong. fromPly/toPly mac dinh la 1..het van.
+  function analyzePosition(uciMoves, fromPly, toPly) {
+    var mb = new MiniBoard();
+    var fens = [];
+    var i, mv, ok;
+    for (i = 0; i < uciMoves.length; i++) {
+      mv = normalizeMove(uciMoves[i]);
+      ok = mb.applyMove(mv);
+      fens.push(ok ? mb.toNormalizedFEN() : null);
+    }
+    var from = fromPly && fromPly >= 1 ? fromPly : 1;
+    var to = toPly && toPly <= fens.length ? toPly : fens.length;
+    var matches = [];
+    var lastMatch = null;
+    for (i = from; i <= to; i++) {
+      var fen = fens[i - 1];
+      var hit = fen ? FEN_BOOK[fen] : null;
+      if (hit) {
+        lastMatch = { eco: hit[0], name: hit[1], family: hit[2], ply: i };
+        matches.push(lastMatch);
+      }
+    }
+    return { current: lastMatch, matches: matches, fens: fens };
+  }
+
+  // Ham tien ich: chi lay chuoi ten khai cuoc, uu tien ket qua theo chuoi nuoc di
+  // (nhanh hon), sau do moi thu theo FEN (bat chuyen vi) neu cach 1 khong ra ket qua.
+  function getOpeningName(uciMoves) {
+    var r1 = analyzeMoves(uciMoves);
+    var r = r1.current || analyzePosition(uciMoves).current;
+    if (!r) { return null; }
+    return r.name + ' (' + r.eco + ')';
+  }
+
+  var api = {
+    analyzeMoves: analyzeMoves,
+    analyzePosition: analyzePosition,
+    getOpeningName: getOpeningName,
+    MiniBoard: MiniBoard,
+    ECO_OPENINGS: ECO_OPENINGS,
+    FEN_BOOK: FEN_BOOK
+  };
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = api;
+  } else {
+    global.ChessOpeningBook = api;
+  }
+})(typeof window !== 'undefined' ? window : this);
+
+</script>
 <script>
 /* ═══════════════════════════════════════════════════
    CONSTANTS
@@ -2472,7 +2740,7 @@ function boardThemeLoad(){
     var v = localStorage.getItem(BOARD_THEME_KEY);
     if(v && BOARD_THEMES[v]) return v;
   }catch(e){}
-  return 'current';
+  return 'blue'; /* mặc định khi người dùng CHƯA từng chọn giao diện — theo yêu cầu */
 }
 /* Chữ mờ gợi ý trong ô PGN (chế độ Phân tích): nếu đã từng tìm username
    nào đó trước đây (còn lưu trong localStorage) thì hiện LUÔN username đó
@@ -3294,6 +3562,8 @@ function classifyMoveCore(data) {
   var isImmediateCheckmate = data.isImmediateCheckmate; /* true = ván kết thúc ngay (Rd8# kiểu), false/undefined = chiếu ép còn tiếp diễn (Qe2+ kiểu) */
 
   var numGoodAlternatives = data.numGoodAlternatives;
+  var isImmediateRecapture = !!data.isImmediateRecapture; /* ăn lại đúng ô đối thủ vừa ăn ở nước liền trước — recapture hiển nhiên, không tính "độc đáo" */
+
   var nextOpponentCaptureCp = data.nextOpponentCaptureCp || 0; /* quân đối phương ăn được ở nước sau — dùng cho brilliantAllowsCapture */
   var ownCaptureCp = data.ownCaptureCp || 0; /* quân mình ăn được ở chính nước này — dùng kèm để xét badTradePattern theo loại quân */
 
@@ -3545,8 +3815,12 @@ function classifyMoveCore(data) {
 
   /* 5. GREAT MOVE — Fix E: bắt buộc isBest; thêm givesCheck handler */
   if (isBest) {
-    /* Great Move chuẩn: cpLoss thấp + nước thực sự unique (bestGap lớn) */
-    if (Math.abs(evalBefore) < 800 && cpLoss <= 20 * strictness && isUniqueGoodMove) return "Great Move";
+    /* Great Move chuẩn: cpLoss thấp + nước thực sự unique (bestGap lớn).
+       LOẠI TRỪ recapture hiển nhiên (isImmediateRecapture): ăn lại đúng ô
+       đối thủ vừa ăn không phải "khó tìm", dù bestGap lớn (vì các phương
+       án khác đều đơn giản là "để mất quân"). Vd 22...Rxd1 23.Rxd1 — không
+       ăn lại thì mất Xe trắng trợn, ai cũng đi được, không xứng "Great". */
+    if (Math.abs(evalBefore) < 800 && cpLoss <= 20 * strictness && isUniqueGoodMove && !isImmediateRecapture) return "Great Move";
     /* givesCheck: Great chỉ khi nước chiếu đó THỰC SỰ unique (bestGap >= 250).
        Bỏ fallback bestGap=null → tránh mọi nước chiếu đơn giản thành Great. */
     if (givesCheck && isUniqueGoodMove) return "Great Move";
@@ -3913,6 +4187,21 @@ function _buildClassifyInput(i){
 
   var numGoodAlternatives = _countGoodAlternatives(si);
 
+  /* isImmediateRecapture: nước i ĂN QUÂN đúng trên Ô mà đối thủ vừa ăn quân
+     ở nước liền trước (i-1) — vd 22...Rxd1 rồi 23.Rxd1. Đây là recapture
+     HIỂN NHIÊN (không ăn lại là mất quân trắng trợn), nên dù bestGap lớn
+     (do các phương án khác đều "để mất quân") KHÔNG nên tính là "độc đáo/
+     khó tìm" — dùng để loại trừ khỏi Great Move thường (không chiếu/không
+     hy sinh thêm), xem chỗ dùng ở classifyMoveCore. */
+  var isImmediateRecapture = false;
+  if (gUciHist && gUciHist[i] && gUciHist[i-1] && gUciHist[i].length >= 4 && gUciHist[i-1].length >= 4) {
+    var _destCur = gUciHist[i].substring(2, 4), _destPrev = gUciHist[i-1].substring(2, 4);
+    var _prevWasCapture = !!(gMoveInfo[i-1] && gMoveInfo[i-1].capVal > 0);
+    var _curIsCapture = (info.capVal || 0) > 0;
+    isImmediateRecapture = (_destCur === _destPrev) && _prevWasCapture && _curIsCapture;
+  }
+
+
   /* isBest: nước đi thực tế trùng với nước engine đề xuất (PV1), HOẶC trùng
      PV2 khi PV2 thấy tốt hơn PV1 thật (xem _playedMatchesPV2 ở trên — case
      Qd8+, root-exclusion multipv tìm ra mate mà PV1 không thấy). */
@@ -3999,6 +4288,7 @@ function _buildClassifyInput(i){
     givesCheck: givesCheck,
 
     numGoodAlternatives: numGoodAlternatives,
+    isImmediateRecapture: isImmediateRecapture,
 
     /* nextOpponentCaptureCp: giá trị quân đối phương ăn được ở nước NGAY SAU
        (thực tế đã chơi) — dựa thuần trên luật cờ (gMoveInfo), không phụ thuộc
@@ -5032,7 +5322,7 @@ function _detectPlayerSide(pgnNames){
      null, không cố "có gì cũng nói" (min thật sự = 0 bullet).
    ============================================================ */
 
-var DEEP_INSIGHT_MAX = 7;        /* trần tối đa hiển thị (toàn bộ 6 nhóm gộp lại) */
+var DEEP_INSIGHT_MAX = 30;       /* TẠM THỜI nới rộng theo yêu cầu để xem TOÀN BỘ phát hiện, dễ cân nhắc giữ/bỏ mục nào. Trả lại 7 khi đã chốt danh sách cuối. */
 var DEEP_INSIGHT_TARGET_MIN = 3; /* mục tiêu mong muốn — KHÔNG ép đủ, min thật sự = 0 */
 
 
@@ -5182,25 +5472,441 @@ function _deepG1_worstMove(cls, cpLosses, gMoveInfo, gMoveTexts, sideChar, sideL
   if (worstIdx === -1 || worstCp < WORST_MIN_CP) return null;
   var moveNum = Math.floor(worstIdx / 2) + 1;
   return {
-    id: 'g1-worstmove-' + sideChar, group: 1, score: Math.min(95, 70 + worstCp/40), sev: 'high', icon: '💥',
+    id: 'g1-worstmove-' + sideChar, group: 1, score: Math.min(95, 70 + worstCp/40), sev: 'high', icon: '❓',
     text: sideLabel + ': nước tệ nhất ván là <b>' + moveNum + (sideChar === 'w' ? '.' : '...')
         + (gMoveTexts[worstIdx] || '') + '</b> — mất khoảng ' + Math.round(worstCp)
         + 'cp so với phương án tốt nhất, đáng để xem lại kỹ.'
   };
 }
 
-function buildDeepInsightsGroup1(cls, evalPcts, cpLosses, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel) {
+/* ── (BỔ SUNG theo yêu cầu) Cặp Tượng sau loạt đổi quân khai cuộc.
+   Ý tưởng: tìm mốc SỚM (trong khoảng 15 nước đầu) nơi 1 bên đang có
+   ĐỦ 2 Tượng + 0 Mã (giữ nguyên cặp Tượng), còn đối phương chỉ còn
+   2 quân nhẹ nhưng KHÔNG phải cặp Tượng (tức Mã+Tượng hoặc 2 Mã) —
+   và khoảng 10 nước trước đó cả 2 bên còn ĐỦ 4 quân nhẹ (2B+2N) để
+   chắc chắn đây là kết quả của 1 loạt đổi quân thực sự, không phải
+   ngẫu nhiên có sẵn từ đầu. Chỉ báo khi trạng thái này ỔN ĐỊNH (giữ
+   nguyên) trong vài nước tiếp theo, tránh báo nhầm 1 tình huống
+   thoáng qua giữa loạt đổi quân chưa kết thúc. ── */
+function _g1_minorCounts(board, sideChar) {
+  var b = (sideChar === 'w') ? WB : BB, n = (sideChar === 'w') ? WN : BN;
+  var cb = 0, cn = 0;
+  for (var s = 0; s < 64; s++) { if (board[s] === b) cb++; else if (board[s] === n) cn++; }
+  return {b: cb, n: cn};
+}
+
+function _deepG1_bishopPairFromTrade(gAnFens, gMoveInfo, gMoveTexts, sideChar, sideLabel) {
+  var EARLY_CUTOFF = 30; /* ~15 nước riêng mỗi bên */
+  var LOOKBACK = 10;
+  var oppChar = (sideChar === 'w') ? 'b' : 'w';
+  for (var i = 0; i < gMoveTexts.length && i <= EARLY_CUTOFF; i++) {
+    var fenAfter = gAnFens[i + 1];
+    if (!fenAfter) continue;
+    var board = boardArrayFromFen(fenAfter).board;
+    var mine = _g1_minorCounts(board, sideChar), opp = _g1_minorCounts(board, oppChar);
+    if (mine.b !== 2 || mine.n !== 0) continue;         /* mình phải còn ĐỦ 2 Tượng, hết Mã */
+    if (opp.b + opp.n !== 2 || opp.b >= 2) continue;    /* đối phương còn đúng 2 quân nhẹ nhưng KHÔNG phải cặp Tượng */
+
+    var checkIdx = Math.max(0, i - LOOKBACK);
+    var fenEarlier = gAnFens[checkIdx];
+    if (!fenEarlier) continue;
+    var boardEarlier = boardArrayFromFen(fenEarlier).board;
+    var mineE = _g1_minorCounts(boardEarlier, sideChar), oppE = _g1_minorCounts(boardEarlier, oppChar);
+    if (mineE.b + mineE.n < 4 || oppE.b + oppE.n < 4) continue; /* phải TỪNG đủ quân nhẹ -> đây mới là kết quả 1 loạt đổi quân */
+
+    var stable = true;
+    for (var k = i + 1; k <= Math.min(gMoveTexts.length - 1, i + 8); k++) {
+      var fk = gAnFens[k + 1]; if (!fk) break;
+      var bk = boardArrayFromFen(fk).board;
+      var mk = _g1_minorCounts(bk, sideChar), ok = _g1_minorCounts(bk, oppChar);
+      if (mk.b !== 2 || mk.n !== 0 || ok.b >= 2) { stable = false; break; }
+    }
+    if (!stable) continue;
+
+    /* Trích dẫn nước CUỐI của cả loạt ăn quân liên tục (nếu ngay sau đó vẫn
+       còn các nước ăn quân liền nhau, vd 10.cxb4 exd4 11.Qxd4) thay vì
+       đúng ply vừa chốt được cặp Tượng — khớp cách người chơi/HLV mô tả
+       "cả loạt đổi quân" như 1 khối, không tách vụn theo từng nước nhỏ. */
+    var citeIdx = i;
+    while (citeIdx + 1 < gMoveTexts.length && gMoveInfo[citeIdx + 1] && gMoveInfo[citeIdx + 1].capVal > 0) citeIdx++;
+
+    var moveNum = Math.floor(citeIdx / 2) + 1;
+    var oppDesc = (opp.b === 1 && opp.n === 1) ? 'Mã + Tượng' : (opp.b === 0 ? '2 Mã' : 'Mã + Tượng');
+    return {
+      id: 'g1-bishoppair-' + sideChar, group: 1, score: 42, sev: 'low', positive: true, icon: '♗',
+      text: sideLabel + ': loạt đổi quân trong khai cuộc kết thúc ở nước <b>' + moveNum
+          + (citeIdx % 2 === 0 ? '.' : '...') + (gMoveTexts[citeIdx] || '') + '</b> — vật chất ngang nhau nhưng '
+          + 'có được lợi thế nhờ giữ được <b>cặp Tượng</b>, trong khi đối phương chỉ còn ' + oppDesc
+    };
+  }
+  return null;
+}
+
+/* ── (BỔ SUNG theo góp ý dev) Các phép đo rẻ tiền trên dữ liệu đã có ── */
+
+/* ── Nhận diện khai cuộc ĐẦY ĐỦ + biến thể, dùng thư viện nhúng sẵn
+   chess-opening-detector_LITE.js (window.ChessOpeningBook, ~132 dòng ECO,
+   31 khai cuộc phổ biến kèm biến thể — xem đầu file HTML). ĐÃ THAY hẳn
+   ECO_TABLE rút gọn (chỉ nhận diện được tên khai cuộc gốc, KHÔNG có biến
+   thể) — giờ dùng analyzeMoves(gUciHist) trước (khớp đúng thứ tự nước
+   đi), rồi analyzePosition(gUciHist) sau nếu không khớp (bắt được cả
+   trường hợp chuyển vị - transposition). Trả về tên + biến thể + mã ECO,
+   VD 'Phòng thủ Caro-Kann, biến Two Knights Attack (B10)'. */
+var OPENING_FAMILY_VI = {
+  'Sicilian Defense': 'Phòng thủ Sicilian',
+  'Ruy Lopez': 'Ruy Lopez (Tây Ban Nha)',
+  'Italian Game': 'Khai cuộc Ý (Italian Game)',
+  'French Defense': 'Phòng thủ Pháp',
+  'Caro-Kann Defense': 'Phòng thủ Caro-Kann',
+  "Queen's Gambit Declined": 'Gambit Hậu bị từ chối',
+  "Queen's Gambit Accepted": 'Gambit Hậu được chấp nhận',
+  'Slav Defense': 'Phòng thủ Slav',
+  'Semi-Slav Defense': 'Phòng thủ Bán Slav',
+  "King's Indian Defense": 'Phòng thủ Ấn Độ Vua',
+  'Nimzo-Indian Defense': 'Phòng thủ Nimzo-Ấn',
+  'Grünfeld Defense': 'Phòng thủ Grünfeld',
+  'English Opening': 'Khai cuộc Anh',
+  'Scandinavian Defense': 'Phòng thủ Scandinavia',
+  'Pirc Defense': 'Phòng thủ Pirc',
+  'Alekhine Defense': 'Phòng thủ Alekhine',
+  'Vienna Game': 'Khai cuộc Vienna',
+  "King's Gambit Accepted": 'Gambit Vua được chấp nhận',
+  'Scotch Game': 'Khai cuộc Scotland (Scotch Game)',
+  'Four Knights Game': 'Khai cuộc Tứ Mã',
+  "Petrov's Defense": 'Phòng thủ Petrov',
+  'Dutch Defense': 'Phòng thủ Hà Lan',
+  'Benoni Defense': 'Phòng thủ Benoni',
+  "Queen's Indian Defense": 'Phòng thủ Ấn Độ Hậu',
+  'Bird Opening': 'Khai cuộc Bird',
+  'Réti Opening': 'Khai cuộc Réti',
+  "King's Indian Attack": 'Tấn công Ấn Độ Vua (KIA)',
+  'Catalan Opening': 'Khai cuộc Catalan',
+  'Philidor Defense': 'Phòng thủ Philidor',
+  'Center Game': 'Khai cuộc Trung tâm',
+  'London System': 'Hệ thống London'
+};
+function _lookupOpeningFull(gUciHist) {
+  if (typeof ChessOpeningBook === 'undefined' || !gUciHist || !gUciHist.length) return null;
+  /* ĐÃ SỬA (chống crash): thư viện ngoài mới nhúng, chưa test hết mọi
+     trường hợp (VD phong cấp, nhập thành lạ...) — nếu nó ném lỗi thì chỉ
+     nên MẤT tên khai cuộc (coi như không nhận diện được), không được kéo
+     sập cả buildGameNarrative theo. */
+  try {
+    var hit = ChessOpeningBook.analyzeMoves(gUciHist).current;
+    if (!hit) hit = ChessOpeningBook.analyzePosition(gUciHist).current; /* bắt chuyển vị (transposition) */
+    if (!hit) return null;
+    var familyVi = OPENING_FAMILY_VI[hit.family] || hit.family; /* chưa dịch -> giữ nguyên tên gốc, còn hơn không có gì */
+    /* hit.name dạng 'Family' (khai cuộc gốc, chưa vào biến thể) hoặc
+       'Family: Variation Name' (đã xác định biến thể cụ thể) — bóc phần
+       sau dấu ':' để ghép câu tự nhiên "biến ...". */
+    var variation = null;
+    var colonIdx = hit.name.indexOf(': ');
+    if (colonIdx !== -1) variation = hit.name.slice(colonIdx + 2);
+    return {
+      familyVi: familyVi,
+      variation: variation,
+      eco: hit.eco,
+      display: familyVi + (variation ? ', biến ' + variation : '') + ' (' + hit.eco + ')'
+    };
+  } catch (_openingErr) {
+    console.error('[ChessCoach] ChessOpeningBook lỗi, bỏ qua nhận diện khai cuộc:', _openingErr);
+    return null;
+  }
+}
+function _deepG0_openingName(gUciHist) {
+  var full = _lookupOpeningFull(gUciHist);
+  if (!full) return null;
+  return {
+    id: 'g0-opening', group: 0, score: 30, sev: 'low', positive: true, icon: '📖',
+    text: 'Khai cuộc: <b>' + full.display + '</b>.'
+  };
+}
+
+function _deepG0_matedEnding(gMoveTexts, gMoveInfo) {
+  if (!gMoveTexts || !gMoveTexts.length) return null;
+  var lastIdx = gMoveTexts.length - 1;
+  var lastSan = gMoveTexts[lastIdx];
+  if (!lastSan || lastSan.indexOf('#') < 0) return null;
+  var moveNum = Math.floor(lastIdx / 2) + 1;
+  var side = (gMoveInfo[lastIdx] && gMoveInfo[lastIdx].side === W) ? 'w' : 'b';
+  return {
+    id: 'g0-mate-end', group: 0, score: 20, sev: 'low', positive: true, icon: '🏁',
+    text: 'Ván kết thúc bằng chiếu hết ở nước <b>' + moveNum + (side === 'w' ? '.' : '...') + lastSan + '</b>.'
+  };
+}
+
+function _g_materialValue(board, sideChar) {
+  var pieces = (sideChar === 'w') ? [WP,WN,WB,WR,WQ] : [BP,BN,BB,BR,BQ];
+  var typs = [1,2,3,4,5];
+  var total = 0;
+  for (var s = 0; s < 64; s++) {
+    for (var k = 0; k < pieces.length; k++) { if (board[s] === pieces[k]) { total += PVAL[typs[k]]; break; } }
+  }
+  return total;
+}
+
+/* 1) Hy sinh vật chất hợp lý: quét mọi thời điểm vật chất của sideChar
+   GIẢM (do đối phương ăn quân), nếu %thắng của sideChar KHÔNG giảm
+   tương ứng (gần như đi ngang hoặc còn tăng) → nước đi NGAY TRƯỚC đó
+   (của sideChar) được coi là "hy sinh hợp lý", khác với hy sinh do sai
+   lầm (cls đã đánh dấu mistake/blunder). Chỉ báo hy sinh ĐẦU TIÊN, đủ
+   lớn (>=100cp, tức tối thiểu 1 Tốt) để tránh nhiễu bởi các trade lặt vặt. */
+function _g_materialDiff(board, sideChar) {
+  var oppChar = (sideChar === 'w') ? 'b' : 'w';
+  return _g_materialValue(board, sideChar) - _g_materialValue(board, oppChar);
+}
+
+function _deepG1_soundSacrifice(cls, evalPcts, gAnFens, gMoveInfo, gMoveTexts, sideChar, sideLabel) {
+  var MIN_SAC_CP = 90, MAX_PCT_DROP = 8;
+  for (var i = 0; i < gMoveTexts.length; i++) {
+    var mvSide = (gMoveInfo[i] && gMoveInfo[i].side === W) ? 'w' : 'b';
+    if (mvSide !== sideChar) continue;
+    if (cls[i] === 'mistake' || cls[i] === 'blunder' || cls[i] === 'inaccuracy') continue; /* mất quân do sai lầm, không phải hy sinh chủ động */
+    if (!gAnFens[i] || !gAnFens[i+2]) continue;
+
+    /* ĐÃ SỬA theo góp ý: "thí quân hợp lý" chỉ nên tính khi quân bị mất
+       là quân THẬT SỰ có giá trị chiến thuật (Mã/Tượng/Xe/Hậu — "quân
+       nặng"), KHÔNG tính Tốt. Lý do: một pha đẩy Tốt rồi bị đối phương
+       ăn lại ngay (VD 2...d5 3.exd5, trước khi tự ăn lại bằng 3...cxd5)
+       chỉ là TRAO ĐỔI TỐT bình thường trong khai cuộc, không phải "hy
+       sinh" theo nghĩa chiến thuật — trước đây bị hàm này bắt nhầm vì
+       chỉ nhìn hiệu số vật chất trong cửa sổ 2 nửa-nước, chưa kịp thấy
+       nước tự ăn lại ngay sau đó của chính mình. gMoveInfo[i].movedVal
+       = giá trị quân mình vừa đưa tới ô bị ăn (đã có sẵn, không cần tính
+       lại) — Tốt = PVAL[1] = 100. */
+    if (gMoveInfo[i] && gMoveInfo[i].movedVal === PVAL[1]) continue;
+
+    /* Chỉ tính là "hy sinh do CHÍNH nước i" khi nước i ĐƯA QUÂN đến đúng
+       Ô mà đối phương ăn ngay ở nước kế tiếp — loại trừ trường hợp quân
+       bị hở từ một nước TRƯỚC ĐÓ rồi tình cờ bị ăn ngay sau 1 nước không
+       liên quan của mình (vd 8.Ne5 để hở Mã, 9.c3 chỉ là nước không liên
+       quan xen giữa, Mã bị ăn ở 9...fxe5 không phải do c3 gây ra). */
+    var destI = gUciHist[i] ? gUciHist[i].substring(2, 4) : null;
+    var destNext = gUciHist[i+1] ? gUciHist[i+1].substring(2, 4) : null;
+    if (!destI || destI !== destNext) continue;
+
+    /* ĐÃ SỬA theo góp ý: TRƯỚC ĐÂY chỉ nhìn đúng 2 nửa-nước (i, i+1) rồi
+       chốt vật chất ngay — nếu đây là 1 pha ĐỔI QUÂN THÔNG THƯỜNG kéo dài
+       hơn 2 nửa-nước trên CÙNG 1 Ô (VD Nxd7 Qxd7 Qxd7 Rxd7 — đổi tới 4
+       lượt ăn quân trên ô d7), hàm chỉ thấy 2 lượt đầu nên tính sai hiệu
+       số vật chất, tưởng là "hy sinh" trong khi thực ra chỉ là chưa đổi
+       xong. Giờ kéo dài cửa sổ theo ĐÚNG chuỗi ăn quân liên tiếp trên
+       CÙNG 1 ô đó cho tới khi chuỗi kết thúc thật (nước kế tiếp không còn
+       đến ô này nữa), rồi mới chốt vật chất ở điểm chuỗi đã xong hẳn. */
+    var chainEnd = i + 1;
+    while (gUciHist[chainEnd + 1] && gUciHist[chainEnd + 1].substring(2, 4) === destI) {
+      chainEnd++;
+    }
+    var endFenIdx = chainEnd + 1;
+    if (!gAnFens[endFenIdx]) continue;
+
+    /* So HIỆU SỐ VẬT CHẤT 2 BÊN (không phải vật chất riêng 1 bên!) từ
+       TRƯỚC nước i tới SAU KHI chuỗi đổi quân trên ô đó kết thúc hẳn —
+       đúng khuôn mẫu "thí 1 quân, bị ăn ngay lập tức" (vd 15.b5 cxb5).
+       Dùng NET DIFF để không nhầm 1 pha ĐỔI QUÂN NGANG GIÁ (ăn Tượng đối
+       phương rồi bị ăn lại bằng Mã mình — hiệu số gần như không đổi)
+       thành "hy sinh", vì chỉ nhìn vật chất riêng 1 bên sẽ luôn thấy
+       "giảm" ngay cả khi đó chỉ là đổi quân bình thường. */
+    var baseDiff = _g_materialDiff(boardArrayFromFen(gAnFens[i]).board, sideChar);
+    var afterDiff = _g_materialDiff(boardArrayFromFen(gAnFens[endFenIdx]).board, sideChar);
+    var netDrop = baseDiff - afterDiff;
+    if (netDrop < MIN_SAC_CP) continue; /* trao đổi ngang giá hoặc có lợi -> KHÔNG phải hy sinh */
+
+    var pctBefore = _deepPct(evalPcts, i, sideChar);
+    var pctAfter = _deepPct(evalPcts, endFenIdx, sideChar);
+    if (pctBefore === null || pctAfter === null) continue;
+    if (pctBefore - pctAfter > MAX_PCT_DROP) continue; /* %thắng vẫn tụt đáng kể -> không phải hy sinh "hợp lý" */
+
+    var moveNum = Math.floor(i / 2) + 1;
+    /* ĐÃ SỬA theo yêu cầu: nếu chính nước thí quân này được engine chấm
+       "Great" (hoặc Best/Brilliant/Excellent) — tức bản thân nước đi đã
+       được xác nhận là xuất sắc — thì ưu tiên điểm CAO HƠN hẳn mức mặc
+       định 55, để dễ lọt vào top 3-5 hiển thị thay vì rơi xuống "chưa
+       xếp" như trước. */
+    var _GREAT_CLS_SAC = {best:1, brilliant:1, great:1, great_defense:1, excellent:1};
+    var _sacScore = _GREAT_CLS_SAC[cls[i]] ? 75 : 55;
+    return {
+      id: 'g1-soundsac-' + sideChar, group: 1, score: _sacScore, sev: 'low', positive: true, icon: '♻️',
+      text: sideLabel + ': thí quân hợp lý ở nước <b>' + moveNum + (mvSide === 'w' ? '.' : '...')
+          + (gMoveTexts[i] || '') + '</b> — hiệu số vật chất giảm khoảng ' + Math.round(netDrop)
+          + 'cp ngay sau phản ứng của đối phương, nhưng % thắng gần như không đổi, cho thấy có đủ bù đắp (thế trận/thời cơ) cho quân đã mất.'
+    };
+  }
+  return null;
+}
+
+/* 2) "Bước ngoặt" máy móc: nước có |delta %thắng| lớn nhất trong TOÀN
+   VÁN mà KHÔNG bị cls đánh dấu lỗi (tức chủ động tạo ra, không phải đối
+   phương tự hỏng). Đây chính là cách phát hiện được 18.e4 mà không cần
+   hiểu ngữ nghĩa — chỉ cần eval nhảy mạnh + không nằm trong danh sách lỗi. */
+function _deepG1_topTurningMove(cls, evalPcts, gMoveInfo, gMoveTexts, sideChar, sideLabel) {
+  var BAD = {mistake:1, blunder:1, inaccuracy:1, missed_win:1, missed_mate:1};
+  var bestSwing = 0, bestIdx = -1;
+  for (var i = 0; i < cls.length; i++) {
+    var mvSide = (gMoveInfo[i] && gMoveInfo[i].side === W) ? 'w' : 'b';
+    if (mvSide !== sideChar) continue;
+    if (BAD[cls[i]]) continue; /* chỉ tính nước CHỦ ĐỘNG tạo bước ngoặt, không phải đối thủ tự sai */
+    var pBefore = _deepPct(evalPcts, i, sideChar), pAfter = _deepPct(evalPcts, i+1, sideChar);
+    if (pBefore === null || pAfter === null) continue;
+    var swing = pAfter - pBefore;
+    if (swing > bestSwing) { bestSwing = swing; bestIdx = i; }
+  }
+  if (bestIdx < 0 || bestSwing < 15) return null; /* cần đủ lớn (>=15% thắng) mới đáng gọi "bước ngoặt" */
+  var moveNum = Math.floor(bestIdx / 2) + 1;
+  return {
+    id: 'g1-turnmove-' + sideChar, group: 1, score: 50 + Math.min(30, bestSwing), sev: 'low', positive: true, icon: '🔑',
+    text: sideLabel + ': nước <b>' + moveNum + (sideChar === 'w' ? '.' : '...') + (gMoveTexts[bestIdx] || '')
+        + '</b> là bước ngoặt lớn nhất ván do TỰ MÌNH tạo ra (không nhờ đối phương sai) — % thắng tăng '
+        + Math.round(bestSwing) + ' điểm ngay sau nước này.'
+  };
+}
+
+/* 3) Chuỗi nước tối ưu liên tiếp dài nhất (best/great/brilliant/excellent),
+   tính trên CHUỖI NƯỚC RIÊNG của sideChar (bỏ qua nước đối phương xen giữa). */
+function _deepG1_bestMoveStreak(cls, gMoveInfo, gMoveTexts, sideChar, sideLabel) {
+  var GOOD = {best:1, great:1, brilliant:1, great_defense:1, excellent:1};
+  var ownIdx = [];
+  for (var i = 0; i < cls.length; i++) {
+    var mvSide = (gMoveInfo[i] && gMoveInfo[i].side === W) ? 'w' : 'b';
+    if (mvSide === sideChar) ownIdx.push(i);
+  }
+  var bestLen = 0, bestStart = -1, curLen = 0, curStart = -1;
+  for (var k = 0; k < ownIdx.length; k++) {
+    if (GOOD[cls[ownIdx[k]]]) {
+      if (curLen === 0) curStart = k;
+      curLen++;
+      if (curLen > bestLen) { bestLen = curLen; bestStart = curStart; }
+    } else curLen = 0;
+  }
+  if (bestLen < 5) return null; /* chỉ đáng nói khi đủ dài */
+  var startPly = ownIdx[bestStart], endPly = ownIdx[bestStart + bestLen - 1];
+  var startMv = Math.floor(startPly / 2) + 1, endMv = Math.floor(endPly / 2) + 1;
+  return {
+    id: 'g1-streak-' + sideChar, group: 1, score: 45 + Math.min(15, bestLen), sev: 'low', positive: true, icon: '✅',
+    text: sideLabel + ': duy trì chuỗi <b>' + bestLen + ' nước tối ưu liên tiếp</b> từ nước '
+        + startMv + ' đến nước ' + endMv + ' — giai đoạn chơi chính xác nhất ván.'
+  };
+}
+
+/* 4) "Điểm thu hoạch": các nước ĂN QUÂN mà %thắng KHÔNG tụt sau đó (ăn
+   sạch, không phải đổi chác rủi ro) — tự nhặt ra các pha ăn quân yếu
+   liên tiếp (vd 21.Bxb7, 24.Bxa6) mà không cần biết "đây là tốt yếu". */
+function _deepG1_harvestPoints(cls, evalPcts, gAnFens, gMoveInfo, gMoveTexts, sideChar, sideLabel) {
+  var BAD = {mistake:1, blunder:1, inaccuracy:1};
+  var MIN_NET_GAIN = 90, MIN_OWN_MOVE = 15; /* bỏ qua giai đoạn khai cuộc (đã có insight cặp Tượng riêng) */
+  var found = [];
+  for (var i = 0; i < gMoveTexts.length; i++) {
+    var mvSide = (gMoveInfo[i] && gMoveInfo[i].side === W) ? 'w' : 'b';
+    if (mvSide !== sideChar) continue;
+    var san = gMoveTexts[i];
+    if (!san || san.indexOf('x') < 0) continue;               /* chỉ xét nước ăn quân */
+    if (san.indexOf('+') >= 0 || san.indexOf('#') >= 0) continue; /* bỏ nước có chiếu — đã có insight "chuỗi chiếu liên hoàn" riêng */
+    if (BAD[cls[i]]) continue;
+    var moveNum = Math.floor(i / 2) + 1;
+    if (moveNum < MIN_OWN_MOVE) continue;
+    /* Loại trừ RECAPTURE (ăn lại đúng ô đối phương vừa ăn ở nước liền
+       trước) — đó là đòi lại quân đã mất, không phải "thu hoạch điểm yếu
+       mới" của đối phương. */
+    if (gUciHist[i] && gUciHist[i-1] && gUciHist[i].substring(2,4) === gUciHist[i-1].substring(2,4)) continue;
+    if (!gAnFens[i] || !gAnFens[Math.min(i+2, gAnFens.length-1)]) continue;
+    var jEnd = Math.min(i + 2, gAnFens.length - 1);
+    var baseDiff = _g_materialDiff(boardArrayFromFen(gAnFens[i]).board, sideChar);
+    var afterDiff = _g_materialDiff(boardArrayFromFen(gAnFens[jEnd]).board, sideChar);
+    if (afterDiff - baseDiff < MIN_NET_GAIN) continue; /* phải THỰC SỰ giữ được lợi vật chất qua phản ứng của đối phương, không phải đổi ngang */
+    var pBefore = _deepPct(evalPcts, i, sideChar), pAfter = _deepPct(evalPcts, i+1, sideChar);
+    if (pBefore === null || pAfter === null) continue;
+    if (pAfter < pBefore - 3) continue;
+    found.push(i);
+  }
+  if (found.length < 2) return null; /* chỉ đáng nói khi có TỪ 2 điểm thu hoạch trở lên */
+  var refs = found.map(function(i){
+    var mv = Math.floor(i / 2) + 1;
+    return '<b>' + mv + (i % 2 === 0 ? '.' : '...') + gMoveTexts[i] + '</b>'; /* mỗi nước bọc RIÊNG trong <b> để bấm link được từng nước */
+  });
+  return {
+    id: 'g1-harvest-' + sideChar, group: 1, score: 44, sev: 'low', positive: true, icon: '🌾',
+    text: sideLabel + ': thu hoạch sạch sẽ ' + found.length + ' điểm yếu của đối phương qua các nước ăn quân '
+        + refs.join(', ') + ' mà không hề bị giảm % thắng sau đó.'
+  };
+}
+
+/* 5) Chuỗi chiếu liên hoàn: gộp các nước CỦA RIÊNG sideChar có "+"/"#"
+   trong SAN thành từng CỤM, cho phép khoảng cách tối đa MAX_GAP nước
+   riêng giữa 2 lần chiếu liên tiếp vẫn tính là "cùng 1 đợt tấn công"
+   (khớp cách chuyên gia mô tả 1 chuỗi tấn công như 1 khối, dù xen giữa
+   có vài nước không phải chiếu, vd 26.Qb7+...29-32). */
+function _deepG1_checkStreak(gMoveInfo, gMoveTexts, sideChar, sideLabel) {
+  var ownIdx = [];
+  for (var i = 0; i < gMoveTexts.length; i++) {
+    var mvSide = (gMoveInfo[i] && gMoveInfo[i].side === W) ? 'w' : 'b';
+    if (mvSide === sideChar) ownIdx.push(i);
+  }
+  /* CHỈ tính "liên hoàn" khi các nước chiếu THỰC SỰ LIÊN TỤC (không có
+     khoảng cách) trong chuỗi nước riêng của sideChar — đúng nghĩa đen của
+     "liên hoàn". Nếu cho phép cách quãng dễ gộp nhầm 2 đợt tấn công khác
+     nhau thành 1 (đã thử và bị chỉ ra là sai). */
+  var bestLen = 0, bestStart = -1, curLen = 0, curStart = -1;
+  for (var k = 0; k < ownIdx.length; k++) {
+    var san = gMoveTexts[ownIdx[k]] || '';
+    var isCheck = san.indexOf('+') >= 0 || san.indexOf('#') >= 0;
+    if (isCheck) {
+      if (curLen === 0) curStart = k;
+      curLen++;
+      if (curLen > bestLen) { bestLen = curLen; bestStart = curStart; }
+    } else curLen = 0;
+  }
+  if (bestLen < 3) return null;
+  var ks = []; for (var m = bestStart; m < bestStart + bestLen; m++) ks.push(m);
+  var startMv = ks[0] + 1, endMv = ks[ks.length - 1] + 1;
+  var endPly = ownIdx[ks[ks.length - 1]];
+  var endsInMate = /#/.test(gMoveTexts[endPly] || '');
+  var dots = (sideChar === 'w') ? '.' : '...';
+  /* ĐÃ SỬA: bọc <b>N.SAN</b> cho CẢ mốc đầu/cuối lẫn từng nước trong danh
+     sách liệt kê — trước đây là số/text thường nên _deepFormatMoveRefs
+     (chỉ nhận diện đúng khuôn <b>N.SAN</b> hoặc <b>N...SAN</b>) không bắt
+     được, khiến các số nước này không bấm nhảy tới thế cờ được như mọi
+     tham chiếu nước đi khác trong báo cáo. */
+  var startRef = '<b>' + startMv + dots + (gMoveTexts[ownIdx[ks[0]]] || '') + '</b>';
+  var endRef = '<b>' + endMv + dots + (gMoveTexts[ownIdx[ks[ks.length - 1]]] || '') + '</b>';
+  /* ĐÃ SỬA theo yêu cầu: danh sách liệt kê trong ngoặc chỉ để TEXT
+     THƯỜNG, không bọc <b> nữa (không cho bấm link) — chỉ giữ link ở mốc
+     "từ nước X đến nước Y" phía trước. */
+  var refs = ks.map(function(k){ return (k+1) + dots + (gMoveTexts[ownIdx[k]] || ''); });
+  return {
+    id: 'g1-checkstreak-' + sideChar, group: 1, score: 48 + Math.min(12, bestLen*2), sev: 'low', positive: true, icon: '👑',
+    text: sideLabel + ': thực hiện chuỗi <b>' + bestLen + ' nước chiếu liên hoàn</b> (thực sự liên tục) từ nước '
+        + startRef + ' đến nước ' + endRef + ' (' + refs.join(', ') + ')'
+        + (endsInMate ? ', kết thúc bằng chiếu hết' : ' — giành được ưu thế lớn về vật chất qua loạt đòn này') + '.'
+  };
+}
+
+
+function buildDeepInsightsGroup1(cls, evalPcts, cpLosses, gAnFens, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel) {
   var out = [];
   var vol = _deepG1_turningVolatility(cls, evalPcts);
   if (vol) out.push(vol);
 
   function pushForSide(sideChar, label) {
+    var bp = _deepG1_bishopPairFromTrade(gAnFens, gMoveInfo, gMoveTexts, sideChar, label);
+    if (bp) out.push(bp);
     var cr = _deepG1_conversionRate(cls, evalPcts, gMoveInfo, gMoveTexts, sideChar, label);
     if (cr) out.push(cr);
     var rs = _deepG1_resilience(cls, evalPcts, gMoveInfo, gMoveTexts, sideChar, label);
+
     if (rs) out.push(rs);
     var wm = _deepG1_worstMove(cls, cpLosses, gMoveInfo, gMoveTexts, sideChar, label);
     if (wm) out.push(wm);
+    var ss = _deepG1_soundSacrifice(cls, evalPcts, gAnFens, gMoveInfo, gMoveTexts, sideChar, label);
+    if (ss) out.push(ss);
+    var tm = _deepG1_topTurningMove(cls, evalPcts, gMoveInfo, gMoveTexts, sideChar, label);
+    if (tm) out.push(tm);
+    var bs = _deepG1_bestMoveStreak(cls, gMoveInfo, gMoveTexts, sideChar, label);
+    if (bs) out.push(bs);
+    /* g1-harvest ("thu hoạch điểm yếu") ĐÃ BỎ theo yêu cầu — không gọi
+       _deepG1_harvestPoints nữa, nên #23 sẽ không còn xuất hiện ở bất kỳ
+       ván nào nữa (kể cả mục "chưa xếp"), thay vì chỉ ẩn nó đi. */
+    var chk = _deepG1_checkStreak(gMoveInfo, gMoveTexts, sideChar, label);
+    if (chk) out.push(chk);
   }
   if (detectedSide === 'white') pushForSide('w', whiteLabel + ' — Trắng');
   else if (detectedSide === 'black') pushForSide('b', blackLabel + ' — Đen');
@@ -5281,6 +5987,28 @@ function _g2_isCaptureUci(fen, uci) {
 function _g2_uciDisplay(uci, isCap) {
   if (!uci || uci.length < 4) return '?';
   return uci.substring(0, 2) + (isCap ? 'x' : '-') + uci.substring(2, 4);
+}
+
+/* ---- Helper: "d3d8" (nước ĂN QUÂN, xác định qua fen TRƯỚC nước đi) ->
+   dạng SAN-like cùng kiểu với gMoveTexts, vd "Qxd8"/"Nxd8"/"exd8" — thay
+   cho _g2_uciDisplay (kiểu "d3xd8") vốn không cùng ngôn ngữ ký hiệu với
+   phần còn lại của báo cáo. Tự nhận diện có phải ăn quân hay không qua
+   _g2_isCaptureUci — không hard-code isCap ở nơi gọi (đã từng gây lỗi
+   hiện "b7-g7" thay vì "Qxg7" cho 1 nước ăn quân ở #6 Missed Mate). ---- */
+function _g2_uciToSanLike(fen, uci) {
+  if (!fen || !uci || uci.length < 4) return '?';
+  var ff = FLS.indexOf(uci.charAt(0));
+  var fr = parseInt(uci.charAt(1), 10) - 1;
+  var dest = uci.substring(2, 4);
+  if (ff < 0 || isNaN(fr)) return dest;
+  var parsed = boardArrayFromFen(fen);
+  var p = parsed.board[sq(fr, ff)];
+  if (!p) return dest;
+  var isCap = _g2_isCaptureUci(fen, uci);
+  var pt = typ(p);
+  var LETTERS = {2: 'N', 3: 'B', 4: 'R', 5: 'Q', 6: 'K'};
+  if (pt === 1) return isCap ? (uci.charAt(0) + 'x' + dest) : dest; /* Tốt: giữ cột xuất phát khi ăn quân, vd "exd8" */
+  return (LETTERS[pt] || '') + (isCap ? 'x' : '-') + dest;
 }
 
 /* ---- Helper: ước lượng tên quân theo giá trị cp (PVAL=[0,100,320,330,500,900,20000]) ---- */
@@ -5411,16 +6139,26 @@ function _g2_findPin(board, sideChar) {
    trong số các nước đã bị dán nhãn xấu). ── */
 function _deepG2_forkAgainst(cls, cpLosses, gAnFens, gMoveInfo, gMoveTexts, sideChar, sideLabel) {
   var oppCol = (sideChar === 'w') ? B : W;
+  /* ĐÃ SỬA theo góp ý: trước đây CHỈ cần nước đã bị dán nhãn "xấu"
+     (mistake/blunder/missed_win/missed_mate) VÀ có fork trên bàn cờ sau
+     đó là đủ để tính — không có ngưỡng cpLoss tối thiểu nào, nên 1 nước
+     chỉ đáng gọi là "mistake nhẹ" (VD %thắng giảm 60%→52%, cpLoss nhỏ)
+     vẫn bị thổi phồng thành "sai lầm quan trọng — dính chĩa đôi (fork)".
+     Giờ thêm ngưỡng tối thiểu FORK_MIN_CP để chỉ tính khi thực sự đủ
+     nghiêm trọng. */
+  var FORK_MIN_CP = 150;
   var best = null, bestLoss = -1;
   for (var i = 0; i < cls.length; i++) {
     if (!BAD_TYPES_G2[cls[i]]) continue;
     var mvSide = (gMoveInfo[i] && gMoveInfo[i].side === W) ? 'w' : 'b';
     if (mvSide !== sideChar) continue;
+    var loss0 = cpLosses[i]; if (loss0 === null || loss0 === undefined) loss0 = 0;
+    if (loss0 < FORK_MIN_CP) continue;
     var fenAfter = gAnFens[i + 1];
     if (!fenAfter) continue;
     var found = _g2_forkOnBoard(boardArrayFromFen(fenAfter).board, sideChar, oppCol);
     if (!found) continue;
-    var loss = cpLosses[i]; if (loss === null || loss === undefined) loss = 0;
+    var loss = loss0;
     if (loss > bestLoss) { bestLoss = loss; best = i; }
   }
   if (best === null) return null;
@@ -5437,17 +6175,20 @@ function _deepG2_forkAgainst(cls, cpLosses, gAnFens, gMoveInfo, gMoveTexts, side
 /* ── #9b Self-Pin: chỉ quy kết khi chính nước đó TẠO RA pin mới
    (so sánh trạng thái trước/sau), tránh đổ lỗi cho pin có sẵn. ── */
 function _deepG2_pinAgainst(cls, cpLosses, gAnFens, gMoveInfo, gMoveTexts, sideChar, sideLabel) {
+  var PIN_MIN_CP = 150; /* đồng bộ ngưỡng với fork — tránh thổi phồng mistake nhẹ thành "sai lầm quan trọng" */
   var best = null, bestLoss = -1, bestPinSq = -1;
   for (var i = 0; i < cls.length; i++) {
     if (!BAD_TYPES_G2[cls[i]]) continue;
     var mvSide = (gMoveInfo[i] && gMoveInfo[i].side === W) ? 'w' : 'b';
     if (mvSide !== sideChar) continue;
+    var loss0 = cpLosses[i]; if (loss0 === null || loss0 === undefined) loss0 = 0;
+    if (loss0 < PIN_MIN_CP) continue;
     var fenBefore = gAnFens[i], fenAfter = gAnFens[i + 1];
     if (!fenBefore || !fenAfter) continue;
     var pinBefore = _g2_findPin(boardArrayFromFen(fenBefore).board, sideChar);
     var pinAfter = _g2_findPin(boardArrayFromFen(fenAfter).board, sideChar);
     if (pinAfter < 0 || pinBefore === pinAfter) continue;
-    var loss = cpLosses[i]; if (loss === null || loss === undefined) loss = 0;
+    var loss = loss0;
     if (loss > bestLoss) { bestLoss = loss; best = i; bestPinSq = pinAfter; }
   }
   if (best === null) return null;
@@ -5463,7 +6204,7 @@ function _deepG2_pinAgainst(cls, cpLosses, gAnFens, gMoveInfo, gMoveTexts, sideC
 }
 
 /* ── #6 Missed Mate ── */
-function _deepG2_missedMate(cls, gAnScores, gMoveInfo, gMoveTexts, sideChar, sideLabel) {
+function _deepG2_missedMate(cls, gAnScores, gAnFens, gMoveInfo, gMoveTexts, sideChar, sideLabel) {
   var count = 0, best = null, bestDepth = 999;
   for (var i = 0; i < cls.length; i++) {
     if (cls[i] !== 'missed_mate') continue;
@@ -5478,7 +6219,7 @@ function _deepG2_missedMate(cls, gAnScores, gMoveInfo, gMoveTexts, sideChar, sid
   if (count === 0 || best === null) return null;
   var moveNum = Math.floor(best / 2) + 1;
   var si2 = gAnScores[best];
-  var bestMoveTxt = si2.bestUci ? _g2_uciDisplay(si2.bestUci, false) : null;
+  var bestMoveTxt = si2.bestUci ? _g2_uciToSanLike(gAnFens[best], si2.bestUci) : null;
   return {
     id: 'g2-missed-mate-' + sideChar, group: 2,
     score: Math.max(65, Math.min(95, 100 - bestDepth * 8)),
@@ -5511,7 +6252,7 @@ function _deepG2_missedMaterial(cls, cpLosses, gAnScores, gAnFens, gMoveInfo, gM
     id: 'g2-missed-material-' + sideChar, group: 2, score: Math.min(88, 55 + Math.round(bestLoss / 15)),
     sev: 'high', icon: '🍖',
     text: sideLabel + ': bỏ lỡ ăn quân ngon ở nước <b>' + moveNum + (sideChar === 'w' ? '.' : '...')
-        + (gMoveTexts[best] || '') + '</b> (đáng lẽ ăn qua ' + _g2_uciDisplay(si2.bestUci, true)
+        + (gMoveTexts[best] || '') + '</b> (đáng lẽ ăn qua ' + _g2_uciToSanLike(gAnFens[best], si2.bestUci)
         + ', thiệt khoảng ' + Math.round(bestLoss) + 'cp so với phương án tốt nhất).'
   };
 }
@@ -5532,7 +6273,7 @@ function _deepG2_hangingPiece(cls, gMoveInfo, gMoveTexts, sideChar, sideLabel) {
   var moveNum = Math.floor(best / 2) + 1;
   return {
     id: 'g2-hanging-' + sideChar, group: 2, score: Math.min(85, 50 + Math.round(bestCap / 20)),
-    sev: 'high', icon: '🎯',
+    sev: 'high', icon: '❌',
     text: sideLabel + ': nước <b>' + moveNum + (sideChar === 'w' ? '.' : '...') + (gMoveTexts[best] || '')
         + '</b> để hở quân, đối thủ ăn lại ngay được khoảng ' + Math.round(bestCap)
         + 'cp (~1 ' + _g2_pieceNameByValue(bestCap) + ').'
@@ -5542,7 +6283,7 @@ function _deepG2_hangingPiece(cls, gMoveInfo, gMoveTexts, sideChar, sideLabel) {
 function buildDeepInsightsGroup2(cls, cpLosses, gAnScores, gAnFens, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel) {
   var out = [];
   function pushForSide(sideChar, label) {
-    var mm = _deepG2_missedMate(cls, gAnScores, gMoveInfo, gMoveTexts, sideChar, label);
+    var mm = _deepG2_missedMate(cls, gAnScores, gAnFens, gMoveInfo, gMoveTexts, sideChar, label);
     if (mm) out.push(mm);
     var mat = _deepG2_missedMaterial(cls, cpLosses, gAnScores, gAnFens, gMoveInfo, gMoveTexts, sideChar, label);
     if (mat) out.push(mat);
@@ -5604,7 +6345,7 @@ function _g3_fenAtOwnMove(gAnFens, sideChar, moveNum) {
 /* ── King Safety: (a) còn kẹt cột d/e sau 12 nước riêng, (b) vỡ
    Tốt che chắn sau khi đã nhập thành (kiểm tra ở vị trí cuối cùng
    có phân tích). ── */
-function _deepG3_kingSafety(gAnFens, sideChar, sideLabel) {
+function _deepG3_kingSafety(gAnFens, gMoveInfo, sideChar, sideLabel) {
   var fen12 = _g3_fenAtOwnMove(gAnFens, sideChar, 12);
   if (fen12) {
     var p12 = boardArrayFromFen(fen12);
@@ -5615,7 +6356,7 @@ function _deepG3_kingSafety(gAnFens, sideChar, sideLabel) {
       var kf = fl(kingSq);
       if (kf === 3 || kf === 4) {
         return {
-          id: 'g3-king-center-' + sideChar, group: 3, score: 62, sev: 'medium', icon: '👑',
+          id: 'g3-king-center-' + sideChar, group: 3, score: 62, sev: 'medium', icon: '🏰',
           text: sideLabel + ': sau 12 nước vẫn chưa nhập thành, Vua còn kẹt ở cột '
               + FLS.charAt(kf).toUpperCase() + ' gần trung tâm — dễ thành mục tiêu tấn công sớm.'
         };
@@ -5625,6 +6366,16 @@ function _deepG3_kingSafety(gAnFens, sideChar, sideLabel) {
 
   var lastFen = gAnFens[gAnFens.length - 1];
   if (!lastFen) return null;
+  /* ĐÃ SỬA theo góp ý: nếu ván đã CHUYỂN SANG TÀN CUỘC thì bỏ qua kiểm
+     tra "vỡ Tốt che chắn Vua" — ở tàn cuộc, việc đẩy Tốt lên và đưa Vua
+     ra trung tâm (phá bỏ chính cái "lá chắn" này) là kỹ thuật ĐÚNG đắn,
+     không phải điểm yếu. Chỉ tính insight này khi ván VẪN CÒN ở khai
+     cuộc/trung cuộc lúc kết thúc phân tích. */
+  var _lastPlyIdx = gAnFens.length - 2; /* gAnFens[i] = vị trí TRƯỚC nước i, nên nước cuối là i = length-2 */
+  if (_lastPlyIdx >= 0 && gMoveInfo && gMoveInfo[_lastPlyIdx] && typeof phaseOf === 'function') {
+    var _finalPhase = phaseOf(gMoveInfo[_lastPlyIdx].materialPct !== undefined ? gMoveInfo[_lastPlyIdx].materialPct : 1);
+    if (_finalPhase === 'endgame') return null;
+  }
   var pl = boardArrayFromFen(lastFen);
   var kp2 = (sideChar === 'w') ? WK : BK;
   var kSq = -1;
@@ -5642,9 +6393,10 @@ function _deepG3_kingSafety(gAnFens, sideChar, sideLabel) {
     if (pl.board[sq(shieldRank, shieldFiles[i2])] === ownPawn) intact++;
   }
   if (intact <= 1) {
+    var _kingShieldColor = (sideChar === 'w') ? 'Trắng' : 'Đen';
     return {
-      id: 'g3-king-shield-' + sideChar, group: 3, score: 55, sev: 'medium', icon: '🏚',
-      text: sideLabel + ': cấu trúc Tốt che chắn Vua sau nhập thành đã vỡ khá nhiều ('
+      id: 'g3-king-shield-' + sideChar, group: 3, score: 55, sev: 'medium', icon: '♙',
+      text: 'cấu trúc Tốt bên ' + _kingShieldColor + ' che chắn Vua sau nhập thành đã vỡ khá nhiều ('
           + intact + '/3 Tốt còn nguyên vị trí) — hàng rào bảo vệ Vua mỏng đi rõ rệt về cuối ván.'
     };
   }
@@ -5740,39 +6492,130 @@ function _g3_isFileOpen(board, file) {
 
 function _deepG3_openFileRook(gAnFens, sideChar, sideLabel) {
   var rookPiece = (sideChar === 'w') ? WR : BR;
-  var moves = [30, 20]; /* ưu tiên mốc muộn hơn trước (Xe đã ổn định vị trí) */
-  for (var mi = 0; mi < moves.length; mi++) {
-    var fen = _g3_fenAtOwnMove(gAnFens, sideChar, moves[mi]);
-    if (!fen) continue;
+  function findOpenFileRook(fen) {
+    if (!fen) return -1;
     var board = boardArrayFromFen(fen).board;
     for (var f = 0; f < 8; f++) {
       for (var r = 0; r < 8; r++) {
-        if (board[sq(r, f)] !== rookPiece) continue;
-        if (_g3_isFileOpen(board, f)) {
-          return {
-            id: 'g3-openfile-' + sideChar, group: 3, score: 38, sev: 'low', positive: true, icon: '🏰',
-            text: sideLabel + ': kiểm soát tốt cột mở hoàn toàn (cột '
-                + FLS.charAt(f).toUpperCase() + ') bằng Xe, duy trì tính đến nước ' + moves[mi]
-                + ' — gây áp lực xuyên suốt dọc cột.'
-          };
-        }
+        if (board[sq(r, f)] === rookPiece && _g3_isFileOpen(board, f)) return f;
       }
     }
+    return -1;
+  }
+  /* Quét TỪNG nước riêng của bên này (không chỉ 2 mốc cố định 20/30) để
+     dựng đầy đủ lịch sử "Xe đang kiểm soát cột mở nào" theo từng nước —
+     rồi gộp thành các ĐOẠN liên tục cùng 1 cột (run-length). Nhờ vậy biết
+     chính xác: cột nào, giữ được bao nhiêu nước liên tục, thay vì đoán mò
+     qua vài mốc rời rạc dễ báo sai (bỏ sót giai đoạn, hoặc ghép nhầm 2
+     giai đoạn khác cột thành 1 "duy trì" không có thật). */
+  var files = [];
+  for (var mv = 1; mv <= 60; mv++) {
+    var fen = _g3_fenAtOwnMove(gAnFens, sideChar, mv);
+    if (!fen) break;
+    files.push(findOpenFileRook(fen));
+  }
+  var runs = [];
+  var curFile = null, curStart = null, curEnd = null;
+  for (var idx = 0; idx < files.length; idx++) {
+    var mvNum = idx + 1, f = files[idx];
+    if (f >= 0 && f === curFile) {
+      curEnd = mvNum;
+    } else {
+      if (curFile !== null) runs.push({file: curFile, start: curStart, end: curEnd});
+      if (f >= 0) { curFile = f; curStart = mvNum; curEnd = mvNum; } else { curFile = null; }
+    }
+  }
+  if (curFile !== null) runs.push({file: curFile, start: curStart, end: curEnd});
+
+  runs = runs.filter(function(r){ return (r.end - r.start + 1) >= 3; }); /* chỉ tính đoạn đủ dài (≥3 nước); nếu không đoạn nào đạt thì bỏ qua cả mục này */
+  if (!runs.length) return null;
+  runs.sort(function(a, b){ return a.start - b.start; }); /* trình bày theo đúng trình tự thời gian ván đấu */
+
+  var oppLabel = (sideChar === 'w') ? 'bên đen' : 'bên trắng';
+  var totalDur = 0;
+  var parts = runs.map(function(r){
+    totalDur += (r.end - r.start + 1);
+    return 'cột ' + FLS.charAt(r.file).toUpperCase() + ' nước ' + r.start + '-' + r.end;
+  });
+  return {
+    id: 'g3-openfile-' + sideChar, group: 3, score: 36 + Math.min(totalDur, 10), sev: 'low', positive: true, icon: '🏰',
+    text: sideLabel + ': kiểm soát tốt cột mở bằng Xe (' + parts.join(', ') + ') gây áp lực cột dọc cho ' + oppLabel
+  };
+}
+
+/* 6) Cờ nhập thành + số lần Vua tự di chuyển: quét thẳng SAN, không cần
+   engine. Chỉ báo khi ván đủ dài (>=20 nước riêng mỗi bên) để tránh báo
+   nhầm các ván ngắn/kết thúc sớm chưa kịp nhập thành. */
+/* CHỈ đáng nói khi có TƯƠNG PHẢN: 1 bên nhập thành an toàn, bên kia thì
+   không — còn nếu cả 2 đều nhập thành (bình thường) thì không cần nêu. */
+function _g3_castleInfo(gMoveInfo, gMoveTexts, sideChar) {
+  var ownIdx = [];
+  for (var i = 0; i < gMoveTexts.length; i++) {
+    var mvSide = (gMoveInfo[i] && gMoveInfo[i].side === W) ? 'w' : 'b';
+    if (mvSide === sideChar) ownIdx.push(i);
+  }
+  var castleMoveNum = null, castleSan = null, kingMovesAfter10 = 0, firstKingMoveNum = null;
+  for (var k = 0; k < ownIdx.length; k++) {
+    var san = gMoveTexts[ownIdx[k]] || '';
+    if (san === 'O-O' || san === 'O-O-O') { castleMoveNum = k + 1; castleSan = san; break; }
+    if (san.charAt(0) === 'K' && (k + 1) > 10) {
+      kingMovesAfter10++;
+      if (firstKingMoveNum === null) firstKingMoveNum = k + 1;
+    }
+  }
+  return {ownLen: ownIdx.length, castleMoveNum: castleMoveNum, castleSan: castleSan,
+          kingMovesAfter10: kingMovesAfter10, firstKingMoveNum: firstKingMoveNum};
+}
+
+function _deepG3_castleContrast(gMoveInfo, gMoveTexts, sideChar, sideLabel, oppLabel) {
+  var oppChar = (sideChar === 'w') ? 'b' : 'w';
+  var mine = _g3_castleInfo(gMoveInfo, gMoveTexts, sideChar);
+  var opp = _g3_castleInfo(gMoveInfo, gMoveTexts, oppChar);
+  if (mine.ownLen < 8 || opp.ownLen < 8) return null;
+  var iCastled = mine.castleMoveNum !== null;
+  var oppCastled = opp.castleMoveNum !== null;
+  if (iCastled === oppCastled) return null; /* cả 2 giống nhau -> không có gì đáng so sánh */
+
+  /* ĐÃ SỬA theo yêu cầu: câu này giờ chỉ nói MÀU quân (Trắng/Đen), KHÔNG
+     dùng tên người chơi/nhãn "Tên — Màu" nữa (dù sideLabel/oppLabel có
+     tên thật, câu ngắn gọn hơn không cần lặp tên vì đã có ở #1). Cũng bỏ
+     chữ "an toàn" thừa ở vế đầu, bỏ luôn số lần Vua tự di chuyển (chi
+     tiết phụ không cần thiết), và đổi kết luận thành "nên có lợi thế an
+     toàn vua" thay vì "lợi thế an toàn Vua rõ rệt nghiêng về [Tên]". */
+  var myColor = (sideChar === 'w') ? 'Trắng' : 'Đen';
+  var oppColor = (sideChar === 'w') ? 'Đen' : 'Trắng';
+
+  if (iCastled && !oppCastled && opp.ownLen >= 20 && opp.kingMovesAfter10 > 0) {
+    return {
+      id: 'g3-castle-contrast-' + sideChar, group: 3, score: 58, sev: 'low', positive: true, icon: '🏰',
+      text: myColor + ' nhập thành ở nước <b>' + mine.castleMoveNum + '.' + mine.castleSan
+          + '</b>, trong khi ' + oppColor + ' không hề nhập thành suốt cả ván, nên có lợi thế an toàn vua.'
+    };
+  }
+  if (!iCastled && oppCastled && mine.ownLen >= 20 && mine.kingMovesAfter10 > 0) {
+    return {
+      id: 'g3-castle-contrast-' + sideChar, group: 3, score: 68, sev: 'medium', icon: '⚠️',
+      text: myColor + ' không nhập thành trong suốt ván — Vua phải tự di chuyển thủ công <b>'
+          + mine.kingMovesAfter10 + ' lần</b> sau nước 10 (lần đầu ở nước ' + mine.firstKingMoveNum
+          + '), trong khi ' + oppColor + ' đã nhập thành từ sớm, nên chịu rủi ro an toàn vua kéo dài cả ván.'
+    };
   }
   return null;
 }
 
-function buildDeepInsightsGroup3(gAnFens, detectedSide, whiteLabel, blackLabel) {
+function buildDeepInsightsGroup3(gAnFens, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel) {
   var out = [];
   function pushForSide(sideChar, label) {
-    var ks = _deepG3_kingSafety(gAnFens, sideChar, label);
+    var ks = _deepG3_kingSafety(gAnFens, gMoveInfo, sideChar, label);
     if (ks) out.push(ks);
     var cc = _deepG3_centerControl(gAnFens, sideChar, label);
     if (cc) out.push(cc);
     var op = _deepG3_outpost(gAnFens, sideChar, label);
     if (op) out.push(op);
-    var rf = _deepG3_openFileRook(gAnFens, sideChar, label);
-    if (rf) out.push(rf);
+    /* g3-openfile ("kiểm soát cột mở bằng Xe") ĐÃ BỎ theo yêu cầu — không
+       gọi _deepG3_openFileRook nữa, #34 sẽ không còn xuất hiện nữa. */
+    var nc = _deepG3_castleContrast(gMoveInfo, gMoveTexts, sideChar, label, (sideChar === 'w') ? (blackLabel + ' — Đen') : (whiteLabel + ' — Trắng'));
+    if (nc) out.push(nc);
   }
   if (detectedSide === 'white') pushForSide('w', whiteLabel + ' — Trắng');
   else if (detectedSide === 'black') pushForSide('b', blackLabel + ' — Đen');
@@ -5932,24 +6775,34 @@ function _deepG4_pawnStructure(gAnFens, sideChar, sideLabel) {
     });
   }
 
-  var isolated = _g4_findIsolated(profile, sideChar);
-  if (isolated.length > 0) {
-    out.push({
-      id: 'g4-isolated-' + sideChar, group: 4, score: 45, sev: 'low', icon: '🏝',
-      text: sideLabel + ': Tốt ở cột ' + FLS.charAt(isolated[0]).toUpperCase() + ' bị cô lập'
-          + (isolated.length > 1 ? ' (và ' + (isolated.length - 1) + ' cột khác)' : '')
-          + ' (tính đến khoảng nước ' + snap.moveUsed + ') — cần quân nặng túc trực bảo vệ thay vì tấn công.'
-    });
-  }
-
+  /* ĐÃ SỬA theo yêu cầu: "Tốt lùi" (backward) và "Tốt cô lập" (isolated)
+     rất hay cùng trúng vào ĐÚNG 1 quân Tốt (1 Tốt lùi gần như luôn cũng
+     là Tốt bị cô lập theo định nghĩa) — trước đây báo 2 dòng riêng cho
+     cùng 1 điểm yếu, đọc trùng lặp. Giờ tính backward TRƯỚC, rồi loại
+     khỏi danh sách isolated những cột đã được backward xử lý — chỉ còn
+     1 dòng DUY NHẤT cho quân Tốt đó, dùng đúng câu chữ + icon 🚩 mới. */
   var backward = _g4_findBackward(board, profile, sideChar);
+  var backwardFiles = {};
   if (backward.length > 0) {
     var b0 = backward[0];
     var bSq = FLS.charAt(b0.file) + (b0.rank + 1);
+    var _bwColor = (sideChar === 'w') ? 'Trắng' : 'Đen';
+    backwardFiles[b0.file] = true;
     out.push({
-      id: 'g4-backward-' + sideChar, group: 4, score: 48, sev: 'low', icon: '🐌',
-      text: sideLabel + ': Tốt ở ô ' + bSq + ' bị lùi (không còn Tốt cột bên hỗ trợ, ô trước mặt bị '
-          + 'đối phương kiểm soát) — khó tiến lên, dễ trở thành mục tiêu lâu dài.'
+      id: 'g4-backward-' + sideChar, group: 4, score: 48, sev: 'low', icon: '🚩',
+      text: 'Tốt ' + _bwColor.toLowerCase() + ' ở ô ' + bSq + ' bị cô lập (không có Tốt khác hỗ trợ, '
+          + 'ô trước mặt bị đối phương kiểm soát) — khó tiến lên và thành mục tiêu của đối thủ.'
+    });
+  }
+
+  var isolated = _g4_findIsolated(profile, sideChar).filter(function(f){ return !backwardFiles[f]; });
+  if (isolated.length > 0) {
+    var _isoColor = (sideChar === 'w') ? 'Trắng' : 'Đen';
+    out.push({
+      id: 'g4-isolated-' + sideChar, group: 4, score: 45, sev: 'low', icon: '🏝',
+      text: 'Tốt bên ' + _isoColor + ' ở cột ' + FLS.charAt(isolated[0]).toUpperCase() + ' bị cô lập'
+          + (isolated.length > 1 ? ' (và ' + (isolated.length - 1) + ' cột khác)' : '')
+          + ' (tính đến khoảng nước ' + snap.moveUsed + ') — cần quân nặng túc trực bảo vệ thay vì tấn công.'
     });
   }
 
@@ -6095,7 +6948,7 @@ function _deepG5_endgameKingActivity(gMoveInfo, gAnFens, sideChar, sideLabel) {
   if (avgDist <= 2.0 && minDist <= 1.5) {
     return {
       id: 'g5-king-active-' + sideChar, group: 5, score: 38, sev: 'low', positive: true, icon: '🏃',
-      text: sideLabel + ': kích hoạt Vua khá tốt trong tàn cuộc, chủ động áp sát trung tâm thay vì '
+      text: sideLabel + ': sử dụng Vua khá tốt trong tàn cuộc, chủ động áp sát trung tâm thay vì '
           + 'đứng yên ở hàng cuối — đúng tinh thần tàn cuộc hiện đại.'
     };
   }
@@ -6233,7 +7086,7 @@ function _selfin_impactMultiplier(c, evalPcts) {
 }
 
 function _selfin_diversitySelect(sortedList, maxTotal) {
-  var MAX_PER_GROUP = 2;
+  var MAX_PER_GROUP = 30; /* TẠM THỜI nới rộng (xem ghi chú ở DEEP_INSIGHT_MAX) — hiển thị hết mọi phát hiện trong mỗi nhóm */
   var selected = [];
   var groupCounts = {};
   var usedBaseIds = {};
@@ -6285,9 +7138,11 @@ function _selfin_ensureHighlightSlot(selected, allSortedByFinal, accuracy) {
    ============================================================ */
 function buildDeepInsightsAll(cls, evalPcts, cpLosses, gAnScores, gAnFens, gMoveInfo, gMoveTexts, winnerSide, accuracy, detectedSide, whiteLabel, blackLabel) {
   var all = [];
-  all = all.concat(buildDeepInsightsGroup1(cls, evalPcts, cpLosses, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel));
+  var opn = _deepG0_openingName(gUciHist);
+  if (opn) all.push(opn);
+  all = all.concat(buildDeepInsightsGroup1(cls, evalPcts, cpLosses, gAnFens, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel));
   all = all.concat(buildDeepInsightsGroup2(cls, cpLosses, gAnScores, gAnFens, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel));
-  all = all.concat(buildDeepInsightsGroup3(gAnFens, detectedSide, whiteLabel, blackLabel));
+  all = all.concat(buildDeepInsightsGroup3(gAnFens, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel));
   all = all.concat(buildDeepInsightsGroup4(gAnFens, detectedSide, whiteLabel, blackLabel));
   all = all.concat(buildDeepInsightsGroup5(cls, cpLosses, gMoveInfo, gAnFens, gMoveTexts, winnerSide, detectedSide, whiteLabel, blackLabel));
   /* Nhóm 6 (Quản lý thời gian): bỏ qua theo yêu cầu — tái dùng logic
@@ -6326,6 +7181,1046 @@ function buildDeepInsightsAll(cls, evalPcts, cpLosses, gAnScores, gAnFens, gMove
   return selected;
 }
 
+/* ══════════════════════════════════════════════════════════════
+   KHUNG "PHÂN TÍCH VÁN ĐẤU" (narrative 14 mục) — bản v0.2 (2024)
+   Chạy SONG SONG với buildDeepInsightsAll (không xoá/thay hàm cũ,
+   các hàm buildDeepInsightsGroup1..5 vẫn được TÁI DÙNG nguyên vẹn
+   làm nguồn dữ liệu chi tiết cho khung này).
+   #1-#14: khung chuẩn đã thống nhất với người dùng.
+   #A1, #A2...: MỌI candidate cũ (g1-g5) CHƯA được xếp vào #1-#14 —
+   KHÔNG bỏ, hiển thị hết xuống cuối để cân nhắc dùng/bỏ sau.
+   ══════════════════════════════════════════════════════════════ */
+/* ── Helper DÙNG CHUNG: mốc "ra khỏi khai cuộc" THEO ĐÚNG vạch chia pha
+   mà đồ thị eval đang vẽ (renderEvalChart, ~dòng 13352 "Vạch mảnh xám
+   chia 3 giai đoạn") — KHÔNG tính lại theo cls[i]!=='book' nữa (2 cách
+   tính độc lập từng cho ra 2 mốc khác nhau, gây lệch giữa lời văn #3 và
+   đường kẻ trên đồ thị mà người dùng nhìn thấy). Copy Y NGUYÊN logic
+   openIdx của renderEvalChart (tín hiệu vật chất giảm <75% HOẶC 2 bên
+   đã nhập thành/mất quyền nhập thành sau mốc sàn OPEN_FLOOR_PLY, lấy
+   mốc SỚM NHẤT rồi "snap" về vị trí yên tĩnh gần nhất) để #3 và đồ thị
+   LUÔN khớp nhau. Trả về -1 nếu không có tín hiệu nào (không đoán mò). */
+function _evalGraphOpeningEndIdx(gMoveInfo, gAnFens) {
+  if (!gMoveInfo || !gMoveInfo.length) return -1;
+  function isCaptureAt(i) { return !!(gMoveInfo[i] && gMoveInfo[i].capVal > 0); }
+  function isQuietPly(i) { return !isCaptureAt(i) && !isCaptureAt(i - 1); }
+  function snapToQuiet(rawIdx, limit) {
+    for (var k = rawIdx; k < Math.min(gMoveInfo.length, rawIdx + limit); k++) {
+      if (isQuietPly(k)) return k;
+    }
+    return rawIdx;
+  }
+  function castleResolvedFen(fen) {
+    var cr = fen.split(' ')[2] || '-';
+    var whiteResolved = (cr.indexOf('K') < 0) && (cr.indexOf('Q') < 0);
+    var blackResolved = (cr.indexOf('k') < 0) && (cr.indexOf('q') < 0);
+    return whiteResolved && blackResolved;
+  }
+  var OPEN_FLOOR_PLY = 20, OPEN_HARD_CAP_PLY = 30, QUIET_SNAP_LIMIT = 10;
+  var openCandidates = [OPEN_HARD_CAP_PLY];
+  for (var i = 0; i < gMoveInfo.length; i++) {
+    var mp = gMoveInfo[i] ? gMoveInfo[i].materialPct : undefined;
+    if (mp === undefined) continue;
+    if (mp < 0.75) { openCandidates.push(i); break; }
+  }
+  if (gAnFens) {
+    for (var j = 0; j < gMoveInfo.length; j++) {
+      var fenAfterJ = gAnFens[j + 1];
+      if (j >= OPEN_FLOOR_PLY && fenAfterJ && castleResolvedFen(fenAfterJ)) { openCandidates.push(j); break; }
+    }
+  }
+  var rawOpenIdx = Math.min.apply(null, openCandidates);
+  return snapToQuiet(rawOpenIdx, QUIET_SNAP_LIMIT);
+}
+
+/* ── Helper riêng cho #3 Trạng thái sau khai cuộc ──
+   Mốc "ra khỏi khai cuộc" giờ lấy TRỰC TIẾP từ _evalGraphOpeningEndIdx
+   (đúng vạch chia pha trên đồ thị eval) thay vì cls[i]!=='book'. Nếu
+   không có tín hiệu nào (game quá ngắn / không rõ ràng), fallback về
+   nước thứ 10 mỗi bên như cũ để vẫn có gì đó để nói. Từ mốc đó: lấy
+   win% của sideChar (tận dụng _deepPct đã có), so sánh vật chất (tận
+   dụng _g_materialValue), và xem ai đã nhập thành trước (quét
+   gMoveTexts) — 3 yếu tố CÓ SẴN dữ liệu, chưa cần phân tích không
+   gian/hoạt động quân (để bổ sung sau khi cần). */
+function _narrG3_postOpeningState(cls, evalPcts, gAnFens, gMoveTexts, gMoveInfo, sideChar, sideLabel, oppLabel, skipCastleReason) {
+  var oppChar = (sideChar === 'w') ? 'b' : 'w';
+  var boundary = _evalGraphOpeningEndIdx(gMoveInfo, gAnFens);
+  if (boundary < 0 || boundary >= cls.length) boundary = Math.min(19, cls.length); /* không có tín hiệu rõ ràng → ước lượng mốc ~nước 10 mỗi bên */
+
+  var pct = _deepPct(evalPcts, boundary, sideChar);
+  if (pct === null) return null;
+  var moveNum = Math.floor(boundary / 2) + 1;
+
+  var fen = gAnFens[boundary];
+  var matDiff = 0;
+  if (fen) {
+    var board = boardArrayFromFen(fen).board;
+    matDiff = _g_materialValue(board, sideChar) - _g_materialValue(board, oppChar);
+  }
+
+  /* Ai nhập thành trước tính tới mốc này (quét text nước đi, đơn giản
+     nhưng đủ dùng vì O-O/O-O-O là ký hiệu SAN cố định). */
+  var sideCastled = false, oppCastled = false;
+  for (var j = 0; j <= boundary && j < gMoveTexts.length; j++) {
+    var mvSide = (gMoveInfo[j] && gMoveInfo[j].side === W) ? 'w' : 'b';
+    var txt = gMoveTexts[j] || '';
+    if (/^O-O(-O)?/.test(txt)) {
+      if (mvSide === sideChar) sideCastled = true; else oppCastled = true;
+    }
+  }
+
+  var who = (pct >= 55) ? sideLabel : (pct <= 45) ? oppLabel : null;
+  var leadTxt = who
+    ? who + ' đang nhỉnh hơn (' + Math.round(who === sideLabel ? pct : (100 - pct)) + '% thắng)'
+    : 'thế trận cân bằng, chưa bên nào rõ ưu thế';
+
+  var reasons = [];
+  if (Math.abs(matDiff) >= 100) {
+    reasons.push((matDiff > 0 ? sideLabel : oppLabel) + ' hơn khoảng ' + Math.round(Math.abs(matDiff) / 100) + ' Tốt về vật chất');
+  }
+  if (!skipCastleReason) {
+    /* ĐÃ SỬA: bỏ qua lý do nhập thành ở đây nếu #35 (g3-castle-contrast)
+       đã có sẵn — tránh nói trùng ý "đã nhập thành, bên kia thì chưa"
+       theo 2 cách diễn đạt khác nhau trong cùng 1 báo cáo. */
+    if (sideCastled && !oppCastled) reasons.push(sideLabel + ' đã nhập thành, ' + oppLabel + ' thì chưa — vua an toàn hơn');
+    else if (oppCastled && !sideCastled) reasons.push(oppLabel + ' đã nhập thành, ' + sideLabel + ' thì chưa — vua an toàn hơn');
+  }
+
+  var reasonTxt = reasons.length ? ', chủ yếu do ' + reasons.join(' và ') : '';
+
+  return 'Tính tới nước <b>' + moveNum + (sideChar === 'w' ? '.' : '...') + (gMoveTexts[boundary] || '')
+       + '</b> (thời điểm ra khỏi khai cuộc): ' + leadTxt + reasonTxt + '.';
+}
+
+/* ── Helper riêng cho #5 Bước ngoặt đầu tiên ──
+   Quét evalPcts theo ĐÚNG THỨ TỰ NƯỚC ĐI (khác _deepG1_topTurningMove
+   đang lấy swing LỚN NHẤT cả ván), dừng ở lần ĐẦU TIÊN có |swing|≥25%
+   (bỏ qua nước trong sách) — đúng nghĩa "đầu tiên" theo yêu cầu khung. */
+/* ĐỔI: trả về OBJECT {text, idx, moveNum, mvSide, gainerLabel} thay vì chỉ
+   trả string — để #14 Kết luận TẬN DỤNG LẠI được đúng nước/bên đã tìm ra
+   ở đây, không phải quét lại evalPcts lần nữa (refactor dùng chung index). */
+function _narrG5_firstTurningMove(cls, evalPcts, gMoveTexts, sideChar, sideLabel, oppLabel) {
+  var SWING_MIN = 25;
+  for (var i = 0; i < cls.length; i++) {
+    if (cls[i] === 'book') continue;
+    var beforeSidePct = _deepPct(evalPcts, i, sideChar);
+    var afterSidePct = _deepPct(evalPcts, i + 1, sideChar);
+    if (beforeSidePct === null || afterSidePct === null) continue;
+    if (Math.abs(afterSidePct - beforeSidePct) < SWING_MIN) continue;
+    var moveNum = Math.floor(i / 2) + 1;
+    var mvSide = (i % 2 === 0) ? 'w' : 'b'; /* quy ước: index chẵn = nước Trắng */
+    var gainerLabel = (afterSidePct > beforeSidePct) ? sideLabel : oppLabel;
+    /* ĐÃ SỬA theo yêu cầu: bỏ cụm "nghiêng hẳn về phía..." và "đây là lần
+       đầu tiên cục diện thay đổi rõ rệt trong ván" (thừa, tiêu đề #5 đã
+       nói rõ đây là bước ngoặt đầu tiên). Đổi động từ theo đúng chiều
+       tăng/giảm thực tế thay vì luôn dùng "đổi từ...sang..." trung tính,
+       và đổi "(theo góc nhìn X)" -> "(góc nhìn bên X)" cho gọn.
+       ĐÃ SỬA (2): nối "xuất hiện ở nước N" và "% thắng ..." bằng "khiến"
+       thay vì dấu ":" (đọc liền mạch hơn); và "(góc nhìn bên X)" giờ chỉ
+       nói MÀU quân (Trắng/Đen), không kèm tên riêng dù sideLabel có tên
+       — tên đã xuất hiện ở #1 rồi, nhắc lại ở đây là thừa. */
+    var colorWord = (sideChar === 'w') ? 'Trắng' : 'Đen';
+    var verbPhrase = (afterSidePct > beforeSidePct)
+      ? 'tăng từ <b>' + Math.round(beforeSidePct) + '%</b> lên <b>' + Math.round(afterSidePct) + '%</b>'
+      : 'giảm từ <b>' + Math.round(beforeSidePct) + '%</b> xuống <b>' + Math.round(afterSidePct) + '%</b>';
+    var text = 'Bước ngoặt xuất hiện ở nước <b>' + moveNum + (mvSide === 'w' ? '.' : '...')
+        + (gMoveTexts[i] || '') + '</b> khiến % thắng ' + verbPhrase + ' (góc nhìn bên ' + colorWord + ').';
+    return {text: text, idx: i, moveNum: moveNum, mvSide: mvSide, gainerLabel: gainerLabel, favorable: (afterSidePct > beforeSidePct)};
+  }
+  return null;
+}
+
+/* ── Helper riêng cho #9 Hậu quả của sai lầm ──
+   Với MỖI candidate đã chọn ở #8 (đều thuộc sideChar, đều có "nước
+   <b>N..." trong text nên suy lại được moveIdx CHÍNH XÁC theo đúng
+   cách _deepFormatMoveRefs đang làm): lấy cpLoss thật (mảng cpLosses,
+   không đoán lại) + swing win% quanh nước đó (tận dụng _deepPct) rồi
+   phân loại hậu quả theo NGƯỠNG win% sau nước đó (after%), không theo
+   cpLoss thô — vì cpLoss lớn ở thế đã thắng đậm không đáng ngại bằng
+   cpLoss vừa phải ở thế đang cân bằng. */
+function _extractMoveIdxFromCandText(text, sideChar) {
+  var m = /<b>(\d+)(?:\.\.\.|\.)/.exec(text);
+  if (!m) return -1;
+  var moveNum = parseInt(m[1], 10);
+  return (moveNum - 1) * 2 + (sideChar === 'w' ? 0 : 1);
+}
+function _narrG9_consequences(g8Pool, evalPcts, cpLosses, gMoveTexts, sideChar) {
+  if (!g8Pool.length) return null;
+  var lines = [];
+  for (var k = 0; k < g8Pool.length; k++) {
+    var idx = _extractMoveIdxFromCandText(g8Pool[k].text, sideChar);
+    if (idx < 0) continue;
+    var before = _deepPct(evalPcts, idx, sideChar);
+    var after = _deepPct(evalPcts, idx + 1, sideChar);
+    var cp = cpLosses[idx];
+    var moveNum = Math.floor(idx / 2) + 1;
+    /* ĐÃ SỬA: bổ sung SAN (gMoveTexts[idx]) vào moveRef — trước đây thiếu,
+       hiển thị trống kiểu "nước 29 " thay vì "nước 29.Qh3". */
+    var moveRef = '<b>' + moveNum + (sideChar === 'w' ? '.' : '...') + (gMoveTexts[idx] || '') + '</b>';
+    var verdict;
+    if (after === null || before === null) verdict = 'gây thiệt hại đáng kể về vị trí';
+    else if (after <= 20) verdict = 'khiến ván gần như mất trắng ngay tại đây';
+    else if (before >= 50 && after < 50) verdict = 'khiến thế chủ động chuyển hẳn sang tay đối thủ';
+    else if (before - after >= 20) verdict = 'làm mất phần lớn ưu thế đang có, đối thủ có cửa quay lại';
+    else verdict = 'làm giảm rõ chất lượng thế cờ dù chưa đổi hẳn cục diện';
+    lines.push('Sau nước ' + moveRef + (cp != null ? ' (mất ~' + Math.round(cp) + 'cp)' : '') + ': ' + verdict + '.');
+  }
+  return lines.length ? lines.join('<br>') : null;
+}
+
+/* ── Helper riêng cho #13 Bài học chính ──
+   KHÔNG tính lại gì mới — chỉ TẬN DỤNG g7Pool (#7 cơ hội bị bỏ lỡ) và
+   g8Pool (#8 sai lầm quan trọng nhất) đã có sẵn. Mỗi id (bỏ hậu tố
+   -w/-b) ứng với đúng 1 "loại lỗi" -> tra LESSON_MAP để rút bài học
+   tổng quát, kèm số nước lấy lại qua _extractMoveIdxFromCandText (dùng
+   chung với #9) để bài học gắn với dữ liệu thật của ván, không nói
+   chung chung. Ưu tiên sai lầm (#8) trước cơ hội bỏ lỡ (#7), loại
+   trùng loại, tối đa 4 bài học theo đúng khung (2–4). */
+var _NARR_LESSON_MAP = {
+  'g1-worstmove': 'tránh những nước cờ gây mất mát lớn về centipawn chỉ trong một nước — cần kiểm tra kỹ trước khi đi những nước tưởng như "tự nhiên"',
+  'g2-fork': 'rà soát kỹ các ô mà đối phương có thể tấn công cùng lúc hai quân trước khi đi, để không dính đòn chĩa đôi (fork)',
+  'g2-pin': 'chú ý xử lý sớm các thế bị ghim (pin) — quân bị ghim mất khả năng di chuyển tự do và rất dễ bị khai thác thêm',
+  'g2-hanging': 'luôn kiểm tra mọi quân đang được bảo vệ hay chưa trước khi đổi nước đi, tránh để quân bị treo (hanging)',
+  'g2-missed-mate': 'khi có cơ hội chiếu hết, cần tính kỹ hết các nước chiếu liên tục thay vì chọn ngay phương án an toàn hơn nhưng chậm hơn',
+  'g2-missed-material': 'rà soát kỹ các nước ăn quân/giành ưu thế vật chất rõ ràng trước khi quyết định, tránh bỏ lỡ cơ hội',
+  'g5-pawn-endgame': 'trong tàn cuộc tốt, cần tính chính xác đường đi của Vua và tốt thông — đây thường là yếu tố quyết định thắng thua'
+};
+function _narrIdPrefix(id) { return id.replace(/-[wb]$/, ''); }
+function _narrG13_lessons(g7Pool, g8Pool, gMoveTexts, sideChar) {
+  var seen = {};
+  var lessons = [];
+  function addFromPool(pool) {
+    for (var i = 0; i < pool.length && lessons.length < 4; i++) {
+      var c = pool[i];
+      var prefix = _narrIdPrefix(c.id);
+      var body = _NARR_LESSON_MAP[prefix];
+      if (!body || seen[prefix]) continue;
+      seen[prefix] = true;
+      var idx = _extractMoveIdxFromCandText(c.text, sideChar);
+      var moveTxt = '';
+      if (idx >= 0) {
+        var moveNum = Math.floor(idx / 2) + 1;
+        /* ĐÃ SỬA: bổ sung SAN (gMoveTexts[idx]) — trước đây thiếu, hiển
+           thị trống kiểu "(nước 29 )" thay vì "(nước 29.Qh3)". */
+        moveTxt = ' (nước <b>' + moveNum + (sideChar === 'w' ? '.' : '...') + (gMoveTexts[idx] || '') + '</b>)';
+      }
+      lessons.push('Nên ' + body + moveTxt + '.');
+    }
+  }
+  addFromPool(g8Pool); /* ưu tiên sai lầm thật đã xảy ra */
+  addFromPool(g7Pool); /* rồi mới tới cơ hội bị bỏ lỡ */
+  return lessons.length ? lessons.join('<br>') : null;
+}
+
+/* ── Helper riêng cho #14 Kết luận ──
+   Ghép NGẮN GỌN: kết quả (winnerSide) + nước bước ngoặt (TẬN DỤNG LẠI
+   g5Result.idx/moveNum đã tính ở #5, không quét evalPcts lần nữa) +
+   nước sai lầm nặng nhất (TẬN DỤNG LẠI g8Pool[0] đã chọn ở #8, dùng
+   chung _extractMoveIdxFromCandText với #9/#13) — đúng tinh thần
+   "1 đoạn rất ngắn chốt lại" của khung 14 mục. */
+function _narrG14_conclusion(winnerSide, sideChar, oppChar, sideLabel, oppLabel, g5Result, g8Pool, gMoveTexts) {
+  var resultPhrase;
+  if (winnerSide === 'draw') resultPhrase = 'Ván đấu kết thúc hoà';
+  else if (winnerSide === sideChar) resultPhrase = sideLabel + ' giành chiến thắng';
+  else if (winnerSide === oppChar) resultPhrase = sideLabel + ' để thua ván này';
+  else resultPhrase = 'Kết quả ván đấu chưa được xác định rõ ràng';
+
+  /* ĐÃ SỬA: bổ sung SAN (gMoveTexts[g5Result.idx]) — trước đây thiếu,
+     hiển thị trống kiểu "nước 11" thay vì "nước 11.Rb8". */
+  var whereTxt = '';
+  if (g5Result) {
+    whereTxt = 'cục diện thay đổi rõ rệt nhất ở nước <b>' + g5Result.moveNum
+        + (g5Result.mvSide === 'w' ? '.' : '...') + (gMoveTexts[g5Result.idx] || '') + '</b>';
+  }
+
+  var mistakeTxt = '';
+  if (g8Pool && g8Pool.length) {
+    var idx0 = _extractMoveIdxFromCandText(g8Pool[0].text, sideChar);
+    if (idx0 >= 0) {
+      var mvNum0 = Math.floor(idx0 / 2) + 1;
+      mistakeTxt = 'sai lầm đáng nhớ nhất là nước <b>' + mvNum0 + (sideChar === 'w' ? '.' : '...') + (gMoveTexts[idx0] || '') + '</b>';
+    }
+  }
+
+  var middleParts = [];
+  if (whereTxt) middleParts.push(whereTxt);
+  if (mistakeTxt) middleParts.push(mistakeTxt);
+
+  if (!middleParts.length) {
+    return resultPhrase + '. Ván đấu không có bước ngoặt hay sai lầm nào nổi bật đủ để rút thành điểm cần nhớ riêng.';
+  }
+  return resultPhrase + ', ' + middleParts.join(' và ') + ' — đây là điều ' + sideLabel + ' cần khắc sâu trước các ván tiếp theo.';
+}
+
+/* ── Helper riêng cho #4 Kế hoạch trung cuộc ──
+   Ý tưởng "thí quân hợp lý" và "chuỗi nước tốt liên tiếp" tham khảo từ
+   chess-bullet-summary.js (mục #3 và #5 trong file đó), nhưng KHÔNG tính
+   lại eval/material thô — dùng THẲNG dữ liệu chính thức đã có sẵn của
+   engine: isSacrifice/materialLostCp qua _buildClassifyInput(i) (đã
+   được group 2/5 dùng ở nơi khác) và cls[] chính thức (giống hệt bảng
+   Classify hiển thị cho người dùng, tránh lệch số liệu). Chỉ xét các
+   nước CỦA BÊN ĐƯỢC PHÂN TÍCH rơi vào phaseOf(...)==='middlegame'. */
+var _NARR_OK_CLS = {forced:1, book:1, best:1, brilliant:1, great_defense:1, great:1, excellent:1, good:1, normal:1};
+function _narrG4_middlegamePlan(cls, gMoveInfo, gMoveTexts, sideChar, sideLabel) {
+  var mySideVal = (sideChar === 'w') ? W : B;
+  var bestSac = null;               /* {idx, materialLostCp} — pha thí quân lớn nhất */
+  var bestStreak = {startIdx: -1, endIdx: -1, len: 0};
+  var curStreak = {startIdx: -1, len: 0};
+
+  for (var i = 0; i < cls.length; i++) {
+    var info = gMoveInfo[i];
+    if (!info || info.side !== mySideVal) continue;
+    if (phaseOf(info.materialPct !== undefined ? info.materialPct : 1) !== 'middlegame') {
+      curStreak = {startIdx: -1, len: 0}; /* ra khỏi trung cuộc thì cắt chuỗi — chỉ tính trong ĐÚNG giai đoạn này */
+      continue;
+    }
+    var ci = _buildClassifyInput(i);
+    if (ci && ci.isSacrifice && ci.materialLostCp >= 150 && cls[i] !== 'blunder' && cls[i] !== 'mistake') {
+      if (!bestSac || ci.materialLostCp > bestSac.materialLostCp) bestSac = {idx: i, materialLostCp: ci.materialLostCp};
+    }
+    if (_NARR_OK_CLS[cls[i]]) {
+      if (curStreak.len === 0) curStreak.startIdx = i;
+      curStreak.len++;
+      if (curStreak.len > bestStreak.len) bestStreak = {startIdx: curStreak.startIdx, endIdx: i, len: curStreak.len};
+    } else {
+      curStreak = {startIdx: -1, len: 0};
+    }
+  }
+
+  var parts = [];
+  if (bestSac) {
+    var sacNum = Math.floor(bestSac.idx / 2) + 1;
+    parts.push(sideLabel + ' chủ động thí quân ở nước <b>' + sacNum + (sideChar === 'w' ? '.' : '...')
+      + (gMoveTexts[bestSac.idx] || '') + '</b> (mất khoảng ' + Math.round(bestSac.materialLostCp)
+      + 'cp vật chất) để đổi lấy thế chủ động hoặc cơ hội tấn công.');
+  }
+  if (bestStreak.len >= 5) {
+    var s1 = Math.floor(bestStreak.startIdx / 2) + 1;
+    var s2 = Math.floor(bestStreak.endIdx / 2) + 1;
+    parts.push('Giai đoạn chơi chắc tay nhất trong trung cuộc là chuỗi <b>' + bestStreak.len
+      + ' nước</b> liên tiếp không mắc lỗi, từ nước <b>' + s1 + '</b> đến <b>' + s2
+      + '</b>, cho thấy kế hoạch được thực hiện khá nhất quán.');
+  }
+  return parts.length ? parts.join(' ') : null;
+}
+
+/* ── Helper riêng cho #10 Phản ứng của đối thủ ──
+   TẬN DỤNG LẠI g8Pool (#8 Sai lầm quan trọng nhất) — với MỖI sai lầm đã
+   chọn, xem nước NGAY SAU đó của đối thủ (idx+1) được xếp nhãn gì trong
+   cls[] chính thức, để biết đối thủ có khai thác được hay không. Không
+   tính lại cpLoss/eval — chỉ đọc nhãn classify đã có, dùng chung
+   _extractMoveIdxFromCandText với #9/#13. */
+function _narrG10_opponentResponse(g8Pool, cls, gMoveTexts, sideChar) {
+  if (!g8Pool.length) return null;
+  var oppChar = (sideChar === 'w') ? 'b' : 'w';
+  var colorWord = (sideChar === 'w') ? 'Trắng' : 'Đen';
+  var BAD_CLS = {inaccuracy:1, mistake:1, blunder:1, missed_win:1, missed_mate:1};
+  var GREAT_CLS = {best:1, brilliant:1, great:1, great_defense:1, excellent:1};
+  var lines = [];
+  var seenIdx = {};
+  for (var k = 0; k < g8Pool.length; k++) {
+    var idx = _extractMoveIdxFromCandText(g8Pool[k].text, sideChar);
+    var oppIdx = idx + 1;
+    if (idx < 0 || oppIdx >= cls.length || seenIdx[oppIdx]) continue;
+    seenIdx[oppIdx] = true;
+    var oppCls = cls[oppIdx];
+    var moveNum = Math.floor(oppIdx / 2) + 1;
+    var moveRef = '<b>' + moveNum + (oppChar === 'w' ? '.' : '...') + (gMoveTexts[oppIdx] || '') + '</b>';
+    /* ĐÃ SỬA theo yêu cầu: câu ngắn gọn hơn — "Sau đó đối thủ đi nước X
+       [đã khai thác triệt để / nhưng chưa tận dụng được / chỉ đáp trả ở
+       mức bình thường]..." thay vì "Ngay sau đó, đối thủ (nước X) tận
+       dụng ngay lập tức bằng một nước rất chính xác, khai thác triệt để
+       sai lầm vừa xảy ra" (dài dòng, lặp ý). */
+    var verdict;
+    if (BAD_CLS[oppCls]) verdict = 'nhưng chưa tận dụng được, trao cơ hội cho ' + colorWord;
+    else if (GREAT_CLS[oppCls]) verdict = 'đã khai thác triệt để sai lầm bên ' + colorWord;
+    else verdict = 'nhưng chỉ đáp trả ở mức bình thường, chưa khai thác hết sai lầm vừa xảy ra';
+    lines.push('Sau đó đối thủ đi nước ' + moveRef + ' ' + verdict + '.');
+  }
+  return lines.length ? lines.join('<br>') : null;
+}
+
+/* ── Helper riêng cho #7 Cơ hội quan trọng bị bỏ lỡ ──
+   g7Pool gốc (g2-missed-mate + g2-missed-material + g5-pawn-endgame) khá
+   HẸP: g2-missed-mate chỉ lấy 1 ca sâu nhất, g2-missed-material chỉ tính
+   missed_win dạng ăn quân và cpLoss≥200 — nhiều ván không có ca nào thoả
+   nên #7 hay trống. Hàm này GIỮ NGUYÊN g7Pool gốc rồi bổ sung thêm (tối
+   đa tới 4 dòng) các nước classify 'missed_win'/'missed_mate' của bên
+   được phân tích mà g7Pool CHƯA nhắc tới — quét thẳng cls[] chính thức,
+   không giới hạn kiểu nước hay ngưỡng cpLoss, để bắt được nhiều ca hơn
+   (vd. bỏ lỡ thắng qua đẩy tốt phong hậu, không phải ăn quân). */
+function _narrG7_missedChances(g7Pool, cls, cpLosses, gMoveInfo, gMoveTexts, sideChar, sideLabel, g8Pool) {
+  var lines = []; /* mỗi phần tử: {idx, text} — để sort theo nước đi ở cuối */
+  var usedIdx = {};
+  /* ĐÃ SỬA: tính trước danh sách nước đã thuộc #8 (g8Pool) để loại trừ
+     NGAY TỪ ĐẦU — kể cả những candidate GỐC của g7Pool (g2-missed-mate/
+     g2-missed-material/g5-pawn-endgame), không chỉ phần "extra" quét
+     thêm bên dưới. Trước đây chỉ lọc phần "extra", nên nếu 1 nước đã
+     nằm sẵn trong g7Pool gốc VÀ cũng là nước tệ nhất ở #8, nó vẫn bị
+     lặp lại ở #7 (đúng như trường hợp thực tế: nước 29 Qh3 xuất hiện ở
+     cả #7, #8, #9, #10). */
+  var g8Idx = {};
+  if (g8Pool && g8Pool.length) {
+    for (var g = 0; g < g8Pool.length; g++) {
+      var gidx = _extractMoveIdxFromCandText(g8Pool[g].text, sideChar);
+      if (gidx >= 0) g8Idx[gidx] = true;
+    }
+  }
+  for (var p = 0; p < g7Pool.length; p++) {
+    var pidx = _extractMoveIdxFromCandText(g7Pool[p].text, sideChar);
+    if (pidx >= 0 && g8Idx[pidx]) continue; /* đã kể ở #8/#9/#10, bỏ qua để khỏi lặp */
+    lines.push({idx: (pidx >= 0 ? pidx : 999999), text: g7Pool[p].text});
+    if (pidx >= 0) usedIdx[pidx] = true;
+  }
+  for (var g2i in g8Idx) usedIdx[g2i] = true; /* loại luôn khỏi vòng quét "extra" bên dưới */
+  var mySideVal = (sideChar === 'w') ? W : B;
+  var extra = [];
+  for (var i = 0; i < cls.length; i++) {
+    if (cls[i] !== 'missed_win' && cls[i] !== 'missed_mate') continue;
+    if (usedIdx[i]) continue;
+    var info = gMoveInfo[i];
+    if (!info || info.side !== mySideVal) continue;
+    var loss = cpLosses[i];
+    extra.push({idx: i, loss: (loss === null || loss === undefined) ? 0 : loss});
+  }
+  /* Chọn top-4 theo mức THIỆT HẠI (loss) trước — vẫn ưu tiên nêu ra
+     những cơ hội bị bỏ lỡ NGHIÊM TRỌNG nhất nếu có nhiều hơn 4 ca. */
+  extra.sort(function(a, b){ return b.loss - a.loss; });
+  for (var k = 0; k < extra.length && lines.length < 4; k++) {
+    var idx = extra[k].idx;
+    var moveNum = Math.floor(idx / 2) + 1;
+    var typeTxt = (cls[idx] === 'missed_mate') ? 'bỏ lỡ cơ hội chiếu hết' : 'bỏ lỡ cơ hội thắng rõ ràng';
+    lines.push({idx: idx, text: sideLabel + ': ' + typeTxt + ' ở nước <b>' + moveNum + (sideChar === 'w' ? '.' : '...')
+      + (gMoveTexts[idx] || '') + '</b>' + (extra[k].loss ? ' (thiệt khoảng ' + Math.round(extra[k].loss) + 'cp so với phương án tốt nhất)' : '') + '.'});
+  }
+  /* ĐÃ SỬA theo yêu cầu: sau khi đã CHỌN xong các dòng (theo mức độ
+     quan trọng), HIỂN THỊ lại theo đúng thứ tự NƯỚC ĐI tăng dần (nước
+     thấp trước, nước cao sau) — dễ theo mạch ván đấu hơn là theo điểm
+     số/thiệt hại. */
+  lines.sort(function(a, b){ return a.idx - b.idx; });
+  return lines.length ? lines.map(function(l){ return l.text; }).join('<br>') : null;
+}
+
+/* ── Helper riêng cho #11 Giai đoạn quyết định / chuyển hóa ──
+   g11Pool gốc (g5-king-active/passive) chỉ nói riêng về hoạt động Vua,
+   không mô tả "giữ/gia tăng/đánh mất lợi thế sau bước ngoặt" như khung
+   yêu cầu. Hàm này TẬN DỤNG LẠI g5Result (#5, đã có idx của bước ngoặt —
+   khỏi quét lại evalPcts) để so % thắng NGAY SAU bước ngoặt với % thắng
+   ở CUỐI VÁN, rồi dùng phaseOf(...) quét từ bước ngoặt trở đi để tìm mốc
+   ván chuyển sang tàn cuộc (nếu có). Kết quả được ghép thêm với g11Pool
+   gốc (hoạt động Vua) nếu có, làm chi tiết bổ sung. */
+function _narrG11_transition(g5Result, g11Pool, evalPcts, gMoveInfo, sideChar, sideLabel) {
+  var parts = [];
+  var colorWord = (sideChar === 'w') ? 'Trắng' : 'Đen';
+  if (g5Result) {
+    var startPct = _deepPct(evalPcts, g5Result.idx + 1, sideChar);
+    var lastEvalIdx = evalPcts.length - 1;
+    var endPct = _deepPct(evalPcts, lastEvalIdx, sideChar);
+    if (startPct !== null && endPct !== null) {
+      var diff = endPct - startPct;
+      var trendTxt = (diff >= 15) ? 'tiếp tục gia tăng lợi thế'
+                   : (diff <= -15) ? 'để tuột lợi thế'
+                   : 'giữ nguyên cục diện từ đó đến hết ván';
+
+      var endgameIdx = -1;
+      for (var i = g5Result.idx; i < gMoveInfo.length; i++) {
+        var info = gMoveInfo[i];
+        if (info && phaseOf(info.materialPct !== undefined ? info.materialPct : 1) === 'endgame') { endgameIdx = i; break; }
+      }
+      var egTxt = '';
+      if (endgameIdx >= 0) {
+        var egMoveNum = Math.floor(endgameIdx / 2) + 1;
+        var egSide = (gMoveInfo[endgameIdx].side === W) ? 'w' : 'b';
+        var egPct = _deepPct(evalPcts, endgameIdx + 1, sideChar);
+        var egStateTxt = (egPct === null) ? '' : (egPct >= 55 ? ', vẫn đang ưu thế' : egPct <= 45 ? ', vị trí không còn thuận lợi' : ', thế cờ tương đối cân bằng');
+        egTxt = ' Ván chuyển sang tàn cuộc từ khoảng nước <b>' + egMoveNum + (egSide === 'w' ? '.' : '...') + '</b>' + egStateTxt + '.';
+      }
+
+      /* ĐÃ SỬA theo yêu cầu: bỏ mốc "từ X%" (đã nói ở câu Bước ngoặt phía
+         trước rồi, nhắc lại là thừa) — chỉ còn nói KẾT QUẢ cuối ván, diễn
+         đạt đúng theo hướng đang thắng hay đang thua ở thời điểm cuối. */
+      var finalStateTxt = (endPct >= 50)
+        ? 'ưu thế thắng ' + colorWord + ' lên đến <b>' + Math.round(endPct) + '%</b>'
+        : colorWord + ' chỉ còn <b>' + Math.round(endPct) + '%</b> cơ hội thắng';
+      parts.push('Sau đó ' + colorWord + ' ' + trendTxt + ', cuối ván ' + finalStateTxt + '.' + egTxt);
+    }
+  }
+  if (g11Pool.length) parts.push(joinTextsG11(g11Pool));
+  return parts.length ? parts.join(' ') : null;
+}
+function joinTextsG11(arr) { return arr.map(function(c){ return c.text; }).join('<br>'); }
+
+/* Mô tả CHUẨN của từng mục trong khung 14 mục — dùng làm nội dung mặc
+   định để hiển thị kèm "(chưa có nội dung)" khi mục đó chưa có logic
+   thật, để người đọc vẫn hiểu mục này dùng để làm gì trong lúc chờ
+   hoàn thiện dần. KHÔNG áp dụng cho #A (leftover không có mô tả chuẩn). */
+var NARR_SPEC_TEXT = {
+  1: 'Tóm tắt kết quả, thế trận nhìn chung và diễn biến chính của ván trong 1–2 câu.',
+  2: 'Hai bên chơi hệ gì, bên được phân tích đã triển khai quân và thực hiện kế hoạch khai cuộc như thế nào; có sớm đạt được vị trí thuận lợi hay không.',
+  3: 'Xác định bên nào đang có ưu thế và ưu thế đó đến từ đâu: vật chất, không gian, phát triển, vua, hoạt động quân hoặc cấu trúc tốt.',
+  4: 'Mô tả kế hoạch chính của bên được phân tích và cách đối thủ đáp trả; đây là phần giải thích "hai bên đang muốn làm gì".',
+  5: 'Xác định thời điểm cục diện bắt đầu thay đổi đáng kể và nước nào gây ra thay đổi đó.',
+  6: 'Chọn một quyết định nổi bật giúp duy trì hoặc tạo lợi thế, kèm lý do ngắn gọn dựa trên vị trí/eval.',
+  7: 'Nếu có, chỉ ra thời điểm bên được phân tích có phương án tốt hơn đáng kể, đặc biệt là cơ hội thắng, giữ ưu thế hoặc thoát thua.',
+  8: 'Chọn 1–3 sai lầm có tác động lớn nhất đến cục diện, thay vì lặp lại toàn bộ bảng Classify.',
+  9: 'Giải thích sai lầm đó dẫn đến điều gì: mất quân, mất initiative, mất ưu thế, vua yếu, tàn cuộc xấu, hoặc chuyển từ thắng sang hòa/thua.',
+  10: 'Chỉ ra cách đối thủ tận dụng hoặc không tận dụng sai lầm đó, qua đó giải thích tại sao cục diện tiếp tục thay đổi.',
+  11: 'Mô tả cách bên được phân tích giữ, gia tăng hoặc đánh mất lợi thế sau bước ngoặt; nếu có tàn cuộc thì nói cách ván đấu được chuyển sang tàn cuộc và xử lý ra sao.',
+  12: 'Tổng hợp ngắn gọn các điểm nổi bật về chiến thuật, tính toán, chiến lược, hoạt động quân và khả năng ra quyết định, nhưng chỉ nêu những đặc điểm thực sự thể hiện qua dữ liệu của ván.',
+  13: 'Rút ra 2–4 bài học cụ thể từ chính những quyết định trong ván, ưu tiên những điều có thể áp dụng cho các ván sau.',
+  14: 'Một đoạn rất ngắn chốt lại: ván đấu được quyết định ở đâu, vì sao và bên được phân tích cần nhớ điều gì.'
+};
+
+/* ── Helper riêng cho #1 Tổng quan ván đấu ──
+   Ghép: kết quả (thắng/thua/hoà, theo góc nhìn bên được phân tích, kèm lý
+   do kết thúc nếu PGN có header [Termination]) + accuracy (nếu tính được
+   riêng 1 bên) + độ dài ván + tên khai cuộc (nếu nhận diện được) + 1 câu
+   về độ biến động (tận dụng g1-volatility, KHÔNG liệt kê lại từng nước —
+   chỉ nói mức độ giằng co/ổn định). */
+function _narrLowerFirst(str) {
+  if (!str) return str;
+  return str.charAt(0).toLowerCase() + str.slice(1);
+}
+
+function _narrOverviewText(cls, evalPcts, sideChar, oppChar, sideLabel, oppLabel, winnerSide, accuracy, opnCand, volCand, termination, gAnFens, gMoveTexts, gAnScores) {
+  var totalMoves = Math.ceil(cls.length / 2);
+
+  /* ĐÃ THÊM: bôi đậm riêng TÊN người chơi (nếu có) trong câu #1 — CHỈ áp
+     dụng cục bộ trong hàm này (sideLabel là tham số nhận từ ngoài, gán
+     lại ở đây KHÔNG ảnh hưởng tới các mục khác như #47/#30 cũng đang
+     dùng chung biến sideLabel gốc). Nếu sideLabel có dạng "Tên (Màu)"
+     thì bôi đậm phần Tên; nếu chỉ là "Trắng"/"Đen" (không có tên thật)
+     thì giữ nguyên, không có gì để bôi đậm riêng. */
+  sideLabel = sideLabel.replace(/^([^(]+)\(/, 'Kỳ thủ <b>$1</b>(');
+
+  /* Lý do kết thúc — ĐÃ SỬA: trước đây CHỈ đọc chuỗi [Termination] trong
+     PGN, không khớp được dạng nào thì im lặng bỏ qua. Giờ ưu tiên tra
+     THẲNG từ thế cờ cuối ván (đáng tin hơn text tự do của PGN, vì đây là
+     luật cờ xác định được 100%): nước cuối có '#' -> chắc chắn chiếu
+     hết; hoà mà bên đi không còn nước nào và không bị chiếu -> chắc chắn
+     hết nước đi (stalemate). Chỉ khi bàn cờ không tự nói lên được lý do
+     (thắng/thua nhưng không phải chiếu hết — tức là do đầu hàng hoặc hết
+     giờ, 2 trường hợp bàn cờ không phân biệt được) mới cần đọc thêm
+     [Termination] để biết cụ thể là đầu hàng hay hết giờ. */
+  var endReason = '';
+  var lastSan = (gMoveTexts && gMoveTexts.length) ? gMoveTexts[gMoveTexts.length - 1] : '';
+  var isMateEnding = !!(lastSan && lastSan.indexOf('#') !== -1);
+  var isStalemateEnding = false;
+  if (!isMateEnding && winnerSide === 'draw' && gAnFens && gAnFens.length) {
+    var _lastFen = gAnFens[gAnFens.length - 1];
+    /* Tái dùng _fenHasNoLegalMoves/_noMoveScoreFor đã có sẵn trong engine
+       (dùng để né hỏi worker khi 0 nước hợp lệ) — cả 2 đều PURE (chỉ dùng
+       boardArrayFromFen, KHÔNG đụng vào gB/gTurn toàn cục), an toàn gọi
+       giữa lúc render báo cáo. */
+    if (_lastFen && typeof _fenHasNoLegalMoves === 'function' && typeof _noMoveScoreFor === 'function'
+        && _fenHasNoLegalMoves(_lastFen) && _noMoveScoreFor(_lastFen) === 0) {
+      isStalemateEnding = true;
+    }
+  }
+  if (isMateEnding) endReason = 'bị chiếu hết';
+  else if (isStalemateEnding) endReason = 'hết nước đi hợp lệ (hết cờ - stalemate)';
+  else if (termination) {
+    /* Bàn cờ không tự nói được lý do (không phải chiếu hết/hết cờ) ->
+       đọc [Termination] để phân biệt đầu hàng và hết thời gian. */
+    var t = termination.toLowerCase();
+    if (t.indexOf('time') !== -1 || t.indexOf('forfeit') !== -1 || t.indexOf('thời gian') !== -1) endReason = 'hết thời gian';
+    else if (t.indexOf('checkmate') !== -1 || t.indexOf('chiếu hết') !== -1) endReason = 'bị chiếu hết';
+    else if (t.indexOf('resign') !== -1 || t.indexOf('đầu hàng') !== -1) endReason = 'đầu hàng';
+    else if (t.indexOf('abandon') !== -1) endReason = 'bỏ ván';
+    else if (t.indexOf('repetition') !== -1 || t.indexOf('lặp') !== -1) endReason = 'lặp nước 3 lần';
+    else if (t.indexOf('insufficient') !== -1 || t.indexOf('vật chất') !== -1) endReason = 'không đủ quân để chiếu hết';
+    else if (t.indexOf('50-move') !== -1 || t.indexOf('fifty') !== -1 || t.indexOf('50 nước') !== -1) endReason = 'đủ 50 nước không ăn quân/đẩy Tốt';
+    else if (t.indexOf('agree') !== -1 || t.indexOf('đồng ý') !== -1 || t.indexOf('thoả thuận') !== -1) endReason = 'hai bên đồng ý hoà';
+  }
+  /* Với lý do "hết thời gian": ván không kết thúc bằng 1 nước cờ trên bàn
+     cờ, nên nói rõ luôn mốc nước cuối cùng (đã có sẵn = totalMoves, không
+     tính gì thêm) để tránh gây hiểu nhầm là ván "kết thúc bằng chiến
+     thuật" ở nước đó. */
+  var endReasonSuffix = (endReason === 'hết thời gian') ? (' ở nước <b>' + totalMoves + '</b>') : '';
+  /* Fallback: kết quả đã ngã ngũ nhưng KHÔNG nhận ra dạng lý do nào (VD
+     [Termination] thiếu, hoặc ghi dạng lạ chưa có trong danh sách ở
+     trên) — vẫn nói 1 câu ngắn thay vì im lặng, để form luôn ổn định. */
+  var endReasonUnknownTxt = (!endReason && winnerSide && winnerSide !== 'draw') ? ' (chưa xác định được lý do kết thúc cụ thể)' : '';
+
+  /* "đáng tiếc" CHỈ thêm đúng 1 trường hợp cụ thể theo yêu cầu: thua vì
+     HẾT THỜI GIAN trong khi ở thế cờ cuối cùng vẫn đang thắng thế rõ
+     ràng (cp nghiêng về bên thua ≥300, tức hơn khoảng 3 Tốt) — nghĩa là
+     thua "oan" vì đồng hồ chứ không phải vì thế cờ đã xấu. Các lý do
+     thua khác (chiếu hết, đầu hàng, hết giờ nhưng thế cờ không hơn) thì
+     KHÔNG thêm "đáng tiếc". Dùng gAnScores[cuối cùng] qua anCPwhite() có
+     sẵn trong engine (quy đổi điểm Lozza — vốn luôn theo góc nhìn bên
+     đang đi — về góc nhìn cố định của Trắng), rồi lật dấu nếu bên thua
+     là Đen để ra đúng cp theo góc nhìn của bên thua. */
+  var isPitifulTimeoutLoss = false;
+  if (endReason === 'hết thời gian' && gAnScores && gAnScores.length && typeof anCPwhite === 'function') {
+    var _lastSc = gAnScores[gAnScores.length - 1];
+    if (_lastSc) {
+      var _cpWhiteLast = anCPwhite(_lastSc);
+      var _cpForSideChar = (sideChar === 'w') ? _cpWhiteLast : -_cpWhiteLast;
+      if (_cpForSideChar >= 300) isPitifulTimeoutLoss = true;
+    }
+  }
+
+  /* ĐÃ SỬA theo yêu cầu: câu chiếu hết giờ nói thẳng "X thắng chiếu hết
+     đối thủ" / "X thua, bị đối thủ chiếu hết" thay vì vòng qua khuôn
+     chung "thắng do đối thủ bị chiếu hết" (nghe ngược, như đối thủ tự
+     chiếu hết mình). "đáng tiếc" chỉ chèn đúng case hết-giờ-nhưng-đang-
+     thắng-thế ở trên, không áp dụng chung cho mọi kiểu thua. Các lý do
+     khác (hết giờ bình thường, đầu hàng...) vẫn dùng khuôn "do đối thủ
+     ..." như cũ vì không có sẵn động từ tự nhiên hơn. */
+  var resultTxt;
+  if (winnerSide === 'draw') resultTxt = 'kết thúc hoà' + (endReason ? ' do ' + endReason : '');
+  else if (winnerSide === sideChar) {
+    resultTxt = isMateEnding
+      ? sideLabel + ' thắng chiếu hết đối thủ'
+      : sideLabel + ' thắng' + (endReason ? ' do đối thủ ' + endReason + endReasonSuffix : endReasonUnknownTxt);
+  } else if (winnerSide === oppChar) {
+    var _pitifulTxt = isPitifulTimeoutLoss ? ' đáng tiếc' : '';
+    resultTxt = isMateEnding
+      ? sideLabel + ' thua, bị đối thủ chiếu hết'
+      : sideLabel + ' thua' + _pitifulTxt + (endReason ? ' vì ' + endReason + endReasonSuffix : endReasonUnknownTxt);
+  } else resultTxt = 'chưa xác định rõ kết quả cuối cùng';
+
+  /* ĐÃ SỬA theo yêu cầu mới: "độ chính xác nước đi" (chung chung, không
+     rõ của bên nào) -> "độ chính xác bên Trắng/Đen" (nói rõ MÀU của bên
+     đang được tường thuật, KHÔNG dùng tên riêng dù có — tên riêng đã
+     xuất hiện ngay câu sau trong resultTxt rồi, dùng lại tên ở đây thành
+     thừa). Đồng thời tách thành CÂU RIÊNG (dấu chấm) thay vì nối bằng
+     dấu phẩy — đọc rành mạch hơn: "...67%. Samackhat (Trắng) thắng..."
+     thay vì "...67%, Samackhat (Trắng) thắng...". */
+  var sideColorWord = (sideChar === 'w') ? 'Trắng' : 'Đen';
+  var accTxt = (accuracy !== null && accuracy !== undefined)
+    ? ' với độ chính xác bên ' + sideColorWord + ' khoảng <b>' + accuracy + '%</b>.'
+    : ' (chưa xác định được độ chính xác nước đi).';
+
+  /* Câu kết quả giờ đứng ĐẦU 1 câu mới (sau dấu chấm ở accTxt) nên viết
+     hoa chữ cái đầu — resultTxt vốn bắt đầu bằng sideLabel (đã viết hoa
+     sẵn) trong mọi trường hợp TRỪ khi hoà hoặc chưa xác định được kết
+     quả (bắt đầu bằng chữ thường "kết thúc hoà"/"chưa xác định..."). */
+  var resultTxtCapped = /^[a-zà-ỹ]/.test(resultTxt)
+    ? resultTxt.charAt(0).toUpperCase() + resultTxt.slice(1)
+    : resultTxt;
+
+  /* ĐÃ SỬA (theo yêu cầu mới nhất): quay lại bỏ hẳn câu Khai cuộc khi
+     KHÔNG xác định được tên cụ thể (opnCand null) — không còn viết câu
+     "chưa xác định được tên cụ thể" nữa, im lặng bỏ qua cho gọn. Chỉ khi
+     có opnCand (đã tra được tên khai cuộc/biến thể) mới thêm câu này. */
+  var openingTxt = opnCand
+    ? ' Khai cuộc dùng ' + _narrLowerFirst(opnCand.text.replace(/^.*?:\s*/, '').replace(/\.$/, '')) + '.'
+    : '';
+
+  /* ĐÃ SỬA: khi KHÔNG có volCand (chưa đổi bên thắng ≥3 lần) — trước đây
+     luôn nói cứng "không có nhiều lần đổi bên thắng đột ngột" dù ván có
+     thể nghiêng hẳn 1 chiều suốt từ đầu (không cần đổi bên vì chưa từng
+     mất ưu thế). Giờ tính % thắng trung bình (theo góc nhìn Trắng, bỏ
+     qua các nước 'book') để nói rõ ván có thật sự 1 chiều hay khá cân
+     bằng, thay vì chỉ nói "không có gì đột ngột" chung chung. */
+  var volTxt;
+  if (volCand) {
+    /* ĐÃ SỬA: đổi từ ngữ theo câu mẫu mới —
+       "đổi bên đang thắng" -> "đổi chiều"; "(N lần dao động" -> "(có N
+       lần dao động"; dấu gạch ngang "—" nối 2 mệnh đề -> dấu phẩy; và bỏ
+       cụm "cơ hội (tăng/củng cố)" trước "ưu thế đang có" cho gọn. */
+    volTxt = ' ' + volCand.text
+        .replace('đổi bên đang thắng', 'đổi chiều')
+        .replace('(', '(có ')
+        .replace(') — thế trận rất bất ổn,', '), thế trận giằng co,')
+        .replace('bỏ lỡ cơ hội củng cố ưu thế đang có', 'bỏ lỡ ưu thế đang có')
+        .replace('bỏ lỡ cơ hội tăng ưu thế đang có', 'bỏ lỡ ưu thế đang có');
+  } else {
+    /* ĐÃ SỬA: trước đây chỉ tính TRUNG BÌNH % thắng cả ván để đoán "một
+       chiều" hay "cân bằng" — nhưng 1 ván có 1-2 lần đổi chiều LỚN (chưa
+       đủ ngưỡng ≥3 lần của volCand ở trên) có thể ra trung bình ~50% dù
+       thực chất KHÔNG hề cân bằng (VD: nửa đầu 1 bên áp đảo, nửa sau bên
+       kia áp đảo ngược lại — trung bình cộng lại trông như huề nhưng
+       thực tế đã đổi chủ 2 lần). Giờ đếm SỐ LẦN ĐỔI CHIỀU thật sự (cùng
+       ngưỡng MAJOR_SWING=25 như volCand) trước, có đổi chiều thì nói rõ
+       "đổi chiều N lần, cuối trận nghiêng về bên nào" thay vì lấy trung
+       bình; chỉ khi HOÀN TOÀN không có lần đổi chiều nào mới xét tới
+       trung bình để phân biệt "một chiều" hay "cân bằng" thật sự. */
+    var _flipCount = 0;
+    for (var _fi = 0; _fi < cls.length; _fi++) {
+      if (cls[_fi] === 'book') continue;
+      var _fBefore = evalPcts[_fi], _fAfter = evalPcts[_fi + 1];
+      if (_fBefore === undefined || _fAfter === undefined) continue;
+      if (Math.abs(_fAfter - _fBefore) < 25) continue;
+      if ((_fBefore - 50) * (_fAfter - 50) < 0) _flipCount++;
+    }
+    if (_flipCount >= 1) {
+      var _finalWhitePct = evalPcts[evalPcts.length - 1];
+      var _finalLeanColor = (_finalWhitePct === undefined) ? null : (_finalWhitePct >= 50 ? 'Trắng' : 'Đen');
+      volTxt = _finalLeanColor
+        ? ' Thế trận đổi chiều ' + _flipCount + ' lần, cuối trận ưu thế thắng nghiêng về bên ' + _finalLeanColor + '.'
+        : ' Thế trận đổi chiều ' + _flipCount + ' lần trong ván.';
+    } else {
+      var _pctSum = 0, _pctCount = 0;
+      for (var _pi = 0; _pi < cls.length; _pi++) {
+        if (cls[_pi] === 'book') continue;
+        var _p = evalPcts[_pi + 1];
+        if (_p === undefined) continue;
+        _pctSum += _p; _pctCount++;
+      }
+      var _avgWhitePct = _pctCount ? (_pctSum / _pctCount) : 50;
+      if (_avgWhitePct >= 60) volTxt = ' Thế trận nhìn chung là một chiều, nghiêng về bên Trắng.';
+      else if (_avgWhitePct <= 40) volTxt = ' Thế trận nhìn chung là một chiều, nghiêng về bên Đen.';
+      else volTxt = ' Thế trận nhìn chung khá cân bằng, không bên nào chiếm ưu thế rõ rệt.';
+    }
+  }
+
+  return 'Ván đấu kéo dài <b>' + totalMoves + ' nước</b>' + accTxt + ' ' + resultTxtCapped + '.'
+       + openingTxt + volTxt;
+}
+
+
+/* Bảng số CỐ ĐỊNH cho các candidate "chưa xếp chỗ" trong khung 14 mục.
+   #1-#14 (đã bỏ #2) là khung chuẩn; các mục dưới đây LUÔN mang đúng số
+   này ở MỌI ván (khác với kiểu #A1/#A2 cũ đổi số theo thứ tự xuất hiện).
+   Base id = id gốc đã bỏ hậu tố -w/-b (_selfin_baseId). Thêm loại
+   candidate mới thì thêm 1 dòng vào đây, đừng chèn giữa bảng (xáo số cũ
+   của người dùng đã quen) — luôn nối vào cuối trước NUM_AFTER_MAP. */
+var LEFTOVER_ID_MAP = {
+  'g1-conversion':       15,
+  'g1-resilience-good':  16,
+  'g1-resilience-bad':   17,
+  'g1-worstmove':        18,
+  'g1-bishoppair':       19,
+  'g1-soundsac':         20,
+  'g1-turnmove':         21,
+  'g1-streak':           22,
+  'g1-harvest':          23,
+  'g1-checkstreak':      24,
+  'g2-fork':             25,
+  'g2-pin':              26,
+  'g2-missed-mate':      27,
+  'g2-missed-material':  28,
+  'g2-hanging':          29,
+  'g3-king-center':      30,
+  'g3-king-shield':      31,
+  'g3-center':           32,
+  'g3-outpost':          33,
+  'g3-openfile':         34,
+  'g3-castle-contrast':  35,
+  'g4-doubled':          36,
+  'g4-isolated':         37,
+  'g4-backward':         38,
+  'g4-passed':           39,
+  'g5-outofbook-bad':    40,
+  'g5-outofbook-good':   41,
+  'g5-king-passive':     42,
+  'g5-king-active':      43,
+  'g5-pawn-endgame':     44,
+  /* ĐÃ THÊM (đổi hướng sang "3-5 ý quan trọng nhất theo mạch nước đi"):
+     3 loại insight này TRƯỚC ĐÂY là mục bắt buộc riêng (#3, #5, #7) —
+     giờ chúng cũng chỉ là candidate cạnh tranh vào top 3-5 như mọi loại
+     khác, nên cần số cố định để khi KHÔNG lọt top vẫn có chỗ đứng ở danh
+     sách "chưa xếp" thay vì biến mất. */
+  'meta-opening-state':  45,
+  'meta-turning-point':  46,
+  'meta-missed-chances': 47
+};
+var NUM_AFTER_MAP = 48; /* candidate lạ chưa có trong bảng -> đánh số nối tiếp từ đây */
+
+/* ── Tiêu đề hiển thị cho từng loại candidate khi lọt vào top 3-5 ý
+   chính (xem buildGameNarrative, phần "POOL HỢP NHẤT"). Không cần phủ
+   hết mọi id — id nào chưa có trong map sẽ dùng tiêu đề chung theo
+   nhóm (g1/g2/g3-g4/g5) qua _narrTitleForBaseId() bên dưới. */
+var _NARR_BULLET_TITLE_MAP = {
+  'g1-worstmove':        'Sai lầm quan trọng nhất',
+  'g2-fork':             'Sai lầm quan trọng nhất',
+  'g2-pin':              'Sai lầm quan trọng nhất',
+  'g2-hanging':          'Sai lầm quan trọng nhất',
+  'meta-missed-chances': 'Cơ hội quan trọng bị bỏ lỡ',
+  'meta-turning-point':  'Bước ngoặt đầu tiên',
+  'meta-opening-state':  'Trạng thái sau khai cuộc',
+  'g1-soundsac':         'Quyết định hay nhất',
+  'g1-bishoppair':       'Quyết định hay nhất',
+  'g1-turnmove':         'Quyết định hay nhất',
+  'g1-streak':           'Quyết định hay nhất',
+  'g1-harvest':          'Quyết định hay nhất',
+  'g1-checkstreak':      'Quyết định hay nhất',
+  'g1-conversion':       'Quyết định hay nhất',
+  'g1-resilience-good':  'Quyết định hay nhất'
+};
+function _narrTitleForBaseId(baseId) {
+  if (_NARR_BULLET_TITLE_MAP[baseId]) return _NARR_BULLET_TITLE_MAP[baseId];
+  if (baseId.indexOf('g2-') === 0) return 'Tình huống chiến thuật';
+  if (baseId.indexOf('g3-') === 0 || baseId.indexOf('g4-') === 0) return 'Đánh giá cách chơi';
+  if (baseId.indexOf('g5-') === 0) return 'Giai đoạn ván đấu';
+  return 'Diễn biến đáng chú ý';
+}
+
+function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
+    gMoveInfo, gMoveTexts, topMistakes, winnerSide, accuracy,
+    detectedSide, whiteLabel, blackLabel, termination) {
+
+  var sections = [];
+  function push(num, title, text, kind, plain, icon){
+    if (!text && NARR_SPEC_TEXT[num]) {
+      text = NARR_SPEC_TEXT[num] + ' (chưa có nội dung)';
+    }
+    /* ĐÃ SỬA theo yêu cầu mới nhất: khôi phục icon đầu dòng kiểu bản cũ
+       (🏰♗🍖💥...) VÀ bỏ luôn tiền tố "#N (chưa xếp — id):" ở các mục
+       leftover — giờ MỌI mục (kể cả leftover) đều hiển thị THẲNG dạng
+       "icon + nội dung", không còn số/tiêu đề kỹ thuật hiện ra màn hình
+       nữa. `num`/`title` vẫn được LƯU trong object để nội bộ cần thì
+       tra cứu, chỉ là renderer không in ra nữa (xem đoạn build HTML). */
+    sections.push({num:num, title:title, text:text||'(chưa có nội dung)', kind:kind, plain:true, icon:icon});
+  }
+
+  var sideChar = (detectedSide === 'black') ? 'b' : 'w'; /* mặc định 'w' nếu không xác định được bên */
+
+  var g1All = buildDeepInsightsGroup1(cls, evalPcts, cpLosses, gAnFens, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel);
+  var g2All = buildDeepInsightsGroup2(cls, cpLosses, gAnScores, gAnFens, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel);
+  var g3All = buildDeepInsightsGroup3(gAnFens, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel);
+  var g4All = buildDeepInsightsGroup4(gAnFens, detectedSide, whiteLabel, blackLabel);
+  var g5All = buildDeepInsightsGroup5(cls, cpLosses, gMoveInfo, gAnFens, gMoveTexts, winnerSide, detectedSide, whiteLabel, blackLabel);
+
+  function byPrefix(arr, prefix){ return arr.filter(function(c){ return c.id.indexOf(prefix) === 0; }); }
+  /* ĐÃ SỬA — LỖI NGHIÊM TRỌNG: indexOf('-' + sideChar) tìm chuỗi con ở
+     BẤT KỲ ĐÂU trong id, không phải riêng hậu tố bên cuối cùng. Nhiều id
+     tình cờ chứa sẵn "-w" hoặc "-b" ở GIỮA tên (VD "g1-worstmove-b" chứa
+     "-w" trong chữ "-worstmove"; "g1-bishoppair-w" / "g1-resilience-bad-w"
+     / "g5-outofbook-bad-w" chứa "-b" trong "-bishoppair"/"-bad") — khiến
+     lọc theo bên bị lẫn NHẦM candidate của bên kia vào (VD sai lầm của
+     Đen bị gắn nhầm vào "bên Trắng", kéo theo tính sai luôn nước phản
+     ứng của đối thủ vì lấy sai ply gốc). Giờ chỉ so khớp ĐÚNG hậu tố ở
+     cuối chuỗi ("-w"/"-b"), không so khớp chuỗi con ở giữa. */
+  function bySideSuffix(arr){ return arr.filter(function(c){ return c.id.slice(-2) === ('-' + sideChar); }); }
+  function joinTexts(arr){ return arr.map(function(c){ return c.text; }).join('<br>'); }
+
+  var oppChar = (sideChar === 'w') ? 'b' : 'w';
+  /* ĐÃ SỬA: khi KHÔNG xác định được tên người chơi thật (whiteLabel/
+     blackLabel vẫn là default 'Trắng'/'Đen' do không có tên trong PGN
+     hoặc không detect được _pgnNamesForReport), trước đây vẫn ghép thành
+     "Trắng — Trắng" / "Đen — Đen" (lặp) — giờ chỉ ghi MÀU QUÂN, không
+     lặp tên. Chỉ khi có tên thật khác biệt mới ghép "Tên — Màu". */
+  var sideLabel = (sideChar === 'w')
+    ? ((whiteLabel && whiteLabel !== 'Trắng') ? (whiteLabel + ' (Trắng)') : 'Trắng')
+    : ((blackLabel && blackLabel !== 'Đen') ? (blackLabel + ' (Đen)') : 'Đen');
+
+  /* ---------- BỐI CẢNH (#1-#4) ---------- */
+
+  /* #1 Tổng quan ván đấu — ghép kết quả (winnerSide) + accuracy (nếu có)
+     + độ dài ván + tên khai cuộc (nếu có) + độ biến động (tận dụng
+     g1-volatility) thành 1-2 câu. */
+  var opnForOverview = _deepG0_openingName(gUciHist);
+  var volCand = null;
+  for (var _vi = 0; _vi < g1All.length; _vi++) {
+    if (g1All[_vi].id === 'g1-volatility') { volCand = g1All[_vi]; break; }
+  }
+  push(1, 'Tổng quan', _narrOverviewText(
+    cls, evalPcts, sideChar, oppChar, sideLabel,
+    (oppChar === 'w') ? whiteLabel : blackLabel,
+    winnerSide, accuracy, opnForOverview, volCand, termination, gAnFens, gMoveTexts, gAnScores
+  ), undefined, true, '📖');
+
+  /* #2 Khai cuộc — ĐÃ BỎ theo yêu cầu: tên khai cuộc đã được ghép sẵn
+     vào câu #1 (Tổng quan ván đấu) qua opnForOverview, lặp lại thành
+     mục riêng là thừa. Không push gì ở đây nữa — số thứ tự #3, #4...
+     giữ nguyên như cũ, chỉ #2 biến mất khỏi khung. */
+
+  /* ══════════════════════════════════════════════════════════════════
+     ĐÃ ĐỔI HƯỚNG (theo thảo luận với người dùng): thay vì ép đủ khung
+     14 mục cố định (hay trùng nội dung — VD #7/#8/#9/#10 cùng nói về 1
+     nước, #13 chỉ nhắc lại #7/#8 theo công thức), giờ MỌI insight (kể cả
+     những mục từng bắt buộc như "trạng thái sau khai cuộc", "bước ngoặt",
+     "sai lầm+hậu quả+phản ứng đối thủ", "đánh giá lối chơi"...) là 1
+     candidate cạnh tranh CHUNG 1 bảng xếp hạng theo .score. Chỉ hiển thị
+     3-5 ý ĐIỂM CAO NHẤT, sắp lại THEO THỨ TỰ NƯỚC ĐI cho dễ theo mạch
+     ván đấu (giống tinh thần bản "bullet theo nước đi" cũ). Mọi candidate
+     KHÔNG lọt top vẫn giữ nguyên SỐ CỐ ĐỊNH (LEFTOVER_ID_MAP) và được
+     liệt kê gọn ở cuối để xem xét dùng/bỏ sau — không mất dữ liệu.
+     ══════════════════════════════════════════════════════════════════ */
+
+  /* --- Sai lầm quan trọng nhất: GỘP mistake + hậu quả + phản ứng đối
+     thủ vào CÙNG 1 candidate (trước đây tách #8/#9/#10 riêng).
+     ĐÃ SỬA BUG: dedupe theo idx — trước đây 1 nước có thể dính 2 nhãn lỗi
+     khác nhau (VD vừa "worstmove" vừa "hanging" cho cùng nước 22 Qf3),
+     khiến #9 in ra 2 dòng "Sau nước 22 Qf3..." giống hệt nhau. */
+  var _mistakeRaw = bySideSuffix(
+      byPrefix(g1All, 'g1-worstmove').concat(byPrefix(g2All, 'g2-fork'), byPrefix(g2All, 'g2-pin'), byPrefix(g2All, 'g2-hanging'))
+    ).sort(function(a,b){ return b.score - a.score; });
+  var g8Pool = []; /* giữ tên biến cũ — #14 Kết luận vẫn dùng g8Pool[0] */
+  var _seenMistakeIdx = {};
+  var _dupMistakeIds = []; /* ĐÃ THÊM: nhãn lỗi khác bị loại vì TRÙNG nước
+     với 1 nhãn đã chọn (VD g2-hanging-w cùng nước với g1-worstmove-w đã
+     chọn) — trước đây bị loại khỏi g8Pool nhưng KHÔNG bị đánh dấu "đã
+     dùng", nên vẫn lọt xuống mục "chưa xếp" và lặp lại đúng nội dung đã
+     nói ở #18 (chỉ khác nhãn kỹ thuật). Giờ ghi nhận riêng để loại hẳn. */
+  for (var _mi = 0; _mi < _mistakeRaw.length && g8Pool.length < 3; _mi++) {
+    var _midx = _extractMoveIdxFromCandText(_mistakeRaw[_mi].text, sideChar);
+    if (_midx >= 0 && _seenMistakeIdx[_midx]) { _dupMistakeIds.push(_mistakeRaw[_mi].id); continue; } /* cùng 1 nước, đã có nhãn khác rồi -> bỏ, tránh lặp */
+    if (_midx >= 0) _seenMistakeIdx[_midx] = true;
+    g8Pool.push(_mistakeRaw[_mi]);
+  }
+  var mistakeCandidates = g8Pool.map(function(c){
+    /* ĐÃ SỬA theo yêu cầu: bỏ hẳn câu "hậu quả" riêng (Sau nước X (mất
+       ~Ycp): ...) — với g1-worstmove, cp đã nói trong CHÍNH câu mô tả
+       lỗi rồi, nói lại là thừa; với các loại lỗi khác (fork/pin/hanging)
+       câu hậu quả cũng không thêm được thông tin mới đáng kể. Câu mô tả
+       lỗi được chuẩn hoá lại gọn hơn: bỏ nhãn "Tên: "/"Màu: " ở đầu
+       (tiêu đề #18 "Sai lầm quan trọng nhất" đã ngụ ý rồi), thay bằng
+       "bên Trắng/Đen là ...". */
+    var colorWord = (sideChar === 'w') ? 'Trắng' : 'Đen';
+    var desc = c.text.replace(/^[^:]+:\s*/, '') /* bỏ "Tên: " hoặc "Màu: " ở đầu */
+        .replace(/^nước tệ nhất ván là (.+?) — mất khoảng (\d+)cp so với phương án tốt nhất,\s*đáng để xem lại kỹ\.?$/,
+                 '$1 làm mất khoảng $2cp so với phương án tốt nhất.');
+    var mergedText = 'Sai lầm quan trọng bên ' + colorWord + ' là ' + desc;
+    var reaction = _narrG10_opponentResponse([c], cls, gMoveTexts, sideChar);
+    if (reaction) mergedText += ' ' + reaction;
+    return {id: c.id, score: c.score, text: mergedText, moveIdx: _extractMoveIdxFromCandText(c.text, sideChar), positive: false, icon: c.icon};
+  });
+
+  /* --- Cơ hội quan trọng bị bỏ lỡ: gộp thành 1 candidate duy nhất, vẫn
+     loại trừ trùng với g8Pool ở trên như bản cũ. */
+  var g7Pool = bySideSuffix(byPrefix(g2All, 'g2-missed')).concat(bySideSuffix(byPrefix(g5All, 'g5-pawn-endgame')))
+                     .sort(function(a,b){ return b.score - a.score; });
+  var missedText = _narrG7_missedChances(g7Pool, cls, cpLosses, gMoveInfo, gMoveTexts, sideChar, sideLabel, g8Pool);
+  var missedScore = g7Pool.length ? Math.max.apply(null, g7Pool.map(function(c){ return c.score; })) : 0;
+  var missedFirstIdx = -1;
+  for (var _g7i = 0; _g7i < g7Pool.length; _g7i++) {
+    var _g7idx = _extractMoveIdxFromCandText(g7Pool[_g7i].text, sideChar);
+    if (_g7idx >= 0) { missedFirstIdx = _g7idx; break; }
+  }
+
+  /* --- Bước ngoặt đầu tiên + giai đoạn chuyển hoá, gộp làm 1 candidate.
+     g5Result vẫn giữ nguyên biến (Kết luận #14 dùng lại idx/moveNum). */
+  var g5Result = _narrG5_firstTurningMove(
+    cls, evalPcts, gMoveTexts, sideChar, sideLabel, (oppChar === 'w') ? whiteLabel : blackLabel
+  );
+  var g11Pool = bySideSuffix(byPrefix(g5All, 'g5-king-'));
+  var transitionText = g5Result ? _narrG11_transition(g5Result, g11Pool, evalPcts, gMoveInfo, sideChar, sideLabel) : null;
+  var turningText = g5Result ? (g5Result.text + (transitionText ? ' ' + transitionText : '')) : null;
+
+  /* --- Đánh giá lối chơi — MỖI ý (an toàn Vua, cột mở, cấu trúc Tốt...)
+     giờ cạnh tranh RIÊNG LẺ thay vì gộp cứng 1 khối như bản 14-mục cũ,
+     để có thể chọn/loại từng ý theo đúng độ quan trọng của chính nó.
+     ĐÃ CHUYỂN LÊN TRƯỚC "Trạng thái sau khai cuộc" (xem lý do bên dưới). */
+  var g12Pool = bySideSuffix(g3All.concat(g4All, byPrefix(g5All, 'g5-outofbook')));
+
+  /* --- Trạng thái sau khai cuộc — 1 candidate, điểm thấp hơn (thông tin
+     nền, ít khi là điều "đáng nói nhất" của cả ván).
+     ĐÃ SỬA: nếu g12Pool đã có sẵn ý "so sánh ai nhập thành trước" (g3-
+     castle-contrast, chi tiết + cụ thể nước hơn), KHÔNG lặp lại đúng lý
+     do này ở đây nữa — trước đây 2 câu độc lập cùng nói "đã nhập thành,
+     bên kia thì chưa — vua an toàn hơn" theo 2 kiểu diễn đạt khác nhau,
+     đọc trùng nội dung dù không trùng chữ. */
+  var _hasCastleContrast = g12Pool.some(function(c){ return _selfin_baseId(c.id) === 'g3-castle-contrast'; });
+  var openingStateText = _narrG3_postOpeningState(
+    cls, evalPcts, gAnFens, gMoveTexts, gMoveInfo, sideChar, sideLabel,
+    (oppChar === 'w') ? whiteLabel : blackLabel, _hasCastleContrast
+  );
+  var openingStateIdx = _evalGraphOpeningEndIdx(gMoveInfo, gAnFens);
+
+  /* --- Quyết định hay nhất --- */
+  var g6Pool = bySideSuffix(g1All).filter(function(c){ return c.positive === true; })
+                     .sort(function(a,b){ return b.score - a.score; });
+
+  /* --- Gộp TẤT CẢ thành 1 pool duy nhất để chấm điểm + chọn top 3-5 --- */
+  var pool = [];
+  mistakeCandidates.forEach(function(c){ pool.push(c); });
+  if (missedText) pool.push({id: 'meta-missed-chances', score: missedScore || 50, text: missedText, moveIdx: missedFirstIdx, positive: false, icon: '🤦'});
+  if (turningText) pool.push({id: 'meta-turning-point', score: 68, text: turningText, moveIdx: g5Result.idx, positive: g5Result.favorable, icon: (g5Result.favorable ? '📈' : '📉')});
+  if (openingStateText) pool.push({id: 'meta-opening-state', score: 35, text: openingStateText, moveIdx: openingStateIdx, icon: '📖'});
+  if (g6Pool[0]) pool.push({id: g6Pool[0].id, score: g6Pool[0].score, text: g6Pool[0].text, moveIdx: _extractMoveIdxFromCandText(g6Pool[0].text, sideChar), positive: true, icon: g6Pool[0].icon});
+  g12Pool.forEach(function(c){ pool.push({id: c.id, score: c.score, text: c.text, moveIdx: _extractMoveIdxFromCandText(c.text, sideChar), positive: !!c.positive, icon: c.icon}); });
+
+  /* Chọn 3-5 ý ĐIỂM CAO NHẤT (ván nào ít dữ liệu thì lấy hết những gì có,
+     không ép đủ 3 nếu thực sự không có đủ candidate). */
+  var poolSorted = pool.slice().sort(function(a, b){ return b.score - a.score; });
+  var selected = poolSorted.slice(0, Math.min(5, poolSorted.length));
+  var selectedIds = {};
+  selected.forEach(function(c){ selectedIds[c.id] = true; });
+
+  /* Hiển thị các ý đã chọn THEO ĐÚNG THỨ TỰ NƯỚC ĐI — dễ theo mạch ván
+     đấu hơn là theo điểm số, giống tinh thần bản bullet-theo-nước-đi cũ. */
+  selected.sort(function(a, b){
+    var ma = (a.moveIdx == null || a.moveIdx < 0) ? 9999 : a.moveIdx;
+    var mb = (b.moveIdx == null || b.moveIdx < 0) ? 9999 : b.moveIdx;
+    return ma - mb;
+  });
+  /* ĐÃ SỬA: nếu 2+ ý được chọn CÙNG rơi vào 1 tiêu đề (VD 2 ý khác nhau
+     đều thuộc "Đánh giá cách chơi") thì GỘP CHUNG thành 1 khổ/1 số thay
+     vì tách thành 2 mục trùng tiêu đề liên tiếp (#31, #37 cùng nói
+     "Đánh giá cách chơi" đọc rất vô lý). Số hiển thị = số của Ý ĐẦU TIÊN
+     gặp theo thứ tự nước đi (selected đã sắp theo moveIdx ở trên); màu
+     nền = màu chung nếu mọi ý trong nhóm cùng loại ưu/nhược điểm, còn
+     lẫn lộn thì để màu mặc định. */
+  var _titleGroups = {}, _titleOrder = [];
+  selected.forEach(function(c){
+    var baseId = _selfin_baseId(c.id);
+    var title = _narrTitleForBaseId(baseId);
+    var fixedNum = LEFTOVER_ID_MAP[baseId] || NUM_AFTER_MAP;
+    var kind;
+    if (baseId === 'meta-missed-chances') kind = 'bad';
+    /* ĐÃ SỬA theo yêu cầu: "Bước ngoặt" giờ tô màu theo ĐÚNG chiều swing
+       cho bên đang phân tích — % thắng TĂNG lên (bước ngoặt có lợi) thì
+       xanh lá, GIẢM đi (bước ngoặt bất lợi) thì vàng cam — thay vì luôn
+       để màu xám trung tính như trước. "Trạng thái sau khai cuộc" vẫn
+       giữ trung tính vì đó chỉ là mô tả 1 thời điểm, không phải 1 nước
+       đi có lợi/hại rõ ràng để tô màu theo phe. */
+    else if (baseId === 'meta-opening-state') kind = undefined;
+    else kind = c.positive ? 'good' : 'bad';
+    if (!_titleGroups[title]) { _titleGroups[title] = {fixedNum: fixedNum, texts: [], kinds: []}; _titleOrder.push(title); }
+    /* ĐÃ SỬA — LỖI THỰC TẾ: nhiều candidate (VD g1-streak, g3-king-center)
+       vẫn dùng nhãn kiểu cũ "Tên — Trắng: ..." (chưa migrate hết). Hàm
+       dọn nhãn ở renderer (_deepStripName) xoá TỪ ĐẦU DÒNG tới hết phần
+       "Tên — " — nếu icon được ghép vào TRƯỚC khi dọn nhãn, icon đứng ở
+       đầu dòng sẽ bị cuốn theo và bị xoá mất luôn (mất tích, đúng như
+       bạn báo). Giờ dọn "Tên — " (nếu có) NGAY TẠI ĐÂY, TRƯỚC khi ghép
+       icon vào, để icon luôn đứng sau bước dọn, không bao giờ bị xoá. */
+    var _cleanedForIcon = c.text.replace(/^[^:<]*—\s*(?=(Trắng|Đen):)/, '');
+    _titleGroups[title].texts.push((c.icon || '') + ' ' + _cleanedForIcon);
+    _titleGroups[title].kinds.push(kind);
+  });
+  _titleOrder.forEach(function(title){
+    var g = _titleGroups[title];
+    var sameKind = g.kinds.every(function(k){ return k === g.kinds[0]; });
+    push(g.fixedNum, title, g.texts.join('<br>'), sameKind ? g.kinds[0] : undefined, true);
+  });
+
+  /* #14 Kết luận — ĐÃ BỎ theo yêu cầu (thừa: #1 Tổng quan đã nói ai
+     thắng/thua, và bullet "Bước ngoặt đầu tiên"/"Sai lầm quan trọng
+     nhất" ở trên đã nêu đúng nước quyết định rồi — #14 chỉ lặp lại các
+     ý đó bằng 1 câu tổng hợp, không thêm thông tin mới). Không push gì
+     ở đây nữa. */
+
+  /* ---------- CÒN LẠI, CHƯA XẾP CHỖ CỐ ĐỊNH (không bỏ, để xét dùng/bỏ sau) ----------
+     Gồm 2 nguồn: (1) các candidate trong `pool` ở trên KHÔNG lọt top 3-5,
+     và (2) mọi candidate g1-g5 khác hoàn toàn chưa được dùng ở đâu cả
+     (chưa từng cạnh tranh vào pool). Cả 2 đều dùng chung SỐ CỐ ĐỊNH tra
+     trong LEFTOVER_ID_MAP — y hệt nhau ở MỌI ván. Candidate nào chưa có
+     trong bảng sẽ tự rơi xuống cuối, đánh số nối tiếp từ NUM_AFTER_MAP để
+     không bao giờ mất dữ liệu. */
+  var usedIds = {};
+  [volCand, opnForOverview].concat(g6Pool[0] ? [g6Pool[0]] : [], g7Pool, g8Pool, g11Pool, g12Pool)
+    .forEach(function(c){ if (c) usedIds[c.id] = true; });
+  _dupMistakeIds.forEach(function(id){ usedIds[id] = true; }); /* xem comment ở chỗ tạo _dupMistakeIds */
+  var leftoverFromPool = pool.filter(function(c){ return !selectedIds[c.id]; });
+  var leftoverFromG1G5 = g1All.concat(g2All, g3All, g4All, g5All).filter(function(c){ return !usedIds[c.id]; });
+  var leftover = leftoverFromPool.concat(leftoverFromG1G5);
+  leftover.sort(function(a, b){
+    var na = LEFTOVER_ID_MAP[_selfin_baseId(a.id)] || 9999;
+    var nb = LEFTOVER_ID_MAP[_selfin_baseId(b.id)] || 9999;
+    return na - nb;
+  });
+  var _nextUnmappedNum = NUM_AFTER_MAP;
+  var HIDE_LEFTOVER = true; /* ĐÃ THÊM: tạm ẩn các mục "chưa xếp" theo yêu cầu — vẫn tính toán đầy đủ
+     ở trên (không xoá logic), chỉ không push ra hiển thị. Đổi lại false khi cần hiện lại. */
+  if (!HIDE_LEFTOVER) {
+    leftover.forEach(function(c){
+      var bid = _selfin_baseId(c.id);
+      var fixedNum = LEFTOVER_ID_MAP[bid] || (_nextUnmappedNum++);
+      /* ĐÃ SỬA: leftover cũng tô màu ưu/nhược điểm nhất quán với bullet
+         chính (trước đây leftover luôn để màu xám mặc định, kể cả những
+         mục rõ ràng là nhược điểm như "để hở quân", "Tốt cô lập"...).
+         Riêng meta-opening-state giữ trung tính (chỉ mô tả 1 thời điểm). */
+      var leftoverKind = (bid === 'meta-opening-state') ? undefined : (c.positive ? 'good' : 'bad');
+      push(fixedNum, '(chưa xếp — ' + c.id + ')', c.text, leftoverKind, true, c.icon);
+    });
+  }
+
+  return sections;
+}
 /* ══════════════════ END cc9-deep-insights.js ══════════════════ */
 
 function buildMoveReport(cls, cpLosses, evalPcts) {
@@ -6455,25 +8350,11 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
       + '<b>ACPL = ' + avgCpLossBlack.toFixed(1) + ' (' + jB.tag + ')</b>. ' + jB.hint});
   }
 
-  /* ── Tóm tắt: chỉ còn ACPL khi insight tương ứng CHƯA hiện nó (tránh trùng lặp).
-     Bỏ hẳn "Tóm tắt: N nước." (thừa, không mang thông tin hữu ích). Nếu không có
-     phần ACPL nào cần hiện (mọi bên đã có insight riêng), bỏ luôn cả khung này. */
-  var _tomTatParts = [];
-  if (_detectedSide === 'white') {
-    if (!jWApplies) _tomTatParts.push('ACPL: ' + avgCpLossWhite.toFixed(1) + ' cp.');
-  } else if (_detectedSide === 'black') {
-    if (!jBApplies) _tomTatParts.push('ACPL: ' + avgCpLossBlack.toFixed(1) + ' cp.');
-  } else {
-    var acplParts = [];
-    if (!jWApplies) acplParts.push(_whiteLabel + ' (Trắng): ' + avgCpLossWhite.toFixed(1) + ' cp');
-    if (!jBApplies) acplParts.push(_blackLabel + ' (Đen): ' + avgCpLossBlack.toFixed(1) + ' cp');
-    if (acplParts.length) _tomTatParts.push('ACPL — ' + acplParts.join(', ') + '.');
-  }
-  if (_tomTatParts.length) {
-    html += '<div style="font-size:0.75rem;line-height:1.5;margin:8px 0;padding:8px 10px;background:#f7f7f7;border-radius:4px">';
-    html += _tomTatParts.join(' ');
-    html += '</div>';
-  }
+  /* ── "Tóm tắt: ACPL — ..." ĐÃ BỎ theo yêu cầu (dòng này chỉ xuất hiện
+     khi ACPL rơi vào vùng "trung bình" chưa có insight riêng ở mục
+     "Nhận xét lỗi" bên dưới, nhưng người dùng thấy nó thừa/trùng ý nên
+     bỏ hẳn — không hiển thị số ACPL riêng ở đây nữa trong mọi trường
+     hợp, kể cả vùng trung bình). */
 
   /* ── Bảng giai đoạn (CHỈ bên người chơi nếu đã xác định — xem _isPlayerMove ở vòng lặp trên) ── */
   var phaseLabelMap = {opening:'Khai cuộc', middlegame:'Trung cuộc', endgame:'Tàn cuộc'};
@@ -6489,9 +8370,9 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
   html += '<table class="an-phase-table" style="width:100%;border-collapse:collapse;font-size:0.68rem;margin-bottom:8px">';
   html += '<thead><tr style="background:#666;color:#fff">'
         + '<th style="padding:3px 4px;text-align:left">Giai đoạn</th>'
-        + '<th style="padding:3px 4px">OK</th><th style="padding:3px 4px">Thiếu c.xác</th>'
-        + '<th style="padding:3px 4px">Sai lầm</th><th style="padding:3px 4px">Blunder</th>'
-        + '<th style="padding:3px 4px">%Tệ</th></tr></thead><tbody>';
+        + '<th style="padding:3px 4px">Best</th><th style="padding:3px 4px">Inaccuracy</th>'
+        + '<th style="padding:3px 4px">Mistake</th><th style="padding:3px 4px">Blunder</th>'
+        + '<th style="padding:3px 4px">%</th></tr></thead><tbody>';
   ['opening','middlegame','endgame'].forEach(function(ph) {
     var d = phaseCount[ph];
     var tot = d.ok + d.inaccuracy + d.mistake + d.blunder;
@@ -6501,10 +8382,14 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
        ngay dòng bảng bằng màu vùng Trắng của đồ thị eval (đồng bộ trực quan). */
     var isWorstRow = (worst && worst.rate > 0 && ph === worst.ph);
     var rowBg = isWorstRow ? 'background:var(--board-eval-white,#d4edda);' : '';
+    /* ĐÃ SỬA: màu cột Best/Inaccuracy giờ lấy ĐÚNG màu dùng cho nhãn đó ở
+       bảng Classify (thanh accuracy) — best:'#81b64c', inaccuracy:'#ffa726'
+       — thay vì để đen mặc định như trước. Mistake/Blunder đã trùng màu
+       sẵn từ trước (#ffa049/#ff2316), không cần đổi. */
     html += '<tr style="border-bottom:1px solid #eee;' + rowBg + '">'
           + '<td style="padding:3px 4px"><b>' + phaseLabelMap[ph] + '</b></td>'
-          + '<td style="padding:3px 4px;text-align:center">' + d.ok + '</td>'
-          + '<td style="padding:3px 4px;text-align:center">' + d.inaccuracy + '</td>'
+          + '<td style="padding:3px 4px;text-align:center;color:#81b64c;font-weight:bold">' + d.ok + '</td>'
+          + '<td style="padding:3px 4px;text-align:center;color:#ffa726">' + d.inaccuracy + '</td>'
           + '<td style="padding:3px 4px;text-align:center;color:#ffa049">' + d.mistake + '</td>'
           + '<td style="padding:3px 4px;text-align:center;color:#ff2316;font-weight:bold">' + d.blunder + '</td>'
           + '<td style="padding:3px 4px;text-align:center">' + pct + '</td></tr>';
@@ -6528,15 +8413,21 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
         + 'Gợi ý: chú ý cấu trúc tốt, an toàn vua, hoạt động quân khi chọn nước.'});
     }
   }
+  var _openingAlreadyFlagged = false;
   if (worst && worst.rate >= 0.25 && worst.tot >= 5) {
     insights.push({icon:'📍', sev:'medium', text:
       '<b>Lỗi tập trung ở ' + phaseLabelMap[worst.ph].toLowerCase() + '</b> ('
       + Math.round(worst.rate*100) + '% nước sai lầm/blunder).'});
+    if (worst.ph === 'opening') _openingAlreadyFlagged = true;
   }
   var earlyCount = topMistakes.filter(function(m){return m.moveNum<=15;}).length;
   var lateCount  = topMistakes.filter(function(m){return m.moveNum>30;}).length;
   if (topMistakes.length >= 5) {
-    if (earlyCount / topMistakes.length >= 0.45) {
+    /* ĐÃ SỬA: bỏ qua nếu đã báo "Lỗi tập trung ở khai cuộc" ở trên rồi —
+       2 chỉ số này (theo giai đoạn vật chất vs theo số nước ≤15) gần như
+       luôn cùng đúng/sai với nhau trên thực tế, ra 2 câu nói CÙNG 1 ý
+       ("lỗi nhiều ở đầu ván") chỉ khác cách đo — giữ 1 câu là đủ. */
+    if (earlyCount / topMistakes.length >= 0.45 && !_openingAlreadyFlagged) {
       insights.push({icon:'📌', sev:'medium', text:
         '<b>' + Math.round(earlyCount/topMistakes.length*100) + '% sai lầm xảy ra ở nước 1-15</b>. '
         + 'Gợi ý: cẩn thận hơn trong khai cuộc, đừng vội tấn công khi chưa phát triển đủ quân.'});
@@ -6660,22 +8551,13 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
     }).join(', ');
     return {icon:'🔎', sev:'medium', text: (label ? (label + ': ') : '') + 'Tổng ' + total + ' lỗi, ' + breakdown + '.'};
   }
-  if (_detectedSide === 'white') {
-    var ep = _errorPatternInsight(0, '');
-    if (ep) insights.push(ep);
-  } else if (_detectedSide === 'black') {
-    var ep2 = _errorPatternInsight(1, '');
-    if (ep2) insights.push(ep2);
-  } else {
-    var epW = _errorPatternInsight(0, _whiteLabel + ' (Trắng)');
-    if (epW) insights.push(epW);
-    var epB = _errorPatternInsight(1, _blackLabel + ' (Đen)');
-    if (epB) insights.push(epB);
-  }
+  /* "🔎 Tổng N lỗi, phân loại theo nguyên nhân..." — ĐÃ BỎ theo yêu cầu
+     (không gọi _errorPatternInsight nữa, các gợi ý khác như ACPL, %lỗi
+     positional, giai đoạn tập trung lỗi... vẫn giữ nguyên bên trên). */
 
   if (insights.length) {
     html += '<div style="margin:8px 0;padding:6px 8px;background:#fafafa;border:1px solid #e0e0e0;border-radius:4px">';
-    html += '<div style="font-size:0.68rem;font-weight:bold;margin-bottom:6px">🧭 Gợi ý từ pattern lỗi:</div>';
+    html += '<div style="font-size:0.68rem;font-weight:bold;margin-bottom:6px">🧭 Nhận xét lỗi:</div>';
     insights.forEach(function(ins) {
       var bg = ins.sev==='high' ? '#fff3e0' : ins.sev==='medium' ? '#f3f4f6' : '#e8f5e9';
       var bd = ins.sev==='high' ? '#e65100' : ins.sev==='medium' ? '#999' : '#43a047';
@@ -6706,8 +8588,15 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
       if (_aSide === 'w') accArrW.push(_aHit); else accArrB.push(_aHit);
     }
     function _avgAcc(arr){ return arr.length ? Math.round(arr.reduce(function(s,v){return s+v;},0)/arr.length) : 0; }
-    var _accuracyForDeep = (_detectedSide === 'white') ? _avgAcc(accArrW)
-                          : (_detectedSide === 'black') ? _avgAcc(accArrB) : null;
+    /* ĐÃ SỬA: trước đây accuracy chỉ tính khi _detectedSide xác định được
+       ('white'/'black'), còn lại truyền null -> #1 mất hẳn câu độ chính
+       xác dù dữ liệu accW/accB LUÔN có sẵn (tính xong ngay phía trên, y
+       hệt cách bảng "Kết quả phân tích" vẫn hiển thị số này bất kể có
+       detect được người chơi hay không). Giờ luôn lấy accuracy của ĐÚNG
+       bên đang được tường thuật (sideChar bên dưới, mặc định Trắng nếu
+       không xác định — khớp quy ước default của buildGameNarrative). */
+    var _accSideForDeep = (_detectedSide === 'black') ? 'b' : 'w';
+    var _accuracyForDeep = (_accSideForDeep === 'w') ? _avgAcc(accArrW) : _avgAcc(accArrB);
 
     /* winnerSide: 'w'|'b'|'draw'|null — từ [Result] trong PGN, cùng cách dùng
        ở nơi khác (bảng highlight tên người thắng in đậm). */
@@ -6718,10 +8607,28 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
       else if (_pgnNamesForReport.result === '1/2-1/2') _winnerSideForDeep = 'draw';
     }
 
-    var deepSelected = buildDeepInsightsAll(
-      cls, evalPcts, cpLosses, gAnScores, gAnFens, gMoveInfo, gMoveTexts,
-      _winnerSideForDeep, _accuracyForDeep, _detectedSide, _whiteLabel, _blackLabel
-    );
+    /* buildDeepInsightsAll (chấm điểm/rank/khử trùng phẳng) VẪN GIỮ NGUYÊN
+       ở trên, không xoá — chỉ không dùng để render nữa, thay bằng
+       buildGameNarrative (khung tường thuật 14 mục + #A leftover). Nếu cần
+       quay lại cách cũ, chỉ cần đổi biến render bên dưới.
+       ĐÃ SỬA (chống crash): bọc try/catch — nếu buildGameNarrative ném lỗi
+       (VD dữ liệu 1 ván cụ thể nào đó khiến 1 candidate tính sai), TRƯỚC
+       ĐÂY lỗi này làm literally toàn bộ buildMoveReport dừng giữa chừng,
+       kéo theo mọi thứ render SAU nó (bảng accuracy, danh sách nước, cột
+       trái...) không bao giờ chạy tới — đúng triệu chứng "chạy đến nước
+       cuối thì dừng, cột trái chỉ còn ô PGN". Giờ nếu lỗi, in ra console
+       để debug và dùng mảng rỗng thay vì phá vỡ toàn bộ báo cáo. */
+    var narrativeSections = [];
+    try {
+      narrativeSections = buildGameNarrative(
+        cls, evalPcts, cpLosses, gAnScores, gAnFens, gMoveInfo, gMoveTexts,
+        topMistakes, _winnerSideForDeep, _accuracyForDeep, _detectedSide, _whiteLabel, _blackLabel,
+        (_pgnNamesForReport && _pgnNamesForReport.termination) || ''
+      );
+    } catch (_narrErr) {
+      console.error('[ChessCoach] buildGameNarrative lỗi, bỏ qua phần "Phân tích chuyên sâu" để không chặn phần còn lại của báo cáo:', _narrErr);
+      narrativeSections = [];
+    }
 
     /* Màu theo nhãn classify — TÁI DÙNG đúng bảng màu của thanh Accuracy bar
        (segC, xem ~dòng 7216) để đồng bộ, không tạo bảng màu riêng. */
@@ -6731,9 +8638,25 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
       inaccuracy:'#ffa726',mistake:'#ffa049',blunder:'#ff2316',
       missed_win:'#880000',missed_mate:'#4a0000'};
 
-    /* Bỏ tên người chơi khỏi đầu text, chỉ giữ "Trắng:"/"Đen:" (theo yêu cầu) */
+    /* Bỏ tên người chơi khỏi đầu text, chỉ giữ "Trắng:"/"Đen:" (theo yêu cầu).
+       ĐÃ SỬA: regex cũ chỉ có anchor '^' (không có flag /g), nên khi 1 mục
+       gộp NHIỀU dòng bằng '<br>' (vd #7, #8), chỉ dòng ĐẦU TIÊN được bóc
+       tên, các dòng sau '<br>' vẫn còn nguyên "Tên — Đen:" — gây lẫn lộn
+       "Đen:" và "Samackhat — Đen:" trong CÙNG 1 mục. Giờ neo theo
+       '(^|<br>)' + flag /g để áp dụng cho MỌI dòng, không chỉ dòng đầu. */
     function _deepStripName(text){
-      return text.replace(/^.*?—\s*(?=(Trắng|Đen):)/, '');
+      return text.replace(/(^|<br>)[^<]*?—\s*(?=(Trắng|Đen):)/g, '$1');
+    }
+    /* ĐÃ THÊM: bỏ tiền tố "Nhãn: " (VD "Trắng: ", "kienhpdb2 (Trắng): ")
+       ở ĐẦU MỖI DÒNG — dùng cho các bullet hiển thị "plain" (không còn
+       tiêu đề "#N Tên mục:" bọc ngoài nữa), đọc liền mạch hơn: "Trắng
+       thí quân hợp lý..." thay vì "Trắng: thí quân hợp lý...". Giữ
+       nguyên nếu KHÔNG khớp mẫu (an toàn cho câu không có tiền tố kiểu
+       này, VD #46/#18 đã viết lại trực tiếp không cần bóc gì thêm). */
+    function _deepStripLabelColon(text){
+      return text.split('<br>').map(function(line){
+        return line.replace(/^([^:<>]+):\s*/, '$1 ');
+      }).join('<br>');
     }
     /* "19...e5"/"19.Nf3" (trong <b>...</b>) → link ngắn gọn "19 e5" tô màu
        theo đúng nhãn classify của nước đó, bấm vào nhảy tới nước (reviewJumpTo). */
@@ -6749,23 +8672,34 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
       });
     }
 
-    /* Ưu điểm (positive:true) lên trước, nhược điểm xuống sau — giữ nguyên
-       thứ tự tương đối trong mỗi nhóm (đã được buildDeepInsightsAll sắp theo
-       finalScore từ trước). */
-    var deepPositive = deepSelected ? deepSelected.filter(function(c){ return c.positive === true; }) : [];
-    var deepNegative = deepSelected ? deepSelected.filter(function(c){ return c.positive !== true; }) : [];
-    var deepOrdered = deepPositive.concat(deepNegative);
-
-    if (deepOrdered.length) {
+    /* Render theo ĐÚNG THỨ TỰ khung 14 mục (#1→#14), rồi tới #A1, #A2...
+       (leftover chưa xếp chỗ) — KHÔNG lọc/ẩn mục nào, kể cả mục còn
+       "(chưa có nội dung)", để dễ theo dõi tiến độ hoàn thiện khung. */
+    if (narrativeSections && narrativeSections.length) {
       html += '<div style="margin:8px 0;padding:6px 8px;background:#f5f0ff;border:1px solid #d8c8f0;border-radius:4px">';
-      html += '<div style="font-size:0.68rem;font-weight:bold;margin-bottom:6px">🔬 Phân tích chuyên sâu:</div>';
-      deepOrdered.forEach(function(c){
-        var _bg = c.sev==='high' ? '#fff3e0' : c.sev==='medium' ? '#f3f4f6' : '#e8f5e9';
-        var _bd = c.sev==='high' ? '#e65100' : c.sev==='medium' ? '#999' : '#43a047';
-        var _txt = _deepFormatMoveRefs(_deepStripName(c.text));
+      html += '<div style="font-size:0.68rem;font-weight:bold;margin-bottom:6px">🔬 Phân tích ván đấu:</div>';
+      narrativeSections.forEach(function(s){
+        var isPlaceholder = /\(chưa có nội dung\)\s*$/.test(s.text);
+        /* ĐÃ THÊM: ưu điểm (kind:'good') nền xanh lá, nhược điểm
+           (kind:'bad') nền vàng — giữ nguyên màu xám mặc định cho #1
+           Tổng quan, #14 Kết luận và các mục "chưa xếp" (kind rỗng). */
+        var _bg, _bd;
+        if (isPlaceholder) { _bg = '#fafafa'; _bd = '#ccc'; }
+        else if (s.kind === 'good') { _bg = '#e8f5e9'; _bd = '#43a047'; }
+        else if (s.kind === 'bad') { _bg = '#fff3e0'; _bd = '#e65100'; } /* ĐÃ SỬA: đổi sang cùng tông vàng cam như mục sev='high' ở "Nhận xét lỗi" */
+        else { _bg = '#f3f4f6'; _bd = '#999'; }
+        var _txt = isPlaceholder ? '<i style="color:#999">' + s.text + '</i>'
+                                  : _deepFormatMoveRefs(_deepStripLabelColon(_deepStripName(s.text)));
+        /* ĐÃ SỬA theo yêu cầu: bỏ hẳn tiền tố "#N Tên mục:" ở MỌI mục
+           (kể cả các mục "chưa xếp" — số kỹ thuật không cần hiện ra màn
+           hình nữa), thay bằng ICON đầu dòng kiểu bản cũ (🏰♗🍖💥...):
+           icon truyền qua tham số riêng (dùng cho mục đơn — VD leftover)
+           hoặc đã có sẵn TRONG text (dùng cho mục gộp nhiều dòng, mỗi
+           dòng tự icon riêng — xem chỗ gộp theo tiêu đề phía trên). */
+        var _iconPrefix = s.icon ? (s.icon + ' ') : '';
         html += '<div style="font-size:0.68rem;margin-bottom:5px;padding:5px 7px;background:' + _bg
               + ';border-left:3px solid ' + _bd + ';border-radius:2px;line-height:1.4">'
-              + c.icon + ' ' + _txt + '</div>';
+              + _iconPrefix + _txt + '</div>';
       });
       html += '</div>';
     }
@@ -6775,69 +8709,112 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
      "Top X nước đáng chú ý nhất" (top 10 theo cpLoss) và "Highlight ván đấu"
      (bước ngoặt/turning point theo % thắng). Giờ gộp làm 1 bảng DUY NHẤT,
      khử trùng theo moveIdx, sắp xếp lại theo ĐÚNG THỨ TỰ thời gian trong ván. */
+  /* ── Highlight ván đấu (ĐÃ XIẾT LẠI theo yêu cầu): trước đây gộp tới
+     10 nước cpLoss cao nhất + 3 bước ngoặt + có thể +1 chiếu hết —
+     không giới hạn tổng, có ván ra tới hơn chục dòng, quá dài để "lướt
+     nhanh". Giờ LUÔN có đúng: nước ĐẦU + nước CUỐI, cộng thêm TỐI ĐA 5
+     nước khác — chọn theo đúng thứ tự ưu tiên đã thống nhất:
+       (1) Nước được chấm "Brilliant" (♦!!) — hiếm và luôn đáng xem.
+       (2) "Đổi thế BỀN VỮNG" — swing đổi phe đang thắng mà từ đó tới hết
+           ván KHÔNG đổi lại lần nào nữa (khác với swing tạm thời rồi lại
+           đảo ngược — loại đó ít ý nghĩa hơn vì cục diện chưa thật sự
+           "chốt" tại đó).
+       (3) Sai lầm lớn nhất của MỖI BÊN (không chỉ 1 bên) theo cpLoss.
+     Nếu tổng số ứng viên đủ điều kiện vẫn nhiều hơn 5, cắt theo đúng thứ
+     tự ưu tiên trên (không trộn lẫn điểm số giữa các tier khác nhau). */
+  var HL_MAX_EXTRA = 5;
   var mergedByIdx = {};
+  var lastPly = cls.length - 1;
 
-  /* Nguồn 1: top 10 theo cpLoss (topMistakes) */
-  var sortedMistakes = topMistakes.slice().sort(function(a,b){ return b.cpLoss - a.cpLoss; }).slice(0, 10);
-  sortedMistakes.forEach(function(m){
-    mergedByIdx[m.moveIdx] = {
-      moveIdx: m.moveIdx, moveNum: m.moveNum, side: m.side, san: m.san,
-      cpLoss: m.cpLoss, tacticalType: m.tacticalType, phase: m.phase,
+  function _hlMakeRow(idx, extra){
+    /* ĐÃ SỬA: trước đây cpLoss/G.đoạn chỉ được điền khi dòng đến từ tier
+       "sai lầm lớn nhất" (nguồn duy nhất truyền `extra`) — các dòng từ
+       tier Brilliant/Đổi thế bền vững hoàn toàn để trống 3 cột này dù dữ
+       liệu cpLoss/giai đoạn LUÔN có sẵn cho MỌI nước (không riêng gì
+       nước bị coi là sai lầm). Giờ điền cpLoss + G.đoạn cho TẤT CẢ các
+       dòng theo đúng dữ liệu thật tại nước đó; riêng "Loại" (positional/
+       tactical) giữ nguyên chỉ áp dụng cho sai lầm thật sự (khái niệm
+       "loại lỗi" không có ý nghĩa với 1 nước hay/trung tính). */
+    var _rowCpLoss = (cpLosses && cpLosses[idx] !== undefined && cpLosses[idx] !== null) ? cpLosses[idx] : null;
+    var _rowPhase = null;
+    if (gMoveInfo && gMoveInfo[idx] && typeof phaseOf === 'function') {
+      _rowPhase = phaseOf(gMoveInfo[idx].materialPct !== undefined ? gMoveInfo[idx].materialPct : 1);
+    }
+    var row = {
+      moveIdx: idx, moveNum: Math.floor(idx/2)+1, side: (idx%2===0)?'white':'black',
+      san: gMoveTexts[idx] || '', cpLoss: _rowCpLoss, tacticalType: null, phase: _rowPhase,
       before: undefined, after: undefined, flipped: false, isMate: false
     };
-  });
+    if (evalPcts && evalPcts[idx] !== undefined && evalPcts[idx+1] !== undefined) {
+      row.before = evalPcts[idx]; row.after = evalPcts[idx+1];
+      row.flipped = (row.before - 50) * (row.after - 50) < 0;
+    }
+    if (idx === lastPly && /#/.test(gMoveTexts[lastPly] || '')) row.isMate = true;
+    if (extra) for (var k in extra) row[k] = extra[k];
+    return row;
+  }
 
-  /* Nguồn 2: bước ngoặt theo % thắng (evalPcts swing) + nước chiếu hết cuối ván */
-  if (evalPcts && evalPcts.length >= 2) {
-    var turningCandidates = [];
+  /* Luôn có nước đầu + nước cuối */
+  if (cls.length > 0) {
+    mergedByIdx[0] = _hlMakeRow(0);
+    if (lastPly > 0) mergedByIdx[lastPly] = _hlMakeRow(lastPly);
+  }
+  var extraCount = 0;
+  function _hlHasRoom(){ return extraCount < HL_MAX_EXTRA; }
+  function _hlAdd(idx, extra){
+    if (mergedByIdx[idx] || !_hlHasRoom()) return false;
+    mergedByIdx[idx] = _hlMakeRow(idx, extra);
+    extraCount++;
+    return true;
+  }
+
+  /* (1) Brilliant — ưu tiên cao nhất, lấy hết nếu còn chỗ (hiếm khi có
+     nhiều hơn vài nước Brilliant trong 1 ván) */
+  for (var bi = 0; bi < cls.length && _hlHasRoom(); bi++) {
+    if (cls[bi] === 'brilliant') _hlAdd(bi);
+  }
+
+  /* (2) Đổi thế BỀN VỮNG — swing≥8 làm đổi phe đang thắng (before/after
+     cắt qua mốc 50%), rồi kiểm tra KHÔNG đổi lại lần nào nữa từ đó tới
+     hết ván (dấu của (evalPcts[cuối]-50) phải khớp với dấu (after-50)). */
+  if (evalPcts && evalPcts.length >= 2 && _hlHasRoom()) {
+    var finalPct = evalPcts[evalPcts.length - 1];
+    var sustainedTurning = [];
     for (var ti = 0; ti < cls.length; ti++) {
       if (cls[ti] === 'book') continue;
       var before = evalPcts[ti], after = evalPcts[ti+1];
-      if (before === undefined || after === undefined) continue;
+      if (before === undefined || after === undefined || finalPct === undefined) continue;
       var swing = Math.abs(after - before);
-      if (swing < 8) continue; /* bỏ qua dao động nhỏ, không đáng gọi là "bước ngoặt" */
-      var flipped = (before - 50) * (after - 50) < 0; /* đổi dấu quanh mốc 50% = đổi phe đang thắng */
-      turningCandidates.push({
-        moveIdx: ti, moveNum: Math.floor(ti/2)+1, side: (ti%2===0)?'white':'black',
-        san: gMoveTexts[ti]||'', before: before, after: after, swing: swing, flipped: flipped,
-        score: swing + (flipped ? 30 : 0)
+      if (swing < 8) continue;
+      var flipped = (before - 50) * (after - 50) < 0;
+      if (!flipped) continue; /* chỉ tính swing THẬT SỰ đổi phe đang thắng, không tính dao động cùng phe */
+      var staysFlipped = (after - 50) * (finalPct - 50) >= 0; /* từ đây tới cuối ván không đảo lại lần nào nữa */
+      if (!staysFlipped) continue;
+      sustainedTurning.push({idx: ti, swing: swing});
+    }
+    sustainedTurning.sort(function(a,b){ return b.swing - a.swing; });
+    for (var si2 = 0; si2 < sustainedTurning.length && _hlHasRoom(); si2++) {
+      _hlAdd(sustainedTurning[si2].idx);
+    }
+  }
+
+  /* (3) Sai lầm lớn nhất của MỖI BÊN theo cpLoss — không chỉ dồn hết cho
+     1 bên như kiểu "top 10 theo cpLoss" cũ (dễ bỏ sót sai lầm lớn của
+     bên còn lại nếu 1 bên chơi tệ hơn hẳn cả ván). */
+  if (_hlHasRoom()) {
+    var byCpDesc = topMistakes.slice().sort(function(a,b){ return b.cpLoss - a.cpLoss; });
+    var whiteAdded = 0, blackAdded = 0;
+    var MAX_PER_SIDE = Math.ceil(HL_MAX_EXTRA / 2);
+    for (var mi = 0; mi < byCpDesc.length && _hlHasRoom(); mi++) {
+      var m = byCpDesc[mi];
+      if (mergedByIdx[m.moveIdx]) continue;
+      if (m.side === 'white' && whiteAdded >= MAX_PER_SIDE) continue;
+      if (m.side === 'black' && blackAdded >= MAX_PER_SIDE) continue;
+      var added = _hlAdd(m.moveIdx, {
+        cpLoss: m.cpLoss, tacticalType: m.tacticalType, phase: m.phase
       });
+      if (added) { if (m.side === 'white') whiteAdded++; else blackAdded++; }
     }
-    turningCandidates.sort(function(a,b){ return b.score - a.score; });
-    var topTurning = turningCandidates.slice(0, 3);
-
-    var lastIdx = cls.length - 1;
-    var endsInMate = lastIdx >= 0 && /#/.test(gMoveTexts[lastIdx] || '');
-    if (endsInMate) {
-      var already = null;
-      for (var qi = 0; qi < topTurning.length; qi++) { if (topTurning[qi].moveIdx === lastIdx) { already = topTurning[qi]; break; } }
-      if (already) {
-        already.isMate = true;
-      } else {
-        var mateBefore = evalPcts[lastIdx] !== undefined ? evalPcts[lastIdx] : 50;
-        var mateAfter  = evalPcts[lastIdx+1] !== undefined ? evalPcts[lastIdx+1] : ((lastIdx%2===0) ? 98 : 2);
-        topTurning.push({
-          moveIdx: lastIdx, moveNum: Math.floor(lastIdx/2)+1, side: (lastIdx%2===0)?'white':'black',
-          san: gMoveTexts[lastIdx]||'', before: mateBefore, after: mateAfter,
-          swing: Math.abs(mateAfter-mateBefore), flipped:false, isMate:true
-        });
-      }
-    }
-
-    topTurning.forEach(function(t){
-      var existing = mergedByIdx[t.moveIdx];
-      if (existing) {
-        /* Đã có từ nguồn Top-mistakes — bổ sung thêm phần "diễn biến %" */
-        existing.before = t.before; existing.after = t.after;
-        existing.flipped = t.flipped; existing.isMate = t.isMate;
-      } else {
-        mergedByIdx[t.moveIdx] = {
-          moveIdx: t.moveIdx, moveNum: t.moveNum, side: t.side, san: t.san,
-          cpLoss: null, tacticalType: null, phase: null,
-          before: t.before, after: t.after, flipped: t.flipped, isMate: t.isMate
-        };
-      }
-    });
   }
 
   var mergedList = Object.keys(mergedByIdx).map(function(k){ return mergedByIdx[k]; });
@@ -6848,13 +8825,14 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
     highlightHtml += '<div style="font-size:0.90rem;font-weight:bold;margin:6px 0 5px">\u2b50 Highlight v\u00e1n \u0111\u1ea5u:</div>';
     highlightHtml += '<table style="width:100%;border-collapse:collapse;font-size:.68rem">';
     highlightHtml += '<thead><tr style="background:#666;color:#fff">'
-          + '<th style="padding:2px 4px">N\u01b0\u1edbc</th><th style="padding:2px 4px">B\u00ean</th>'
-          + '<th style="padding:2px 4px">\u0110\u00e3 \u0111i</th><th style="padding:2px 4px">cpLoss</th>'
+          + '<th style="padding:2px 4px">N\u01b0\u1edbc</th><th style="padding:2px 4px">cpLoss</th>'
           + '<th style="padding:2px 4px">Lo\u1ea1i</th><th style="padding:2px 4px">G.\u0111o\u1ea1n</th>'
           + '<th style="padding:2px 4px">Di\u1ec5n bi\u1ebfn</th></tr></thead><tbody>';
     mergedList.forEach(function(m){
-      var moveLbl = m.moveNum + (m.side==='black' ? '\u2026' : '.');
-      var sideLbl = m.side==='white' ? 'Tr\u1eafng' : '\u0110en';
+      /* ĐÃ SỬA: gộp cột "Nước" + "Đã đi" (và bỏ hẳn cột "Bên") thành 1
+         cột duy nhất — Trắng: "N.SAN" (có dấu chấm), Đen: "N SAN" (chỉ
+         cách 1 khoảng trắng, KHÔNG chấm/ba chấm) theo đúng yêu cầu. */
+      var moveLbl = (m.side==='white') ? (m.moveNum + '.' + m.san) : (m.moveNum + ' ' + m.san);
       var cpLossTxt = (m.cpLoss !== null && m.cpLoss !== undefined) ? String(m.cpLoss) : '\u2013';
       var lossColor = (m.cpLoss !== null && m.cpLoss !== undefined) ? (m.cpLoss > 300 ? '#ff2316' : '#ffa049') : '#999';
       var tactLbl = m.tacticalType === 'tactical' ? '\u2694 tactic' : m.tacticalType === 'positional' ? '~ positional' : '\u2013';
@@ -6872,9 +8850,7 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
          nhảy tới nước đó và sáng xanh đồng bộ với bảng "Chi tiết từng nước"
          (dùng chung class .an-row-active qua data-idx, xem _reviewJumpToCore). */
       highlightHtml += '<tr class="an-hl-row" data-idx="' + m.moveIdx + '" onclick="reviewJumpTo(' + m.moveIdx + ', true)" style="border-bottom:1px solid #eee">'
-            + '<td style="padding:2px 4px">' + moveLbl + '</td>'
-            + '<td style="padding:2px 4px">' + sideLbl + '</td>'
-            + '<td style="padding:2px 4px;font-family:monospace">' + m.san + '</td>'
+            + '<td style="padding:2px 4px;font-family:monospace">' + moveLbl + '</td>'
             + '<td style="padding:2px 4px;color:' + lossColor + ';font-weight:bold">' + cpLossTxt + '</td>'
             + '<td style="padding:2px 4px;color:' + tactColor + '">' + tactLbl + '</td>'
             + '<td style="padding:2px 4px">' + phaseTxt + '</td>'
@@ -7056,6 +9032,11 @@ function _anDeepReverifyPass(indices, cb){
   for (var k = 0; k < nWorkers; k++) pumpWorker(gAnPool[k]);
 }
 
+function _hideLcWatermark(){
+  var wm = document.getElementById('lc-watermark');
+  if (wm) wm.style.display = 'none';
+}
+
 function finishAnalysis(){
   /* Lozza không hỗ trợ 'searchmoves' trong lệnh go → Pass C không hoạt động
      và gây treo nếu có nhiều position forced liên tiếp (stack từ _runPass2Next đệ quy).
@@ -7071,6 +9052,17 @@ function finishAnalysis(){
 /* ── _runPass2Next đã bị loại bỏ (Lozza không hỗ trợ searchmoves) ── */
 
 function _finishAnalysisRender(){
+  _hideLcWatermark(); /* ĐÃ THÊM: chữ mờ "update ngày" chỉ hiện lúc mới mở trang, ẩn khi phân tích xong 1 ván */
+  /* ĐÃ THÊM: cuộn cột trái lên đầu ngay sau khi phân tích xong — để lộ
+     ngay ô PGN + đồ thị eval + đầu mục "Phân tích ván đấu" thay vì giữ
+     nguyên vị trí cuộn cũ (có thể đang ở giữa/cuối trang từ lần xem
+     trước). Bọc setTimeout 0 để chạy SAU khi DOM của #lc-scroll-wrap đã
+     được cập nhật xong nội dung báo cáo mới (tránh cuộn hụt vì lúc này
+     nội dung/chiều cao trang có thể chưa kịp render). */
+  setTimeout(function(){
+    var _scrollWrap = document.getElementById('lc-scroll-wrap');
+    if (_scrollWrap) _scrollWrap.scrollTop = 0;
+  }, 0);
   _stopAnalysisReplay();
   gAnMode=false;
   /* Đã có kết quả — hiện lại các khối accuracy/bar/table (có thể đang bị
@@ -9235,6 +11227,7 @@ function switchAppTab(tab) {
     if (backLnk) backLnk.style.display = 'none';
     ensureReviewLayerVisible();
   } else {
+    _hideLcWatermark(); /* ĐÃ THÊM: bấm vào tab Luyện tập cũng ẩn chữ mờ "update ngày" */
     /* Mỗi lần bấm vào "Luyện tập" (kể cả khi đang có ván dở) → bắt đầu ván
        mới, ngẫu nhiên vào bên Trắng hoặc Đen. */
     gPC = (Math.random() < 0.5) ? W : B;
@@ -9810,7 +11803,7 @@ function analyzerBackToList() {
    tái sử dụng engine thay thế/replay nước đi sẵn có của ChessCoach7 thay vì
    dựng PGN SAN bằng tay (không cần thư viện chess.js). */
 function analyzerReplayUciAndAnalyze(ucis, names, headers) {
-  var pgnNames = { white: names.white, black: names.black, result: (headers && headers.Result) || '' };
+  var pgnNames = { white: names.white, black: names.black, result: (headers && headers.Result) || '', termination: (headers && headers.Termination) || '' };
   newGame();
   gPgnPlayerNames = pgnNames;
   if (typeof applyAutoFlipForPgnNames === 'function') applyAutoFlipForPgnNames(pgnNames);
@@ -9873,6 +11866,7 @@ function extractPgnPlayerNames(pgn){
   var wm = pgn.match(/\[White\s+"([^"]*)"\]/);
   var bm = pgn.match(/\[Black\s+"([^"]*)"\]/);
   var rm = pgn.match(/\[Result\s+"([^"]*)"\]/);
+  var tm = pgn.match(/\[Termination\s+"([^"]*)"\]/); /* vd "Time forfeit", "Checkmate", "Resignation"... — dùng cho câu kết quả ở mục #1 Tổng quan */
   /* Bỏ phần "(Nms)" nếu có, vd "ChessFun9 (16ms)" → "ChessFun9" */
   function cleanName(s){ return s ? s.replace(/\s*\([^)]*\)\s*$/, '').trim() : ''; }
   var result = rm ? rm[1].trim() : '';
@@ -9885,7 +11879,8 @@ function extractPgnPlayerNames(pgn){
   return {
     white: wm ? cleanName(wm[1]) : '',
     black: bm ? cleanName(bm[1]) : '',
-    result: result
+    result: result,
+    termination: tm ? tm[1].trim() : ''
   };
 }
 
@@ -12281,17 +14276,74 @@ function renderEvalChart() {
   var areaPathBlack = linePath + ' L ' + lastX.toFixed(2) + ',' + (PT+ch).toFixed(2)
                      + ' L ' + PL.toFixed(2) + ',' + (PT+ch).toFixed(2) + ' Z';
 
-  /* Vạch mảnh xám chia 3 giai đoạn: Khai cuộc/Trung cuộc/Tàn cuộc (giống Lichess)
-     Dựa theo boardMaterialPct nếu có dữ liệu gMoveInfo, fallback 1/3-1/3-1/3 theo số nước */
-  var openIdx = -1, endIdx = -1;
-  for (var i = 0; i < gMoveInfo.length; i++) {
-    var mp = gMoveInfo[i] ? gMoveInfo[i].materialPct : undefined;
-    if (mp === undefined) continue;
-    if (openIdx < 0 && mp < 0.75) openIdx = i;
-    if (mp <= 0.30) { endIdx = i; }
+  /* Vạch mảnh xám chia 3 giai đoạn: Khai cuộc/Trung cuộc/Tàn cuộc.
+     Lấy mốc SỚM NHẤT trong nhiều tín hiệu (OR), sau đó "snap" về vị trí
+     YÊN TĨNH gần nhất (không đang giữa 1 loạt ăn quân) để tránh chốt
+     mốc ngay giữa 1 pha trao đổi chưa ổn định — điều này từng khiến
+     nhận định thế cờ tại mốc bị sai lệch. Không fallback đoán mò theo
+     %-số-nước nữa: nếu không tín hiệu nào xảy ra thì không vẽ vạch đó. */
+  function _phase_isCaptureAt(i) {
+    return !!(gMoveInfo[i] && gMoveInfo[i].capVal > 0);
   }
-  if (openIdx < 0) openIdx = Math.round(n * 0.22);
-  if (endIdx   < 0) endIdx   = Math.round(n * 0.70);
+  function _phase_isQuietPly(i) {
+    /* "Yên tĩnh" = nước NÀY và nước NGAY TRƯỚC nó đều không ăn quân —
+       tránh chốt mốc ngay giữa 1 chuỗi ăn-qua-lại chưa kết thúc. */
+    return !_phase_isCaptureAt(i) && !_phase_isCaptureAt(i - 1);
+  }
+  function _phase_snapToQuiet(rawIdx, limit) {
+    for (var k = rawIdx; k < Math.min(gMoveInfo.length, rawIdx + limit); k++) {
+      if (_phase_isQuietPly(k)) return k;
+    }
+    return rawIdx; /* không tìm được vị trí yên tĩnh trong giới hạn -> đành giữ mốc thô */
+  }
+  function _phase_castleResolvedFen(fen) {
+    var cr = fen.split(' ')[2] || '-';
+    var whiteResolved = (cr.indexOf('K') < 0) && (cr.indexOf('Q') < 0);
+    var blackResolved = (cr.indexOf('k') < 0) && (cr.indexOf('q') < 0);
+    return whiteResolved && blackResolved;
+  }
+  function _phase_noQueensFen(fen) {
+    var boardPart = fen.split(' ')[0];
+    return (boardPart.indexOf('Q') < 0) && (boardPart.indexOf('q') < 0);
+  }
+
+  var QUIET_SNAP_LIMIT  = 10;
+
+  /* openIdx: DÙNG CHUNG với #3 "Trạng thái sau khai cuộc" qua
+     _evalGraphOpeningEndIdx (xem hàm dùng chung ở cc9-deep-insights.js)
+     — đảm bảo vạch kẻ trên đồ thị và mốc lời văn ở #3 LUÔN khớp nhau,
+     không còn 2 cách tính độc lập cho 2 kết quả khác nhau.
+     ĐÃ SỬA (chống crash): renderEvalChart() chạy lại ở MỖI nước đi trong
+     lúc xem lại ván — nếu _evalGraphOpeningEndIdx ném lỗi ở 1 thế cờ cụ
+     thể nào đó (dữ liệu lạ), TRƯỚC ĐÂY sẽ làm crash renderEvalChart giữa
+     chừng, kéo theo mọi phần vẽ SAU nó (đường line, các mốc, cả bảng bên
+     trái phụ thuộc vào hàm này) không bao giờ vẽ xong. Bọc try/catch,
+     lỗi thì coi như không có mốc nào (không vẽ vạch), KHÔNG chặn phần
+     còn lại của biểu đồ. */
+  var openIdx = 30;
+  try {
+    if (typeof _evalGraphOpeningEndIdx === 'function') {
+      openIdx = _evalGraphOpeningEndIdx(gMoveInfo, gAnFens);
+    }
+  } catch (_openIdxErr) {
+    console.error('[ChessCoach] _evalGraphOpeningEndIdx lỗi, bỏ qua vạch khai cuộc trên đồ thị:', _openIdxErr);
+    openIdx = 30;
+  }
+  var endIdx = -1;
+
+  var endCandidates = [];
+  for (var p = openIdx + 1; p < gMoveInfo.length; p++) {
+    var mp2 = gMoveInfo[p] ? gMoveInfo[p].materialPct : undefined;
+    if (mp2 !== undefined && mp2 <= 0.30) { endCandidates.push(p); break; }
+  }
+  for (var q = openIdx + 1; q < gMoveInfo.length; q++) {
+    var fenAfterQ = gAnFens[q + 1];
+    if (fenAfterQ && _phase_noQueensFen(fenAfterQ)) { endCandidates.push(q); break; }
+  }
+  if (endCandidates.length) {
+    var rawEndIdx = Math.min.apply(null, endCandidates);
+    endIdx = _phase_snapToQuiet(rawEndIdx, QUIET_SNAP_LIMIT);
+  }
   var phaseLines = '';
   [openIdx, endIdx].forEach(function(pIdx) {
     if (pIdx <= 0 || pIdx >= n-1) return;
