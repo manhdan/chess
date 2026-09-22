@@ -305,6 +305,8 @@ body {
 .lc-sec.lc-collapsed .lc-sec-hd:after { content:' \25B8'; }
 .lc-sec.lc-collapsed .lc-sec-body { display:none; }
 .lc-sec.lc-collapsed .lc-sec-hd { margin-bottom:0 !important; }
+#lc-report-narr-mobile { display: none; }
+html.mp-mode #mobile-stack #lc-report-narr-mobile.has-content { display: block; padding: 0 6px; -webkit-user-select: text; user-select: text; }
 .ancp-white { color:#2a7a2a; }
 .ancp-black { color:#b01010; }
 .ancp-even  { color:#888; }
@@ -1083,7 +1085,7 @@ html.mp-mode #mobile-stack .an-acc-icon { font-size: 1.6em; vertical-align: -0.1
 html.mp-mode #mobile-stack #lc-eval-chart {
   background: #f5f5f0 !important;
   padding-left: 0 !important; padding-right: 0 !important;
-  padding-top: 2px !important;
+  padding-top: 2px !important; padding-bottom: 4px !important;
 }
 html.mp-mode #mobile-stack .an-accuracy-row,
 html.mp-mode #mobile-stack .an-acc-block { background: #f5f5f0 !important; }
@@ -1189,7 +1191,7 @@ html.mp-mode #mobile-stack #eval-chart-svg { height: 101px !important; }
          của nó chạm mép trên khung cuộn — phần PGN phía trên cuộn khuất bình thường, phần báo cáo
          phía dưới cũng cuộn bình thường bên dưới đồ thị, chỉ riêng đồ thị luôn hiện. background trùng
          màu nền .left-col (#f5f5f0) để nội dung cuộn qua bên dưới không bị lộ/đè lên nhìn xuyên qua. -->
-    <div id="lc-eval-chart" style="display:none;padding:6px 6px 4px;-webkit-flex-shrink:0;flex-shrink:0;display:-webkit-flex;display:flex;-webkit-flex-direction:column;flex-direction:column;-webkit-align-items:stretch;align-items:stretch;position:-webkit-sticky;position:sticky;top:0;z-index:5;background:#f5f5f0">
+    <div id="lc-eval-chart" style="display:none;padding:4px 6px 0;-webkit-flex-shrink:0;flex-shrink:0;display:-webkit-flex;display:flex;-webkit-flex-direction:column;flex-direction:column;-webkit-align-items:stretch;align-items:stretch;position:-webkit-sticky;position:sticky;top:0;z-index:5;background:#f5f5f0">
       <div id="eval-chart-label" style="display:none;font-size:0.68rem;color:#888;margin-bottom:3px;-webkit-flex-shrink:0;flex-shrink:0">Eval (góc Trắng, ±600cp)</div>
       <svg id="eval-chart-svg" viewBox="0 0 600 120" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"
         style="width:100%;height:108px;display:block;border:1px solid #ccc;border-radius:8px;overflow:hidden;background:#fafafa;cursor:crosshair;shape-rendering:geometricPrecision">
@@ -1333,6 +1335,9 @@ html.mp-mode #mobile-stack #eval-chart-svg { height: 101px !important; }
              applyMobileLayout()). Nội dung được đổ cùng lúc với bảng
              #an-stats trong buildMoveReport(), luôn đồng bộ dữ liệu. -->
         <div id="an-stats-mobile" style="display:none;margin-bottom:10px"></div>
+        <!-- Bản MOBILE của khối "Phân tích ván đấu" (cùng style hộp bo tròn + tiêu đề bấm thu/bung): ẩn ở PC, chỉ hiện khi
+             bị JS di chuyển sang #mobile-stack (ngay TRÊN "Chi tiết từng nước") — xem applyMobileLayout() + CSS bên dưới. -->
+        <div id="lc-report-narr-mobile"></div>
         <div class="an-moves-title" id="an-moves-title" style="display:none">Chi ti&#7871;t t&#7915;ng n&#432;&#7899;c</div>
       </div>
       <div class="an-moves-new" id="an-moves" style="-webkit-flex:1;flex:1;overflow-y:auto;min-height:0;padding-bottom:8px"></div>
@@ -5744,6 +5749,17 @@ function _deepG1_soundSacrifice(cls, evalPcts, gAnFens, gMoveInfo, gMoveTexts, s
        phương rồi bị ăn lại bằng Mã mình — hiệu số gần như không đổi)
        thành "hy sinh", vì chỉ nhìn vật chất riêng 1 bên sẽ luôn thấy
        "giảm" ngay cả khi đó chỉ là đổi quân bình thường. */
+    /* Nếu quân đặt vào ô đó (ở nước i) vốn đã CÓ SẴN quân che chắn — cụ thể là trong chuỗi đổi quân trên ô này có
+       bước TA tự ăn lại ngay sau đó (i+2) với giá trị gần bằng đúng quân vừa mất (chênh lệch <= 60cp) — thì đây chỉ
+       là 1 pha ĐỔI QUÂN BÌNH THƯỜNG (quân được bảo vệ sẵn, đối phương ăn, ta ăn lại tương đương), KHÔNG phải "hy
+       sinh", dù hiệu số vật chất của TOÀN chuỗi (netDrop bên dưới) có thể khác 0 vì lẫn thêm 1 nước ăn quân khác
+       ngay khi vừa tới ô đó (VD nhân tiện ăn luôn 1 Tốt đang đứng ở đó trước khi bị đối phương ăn lại). */
+    if (chainEnd >= i + 2 && gMoveInfo[i + 2] && gMoveInfo[i + 2].capVal > 0) {
+      var _lostVal = (gMoveInfo[i] && gMoveInfo[i].movedVal) || 0;
+      var _recoveredVal = gMoveInfo[i + 2].capVal || 0;
+      if (_recoveredVal >= _lostVal - 60) continue;
+    }
+
     var baseDiff = _g_materialDiff(boardArrayFromFen(gAnFens[i]).board, sideChar);
     var afterDiff = _g_materialDiff(boardArrayFromFen(gAnFens[endFenIdx]).board, sideChar);
     var netDrop = baseDiff - afterDiff;
@@ -6003,9 +6019,14 @@ function _deepG1_checkStreak(gMoveInfo, gMoveTexts, sideChar, sideLabel, evalPct
    Điều kiện: (a) đi đúng nước tốt nhất (cpLoss <= 20, không lỗi); (b) khoảng cách PV1 - PV2 >= 300cp;
    (c) PV1 còn giữ được thế (>= -200cp) — tức thật sự "chỉ nước này mới giữ/cứu được"; (d) PV2 tụt xuống <= +150cp
    (nếu PV2 vẫn hơn hẳn thì không có gì "duy nhất"); (e) loại: chỉ có 1 nước hợp lệ, ăn lại hiển nhiên, nước trong sách,
-   nước chiếu hết ngay, và mate-in-1 (quá hiển nhiên). Chọn nước có khoảng cách lớn nhất, ghi kèm tổng số nước duy nhất. */
+   nước chiếu hết ngay, và mate-in-1 (quá hiển nhiên); (f) CHỈ tính khi thế cờ TRƯỚC nước đó chưa thắng rõ (<= +300cp):
+   tức tình huống bình thường hoặc đang bị tấn công/bất lợi mà tìm được đường thoát/phản công tốt — KHÔNG tính khi đã
+   hơn hẳn vì đối thủ vừa hiến quân; (g) loại nước ĂN QUÂN ngay sau khi đối thủ vừa đi nước sai/blunder (chỉ là nhận quà,
+   không phải "khó nhận ra"). Chọn nước có khoảng cách lớn nhất, ghi kèm tổng số nước duy nhất. */
 function _deepG1_onlyMove(cls, gMoveInfo, gMoveTexts, sideChar, sideLabel) {
   var GAP_MIN = 300, BEST_MIN = -200, SECOND_MAX = 150, MATE_IN_1 = 9999; /* anCP: mate-in-1 = 9999, mate-in-2 = 9998, ... */
+  var BEFORE_MAX = 300; /* thế cờ TRƯỚC nước đó phải chưa thắng rõ (<= +300cp) */
+  var OPP_GIFT = {mistake:1, blunder:1}; /* đối thủ vừa sai nặng ở nước liền trước */
   var SKIP = {book:1, forced:1, inaccuracy:1, mistake:1, blunder:1, missed_win:1, missed_mate:1};
   var best = null, count = 0;
   for (var i = 0; i < cls.length; i++) {
@@ -6018,6 +6039,8 @@ function _deepG1_onlyMove(cls, gMoveInfo, gMoveTexts, sideChar, sideLabel) {
     var cpLoss = Math.max(0, ci.evalBest - ci.evalActual);
     if (!ci.isBest && cpLoss > 20) continue;
     if (ci.evalBest >= MATE_IN_1) continue;
+    if (ci.evalBefore !== undefined && ci.evalBefore !== null && ci.evalBefore > BEFORE_MAX) continue; /* đã hơn hẳn từ trước (VD đối thủ vừa hiến quân) */
+    if (i > 0 && OPP_GIFT[cls[i - 1]] && gMoveInfo[i] && gMoveInfo[i].capVal > 0) continue;          /* chỉ là ăn quân đối thủ vừa tặng */
     if (ci.evalBest < BEST_MIN) continue;
     if (ci.eval2ndBest > SECOND_MAX) continue;
     var gap = ci.evalBest - ci.eval2ndBest;
@@ -6699,8 +6722,19 @@ function _deepG2_hangingPiece(cls, gMoveInfo, gMoveTexts, sideChar, sideLabel) {
     if (mvSide !== sideChar) continue;
     var ci = _buildClassifyInput(i);
     if (!ci || ci.isSacrifice) continue;
-    var cap = ci.nextOpponentCaptureCp;
-    if (cap >= HANGING_MIN_CP && cap > bestCap) { bestCap = cap; best = i; }
+    /* THIỆT HẠI RÒNG = quân đối thủ ăn được ở nước sau − quân mình vừa ăn ở CHÍNH nước này. Nếu trừ xong không còn
+       đáng kể thì đó chỉ là 1 pha ĐỔI QUÂN (VD 21.Qxb6 axb6: ăn Hậu rồi bị ăn lại Hậu = 0), KHÔNG phải "để hở quân". */
+    var cap = (ci.nextOpponentCaptureCp || 0) - (ci.ownCaptureCp || 0);
+    if (cap < HANGING_MIN_CP) continue;
+    /* Nếu ngay sau đó TA tự ăn lại trên ĐÚNG ô đối thủ vừa ăn, với giá trị gần bằng đúng những gì vừa mất
+       (chênh lệch <= 60cp) — đây chỉ là 1 pha ĐỔI QUÂN (VD Tượng bị Mã ăn, ta ăn lại Mã ngay), KHÔNG phải
+       "để hở quân mất trắng", dù quân có thể đã bị hở từ TRƯỚC đó (không phải do chính nước i gây ra). */
+    if (typeof gUciHist !== 'undefined' && gUciHist && gUciHist[i + 1] && gMoveInfo[i + 2] && gUciHist[i + 2]) {
+      var _hpDest = gUciHist[i + 1].substring(2, 4);
+      if (_hpDest && _hpDest === gUciHist[i + 2].substring(2, 4) && gMoveInfo[i + 2].capVal > 0
+          && gMoveInfo[i + 2].capVal >= cap - 60) continue;
+    }
+    if (cap > bestCap) { bestCap = cap; best = i; }
   }
   if (best === null) return null;
   var moveNum = Math.floor(best / 2) + 1;
@@ -7233,10 +7267,10 @@ function _deepG4_pawnStructure(gAnFens, sideChar, sideLabel) {
   var doubled = _g4_findDoubled(profile, sideChar);
   if (doubled.length > 0) {
     out.push({
-      id: 'g4-doubled-' + sideChar, group: 4, score: 42, sev: 'low', icon: '🔗',
+      id: 'g4-doubled-' + sideChar, group: 4, score: 42, sev: 'low', icon: '⚔️',
       text: sideLabel + ': có Tốt chồng ở cột ' + FLS.charAt(doubled[0]).toUpperCase()
           + (doubled.length > 1 ? ' (và ' + (doubled.length - 1) + ' cột khác)' : '')
-          + ' (tính đến khoảng nước ' + snap.moveUsed + ') — điểm yếu cố định, dễ bị đối phương nhắm vào.'
+          + ' (tính đến khoảng nước ' + snap.moveUsed + ') tạo thành điểm yếu dễ bị đối phương nhắm vào trong dài hạn.'
     });
   }
 
@@ -8130,6 +8164,11 @@ function _narrG10_opponentResponse(g8Pool, cls, gMoveTexts, sideChar) {
     var idx = _extractMoveIdxFromCandText(g8Pool[k].text, sideChar);
     var oppIdx = idx + 1;
     if (idx < 0 || oppIdx >= cls.length || seenIdx[oppIdx]) continue;
+    /* Nước sai là 1 pha ĂN QUÂN và đối thủ chỉ ĂN LẠI ngay trên cùng ô (đổi quân) → nói "khai thác sai lầm" không có
+       căn cứ (chỉ là đổi quân), bỏ dòng phản ứng này. */
+    if (typeof gMoveInfo !== 'undefined' && typeof gUciHist !== 'undefined' && gMoveInfo && gUciHist
+        && gMoveInfo[idx] && gMoveInfo[oppIdx] && gMoveInfo[idx].capVal > 0 && gMoveInfo[oppIdx].capVal > 0
+        && gUciHist[idx] && gUciHist[oppIdx] && gUciHist[idx].substring(2, 4) === gUciHist[oppIdx].substring(2, 4)) continue;
     seenIdx[oppIdx] = true;
     var oppCls = cls[oppIdx];
     var moveNum = Math.floor(oppIdx / 2) + 1;
@@ -8883,6 +8922,26 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
     });
   }
 
+  /* ── SẮP XẾP LẠI theo ĐÚNG THỨ TỰ NƯỚC ĐI trong ván (yêu cầu người dùng):
+     mỗi nguồn tính moveIdx độc lập ở nhiều chỗ phía trên (g5Result.idx, extractMoveIdxFromCandText,
+     _evalGraphOpeningEndIdx...) nên không đảm bảo đã nhất quán để "selected.sort" trước đó luôn đúng —
+     ở đây CHỐT LẠI lần cuối bằng cách đọc trực tiếp từ chính s.text (nguồn duy nhất người dùng NHÌN THẤY),
+     đảm bảo thứ tự hiển thị luôn khớp thứ tự thời gian dù nguồn tính idx phía trên có lệch ở đâu đó.
+     #1 Tổng quan luôn đứng đầu; các mục leftover (nếu HIDE_LEFTOVER=false) giữ nguyên vị trí cuối cùng. */
+  (function(){
+    function _secOrdIdx(txt){
+      var m = /<b>(\d+)(?:\.\.\.|\.)/.exec(txt);
+      return m ? parseInt(m[1], 10) : 9999; /* không tìm được nước cụ thể -> giữ cuối, không phá thứ tự các mục khác */
+    }
+    var head = (sections.length && sections[0].num === 1) ? [sections.shift()] : [];
+    var leftoverStart = sections.length;
+    for (var _li = 0; _li < sections.length; _li++) { if (sections[_li].title && sections[_li].title.indexOf('(chưa xếp') === 0) { leftoverStart = _li; break; } }
+    var main = sections.slice(0, leftoverStart), rest = sections.slice(leftoverStart);
+    main.forEach(function(s){ s._ord = _secOrdIdx(s.text); });
+    main.sort(function(a, b){ return a._ord - b._ord; }); /* stable: giữ nguyên thứ tự cũ khi trùng số nước */
+    sections = head.concat(main, rest);
+  })();
+
   return sections;
 }
 /* ══════════════════ END cc9-deep-insights.js ══════════════════ */
@@ -9016,7 +9075,7 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
     if (v > 120) return {tag:'rất cao', sev:'high', icon:'📉',
       hint:'Nhiều sai lầm lớn — nên chậm lại, kiểm tra kỹ trước khi đi quân, đặc biệt các nước ăn quân/chiếu của đối thủ.'};
     if (v > 60) return {tag:'khá cao', sev:'medium', icon:'📉',
-      hint:'Còn nhiều dư địa cải thiện — tập trung giảm số nước "Thiếu chính xác" và "Sai lầm".'};
+      hint:'Còn nhiều dư địa cải thiện — tập trung giảm số nước Mistake và Blunder.'};
     return null; /* chỉ còn v <= 0 (chưa có dữ liệu) */
   }
   var jW = _acplJudgment(avgCpLossWhite);
@@ -9054,7 +9113,7 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
     if (tot >= 3 && rate > worstRate) { worstRate = rate; worst = {ph:ph, tot:tot, bad:bad, rate:rate}; }
   });
 
-  html += '<div class="' + _lcSecCls('phase') + '" style="margin:8px 0;padding:6px 8px;background:#fafafa;border:1px solid #e0e0e0;border-radius:4px">';
+  html += '<div class="' + _lcSecCls('phase') + '" style="margin:4px 0;padding:6px 8px;background:#fafafa;border:1px solid #e0e0e0;border-radius:4px">';
   html += '<div class="lc-sec-hd" data-key="phase" onclick="lcToggleSec(this)" style="font-size:0.68rem;font-weight:bold;margin-bottom:6px">\ud83d\udcca Th\u1ed1ng k\u00ea n\u01b0\u1edbc \u0111i:</div><div class="lc-sec-body">';
   html += '<table class="an-phase-table" style="width:100%;border-collapse:collapse;font-size:0.68rem;margin:0">';
   html += '<thead><tr style="background:#666;color:#fff">'
@@ -9068,9 +9127,9 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
     var bad = d.mistake + d.blunder;
     var pct = tot ? Math.round(bad/tot*100) + '%' : '—';
     /* Thay cho dòng text "Giai đoạn nhiều sai lầm nhất" riêng — highlight
-       ngay dòng bảng bằng màu vùng Trắng của đồ thị eval (đồng bộ trực quan). */
+       ngay dòng bảng bằng màu vàng cam của các mục dạng lỗi (đồng bộ trực quan). */
     var isWorstRow = (worst && worst.rate > 0 && ph === worst.ph);
-    var rowBg = isWorstRow ? 'background:var(--board-eval-white,#d4edda);' : '';
+    var rowBg = isWorstRow ? 'background:#fff3e0;' : ''; /* vàng cam — cùng màu nền các mục dạng lỗi (Nhận xét lỗi / Phân tích ván đấu) */
     /* ĐÃ SỬA: màu cột Best/Inaccuracy giờ lấy ĐÚNG màu dùng cho nhãn đó ở
        bảng Classify (thanh accuracy) — best:'#81b64c', inaccuracy:'#ffa726'
        — thay vì để đen mặc định như trước. Mistake/Blunder đã trùng màu
@@ -9117,9 +9176,9 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
        luôn cùng đúng/sai với nhau trên thực tế, ra 2 câu nói CÙNG 1 ý
        ("lỗi nhiều ở đầu ván") chỉ khác cách đo — giữ 1 câu là đủ. */
     if (earlyCount / topMistakes.length >= 0.45 && !_openingAlreadyFlagged) {
-      insights.push({icon:'📌', sev:'medium', text:
+      insights.push({icon:'📊', sev:'medium', text:
         '<b>' + Math.round(earlyCount/topMistakes.length*100) + '% sai lầm xảy ra ở nước 1-15</b>. '
-        + 'Gợi ý: cẩn thận hơn trong khai cuộc, đừng vội tấn công khi chưa phát triển đủ quân.'});
+        + 'Gợi ý: cẩn thận hơn trong khai cuộc, nên đi chính xác hơn, đừng vội tấn công khi chưa phát triển đủ quân.'});
     } else if (lateCount / topMistakes.length >= 0.45) {
       insights.push({icon:'📌', sev:'medium', text:
         '<b>' + Math.round(lateCount/topMistakes.length*100) + '% sai lầm xảy ra ở nước 31+</b>. '
@@ -9267,7 +9326,7 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
         if (ci3 && ci3.isSacrifice) {
           cat = 'selfSac';
         } else {
-          var nextCap = (gMoveInfo[ei+1] && gMoveInfo[ei+1].capVal) || 0;
+          var nextCap = ((gMoveInfo[ei+1] && gMoveInfo[ei+1].capVal) || 0) - ((gMoveInfo[ei] && gMoveInfo[ei].capVal) || 0); /* thiệt hại ròng, không tính đổi quân ngang giá */
           cat = (nextCap >= HANGING_MIN_CP) ? 'hanging' : 'other';
         }
       }
@@ -9296,7 +9355,7 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
      positional, giai đoạn tập trung lỗi... vẫn giữ nguyên bên trên). */
 
   if (insights.length) {
-    html += '<div class="' + _lcSecCls('ins') + '" style="margin:8px 0;padding:6px 8px;background:#fafafa;border:1px solid #e0e0e0;border-radius:4px">';
+    html += '<div class="' + _lcSecCls('ins') + '" style="margin:4px 0;padding:6px 8px;background:#fafafa;border:1px solid #e0e0e0;border-radius:4px">';
     html += '<div class="lc-sec-hd" data-key="ins" onclick="lcToggleSec(this)" style="font-size:0.68rem;font-weight:bold;margin-bottom:6px">🧭 Nhận xét lỗi:</div><div class="lc-sec-body">';
     insights.forEach(function(ins) {
       var bg = ins.sev==='high' ? '#fff3e0' : ins.sev==='medium' ? '#f5f5f0' : '#e8f5e9';
@@ -9415,8 +9474,10 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
     /* Render theo ĐÚNG THỨ TỰ khung 14 mục (#1→#14), rồi tới #A1, #A2...
        (leftover chưa xếp chỗ) — KHÔNG lọc/ẩn mục nào, kể cả mục còn
        "(chưa có nội dung)", để dễ theo dõi tiến độ hoàn thiện khung. */
+    gLcNarrativeHtml = '';
+    var _narrStart = html.length;
     if (narrativeSections && narrativeSections.length) {
-      html += '<div id="lc-narrative-anchor" class="' + _lcSecCls('narr') + '" style="margin:8px 0;padding:6px 8px;background:#fafafa;border:1px solid #e0e0e0;border-radius:4px">';
+      html += '<div id="lc-narrative-anchor" class="' + _lcSecCls('narr') + '" style="margin:4px 0;padding:6px 8px;background:#fafafa;border:1px solid #e0e0e0;border-radius:4px">';
       html += '<div class="lc-sec-hd" data-key="narr" onclick="lcToggleSec(this)" style="font-size:0.68rem;font-weight:bold;margin-bottom:6px">🔬 Phân tích ván đấu:</div><div class="lc-sec-body">';
       narrativeSections.forEach(function(s){
         var isPlaceholder = /\(chưa có nội dung\)\s*$/.test(s.text);
@@ -9442,6 +9503,7 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
               + _iconPrefix + _txt + '</div>';
       });
       html += '</div></div>';
+      gLcNarrativeHtml = html.substring(_narrStart); /* bản sao cho mobile (đổi id để không trùng #lc-narrative-anchor) */
     }
   })();
 
@@ -10105,6 +10167,11 @@ function _finishAnalysisRender(){
   if(reportSummaryDiv){
     reportSummaryDiv.innerHTML=reportResult.summaryHtml;
     reportSummaryDiv.style.display='block';
+  }
+  var reportNarrMobile=document.getElementById('lc-report-narr-mobile');
+  if(reportNarrMobile){
+    reportNarrMobile.innerHTML=(gLcNarrativeHtml||'').replace('id="lc-narrative-anchor"','id="lc-narrative-anchor-m"');
+    reportNarrMobile.className=gLcNarrativeHtml?'has-content':'';
   }
 
   /* ── Danh sách nước với cp-loss + gợi ý Lozza cho blunder ── */
@@ -10949,6 +11016,8 @@ function newGame(){
   if(lrh) lrh.style.display='none';
   var lrs=document.getElementById('lc-report-summary');
   if(lrs) lrs.style.display='none';
+  var lnm=document.getElementById('lc-report-narr-mobile');
+  if(lnm){ lnm.innerHTML=''; lnm.className=''; }
   resetEvalBar();
   gUciHist = [];
   if(typeof randomizeContempt==='function') randomizeContempt();
@@ -12282,13 +12351,16 @@ function onHistoryPaste(e) {
 /* Thu gọn / bung các mục báo cáo (Highlight, Thống kê nước đi, Nhận xét lỗi, Phân tích ván đấu).
    Trạng thái nhớ theo key, lưu vào localStorage → giữ nguyên cả khi phân tích ván khác lẫn lần mở sau. */
 var LC_SEC_KEY = 'cc_report_sections_collapsed';
-var gLcSecCollapsed = {};
+var gLcNarrativeHtml = ''; /* HTML riêng của khối "Phân tích ván đấu" (do buildMoveReport gán) — để hiện bản mobile */
+/* MẶC ĐỊNH lần đầu truy cập (chưa lưu gì): Highlight ván đấu + Thống kê nước đi ở dạng ẨN (thu gọn); Nhận xét lỗi
+   và Phân tích ván đấu mở. Trạng thái người dùng đã bấm (lưu localStorage) luôn được ưu tiên đè lên mặc định. */
+var gLcSecCollapsed = {hl: true, phase: true};
 /* Đọc trạng thái đã lưu từ lần trước (localStorage) — giữ nguyên qua các lần mở app */
 try {
   var _lcSaved = localStorage.getItem(LC_SEC_KEY);
   if (_lcSaved) {
     var _lcObj = JSON.parse(_lcSaved);
-    if (_lcObj && typeof _lcObj === 'object') gLcSecCollapsed = _lcObj;
+    if (_lcObj && typeof _lcObj === 'object') { for (var _lk in _lcObj) { if (_lcObj.hasOwnProperty(_lk)) gLcSecCollapsed[_lk] = _lcObj[_lk]; } }
   }
 } catch (e) {}
 function _lcSecCls(key){ return 'lc-sec' + (gLcSecCollapsed[key] ? ' lc-collapsed' : ''); }
@@ -12516,7 +12588,7 @@ function analyzerFormatDateTime(epochSeconds) {
 var ANALYZER_BULLET_SVG = '<svg width="10" height="10" viewBox="0 0 16 16" style="vertical-align:-1px;margin-right:2px"><path d="M8 1 C11 1 12.5 3 12.5 5.5 L12.5 10 C12.5 12.5 10.5 14.5 8 14.5 C5.5 14.5 3.5 12.5 3.5 10 L3.5 5.5 C3.5 3 5 1 8 1 Z" fill="#e0a92a" stroke="#a8791a" stroke-width="0.5"/><ellipse cx="8" cy="5" rx="3.2" ry="1.6" fill="#f3c65a"/></svg>';
 function analyzerTimeClassIcon(timeClass){
   switch(String(timeClass||'').toLowerCase()){
-    case 'bullet': return ANALYZER_BULLET_SVG;
+    case 'bullet': return '🚀 ';
     case 'blitz':  return '\u26A1 ';     /* ⚡ tia chớp */
     case 'rapid':  return '\u{1F551} ';  /* 🕑 đồng hồ */
     case 'daily':  return '\u2600\uFE0F '; /* ☀️ mặt trời — cờ hàng ngày (chơi trong nhiều ngày) */
@@ -13002,6 +13074,7 @@ function _buildMobileLayoutItems() {
     '#an-bar-row',          /* 7. Thanh diễn biến nhiều màu (nước đi) — ngay dưới lc-bot-row */
     '#an-stats-mobile',     /* 8. Bảng phân loại nước đi — bản badge gọn */
     '#coach-layer-normal',  /* (tab Luyện tập, chưa có kết quả phân tích) */
+    '#lc-report-narr-mobile', /* 8b. Phân tích ván đấu (bản mobile) — NGAY TRÊN Chi tiết từng nước */
     '#an-moves-title',
     '#an-moves'             /* 9. Chi tiết từng nước */
   ];
