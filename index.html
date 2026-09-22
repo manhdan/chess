@@ -4248,6 +4248,7 @@ function _buildClassifyInput(i){
   /* isForced: chỉ có đúng 1 nước hợp lệ tại vị trí này.
      Tính từ gAnFens[i] bằng cách parse FEN và gọi legalMoves. */
   var isForced = false;
+  var legalCount = null;
   if (gAnFens && gAnFens[i]) {
     try {
       var _fp = gAnFens[i].split(' ');
@@ -4258,6 +4259,7 @@ function _buildClassifyInput(i){
       var _fCas = { WK: (_fp[2]||'').indexOf('K')>=0, WQ: (_fp[2]||'').indexOf('Q')>=0, BK: (_fp[2]||'').indexOf('k')>=0, BQ: (_fp[2]||'').indexOf('q')>=0 };
       var _legals = legalMoves(_fb.board, _fb.turn, _fEP, _fCas);
       isForced = (_legals.length === 1);
+      legalCount = _legals.length;
     } catch(e) { isForced = false; }
   }
 
@@ -4309,6 +4311,7 @@ function _buildClassifyInput(i){
 
     isBest: isBest,
     isForced: isForced,
+    legalCount: legalCount,
     givesCheck: givesCheck,
 
     numGoodAlternatives: numGoodAlternatives,
@@ -6035,6 +6038,7 @@ function _deepG1_onlyMove(cls, gMoveInfo, gMoveTexts, sideChar, sideLabel) {
     if (SKIP[cls[i]]) continue;
     var ci = _buildClassifyInput(i);
     if (!ci || ci.isForced || ci.isImmediateRecapture || ci.isImmediateCheckmate) continue;
+    if (ci.legalCount !== null && ci.legalCount < 5) continue; /* dưới 5 nước hợp lệ -> quá dễ nhìn ra, không tính là "khó nhận ra" */
     if (ci.eval2ndBest === null || ci.eval2ndBest === undefined) continue;
     var cpLoss = Math.max(0, ci.evalBest - ci.evalActual);
     if (!ci.isBest && cpLoss > 20) continue;
@@ -7288,9 +7292,9 @@ function _deepG4_pawnStructure(gAnFens, sideChar, sideLabel) {
     var _bwColor = (sideChar === 'w') ? 'Trắng' : 'Đen';
     backwardFiles[b0.file] = true;
     out.push({
-      id: 'g4-backward-' + sideChar, group: 4, score: 48, sev: 'low', icon: '🚩',
+      id: 'g4-backward-' + sideChar, group: 4, score: 32, sev: 'low', icon: '🚩',
       text: 'Tốt ' + _bwColor.toLowerCase() + ' ở ô ' + bSq + ' bị cô lập (không có Tốt khác hỗ trợ, '
-          + 'ô trước mặt bị đối phương kiểm soát) — khó tiến lên và thành mục tiêu của đối thủ.'
+          + 'ô trước mặt bị đối phương kiểm soát) (tính đến khoảng nước ' + snap.moveUsed + ') — khó tiến lên và thành mục tiêu của đối thủ.'
     });
   }
 
@@ -7843,6 +7847,50 @@ function _evalGraphEndgameStartIdx(gMoveInfo, gAnFens, openIdx) {
    dụng _g_materialValue), và xem ai đã nhập thành trước (quét
    gMoveTexts) — 3 yếu tố CÓ SẴN dữ liệu, chưa cần phân tích không
    gian/hoạt động quân (để bổ sung sau khi cần). */
+/* Helper: trả {side:'side'|'opp', text: cụm mô tả KHÔNG kèm chủ ngữ} hoặc null */
+function _g_minorPieceReason(board, sideChar, oppChar) {
+  function counts(color) {
+    var B = (color === 'w') ? WB : BB, N = (color === 'w') ? WN : BN;
+    var b = 0, n = 0;
+    for (var s = 0; s < 64; s++) { if (board[s] === B) b++; else if (board[s] === N) n++; }
+    return {b: b, n: n};
+  }
+  var mine = counts(sideChar), opp = counts(oppChar);
+  if (mine.b + mine.n < 2 || opp.b + opp.n < 2) return null;
+  if (mine.b >= 2 && opp.b < 2) return {side: 'side', text: 'giữ được cặp Tượng'};
+  if (opp.b >= 2 && mine.b < 2) return {side: 'opp', text: 'giữ được cặp Tượng'};
+  return null;
+}
+
+function _g_centerPawnReason(board, sideChar, oppChar) {
+  function pawnCount(color) {
+    var P = (color === 'w') ? WP : BP, c = 0;
+    for (var i = 0; i < G3_CENTER_SQUARES.length; i++) { if (board[G3_CENTER_SQUARES[i]] === P) c++; }
+    return c;
+  }
+  var mine = pawnCount(sideChar), opp = pawnCount(oppChar);
+  if (mine - opp >= 1) return {side: 'side', text: 'có Tốt chiếm trung tâm tốt hơn (' + mine + ' vs ' + opp + ')'};
+  if (opp - mine >= 1) return {side: 'opp', text: 'có Tốt chiếm trung tâm tốt hơn (' + opp + ' vs ' + mine + ')'};
+  return null;
+}
+
+function _g_majorMobilityReason(board, sideChar, oppChar, ep, cas) {
+  function mobility(color) {
+    try {
+      var turnCode = (color === 'w') ? W : B;
+      var pseudo = genPseudo(board, turnCode, ep, cas);
+      var cnt = 0;
+      for (var i = 0; i < pseudo.length; i++) { var t = typ(board[pseudo[i][0]]); if (t === 4 || t === 5) cnt++; }
+      return cnt;
+    } catch (e) { return null; }
+  }
+  var mine = mobility(sideChar), opp = mobility(oppChar);
+  if (mine === null || opp === null) return null;
+  if (mine - opp >= 4) return {side: 'side', text: 'có Xe/Hậu cơ động hơn hẳn (' + mine + ' vs ' + opp + ' nước khả dĩ)'};
+  if (opp - mine >= 4) return {side: 'opp', text: 'có Xe/Hậu cơ động hơn hẳn (' + opp + ' vs ' + mine + ' nước khả dĩ)'};
+  return null;
+}
+
 function _narrG3_postOpeningState(cls, evalPcts, gAnFens, gMoveTexts, gMoveInfo, sideChar, sideLabel, oppLabel, skipCastleReason) {
   var oppChar = (sideChar === 'w') ? 'b' : 'w';
   var boundary = _evalGraphOpeningEndIdx(gMoveInfo, gAnFens);
@@ -7897,16 +7945,36 @@ function _narrG3_postOpeningState(cls, evalPcts, gAnFens, gMoveTexts, gMoveInfo,
     }
   }
 
+  /* ĐÃ SỬA: reasons giờ là mảng {side:'side'|'opp', text} thay vì string
+     ghép sẵn chủ ngữ — cho phép gom nhiều lý do CÙNG THUỘC 1 BÊN thành 1
+     câu tự nhiên (VD "...chủ yếu do Trắng đã nhập thành..., Trắng cũng
+     giữ được cặp Tượng và có Tốt chiếm trung tâm tốt hơn...") thay vì chỉ
+     nêu đúng 1 lý do (nhập thành) trong khi còn nhiều căn cứ khác cùng
+     ủng hộ bên đang nhỉnh hơn. */
   var reasons = [];
   if (Math.abs(matDiff) >= 100) {
-    reasons.push((matDiff > 0 ? sideLabel : oppLabel) + ' hơn ' + Math.abs(matDiff) + 'cp về vật chất');
+    reasons.push({side: (matDiff > 0) ? 'side' : 'opp', text: 'hơn ' + Math.abs(matDiff) + 'cp về vật chất'});
   }
   if (!skipCastleReason) {
     /* ĐÃ SỬA: bỏ qua lý do nhập thành ở đây nếu #35 (g3-castle-contrast)
        đã có sẵn — tránh nói trùng ý "đã nhập thành, bên kia thì chưa"
        theo 2 cách diễn đạt khác nhau trong cùng 1 báo cáo. */
-    if (sideCastled && !oppCastled) reasons.push(sideLabel + ' đã nhập thành, ' + oppLabel + ' thì chưa — vua an toàn hơn');
-    else if (oppCastled && !sideCastled) reasons.push(oppLabel + ' đã nhập thành, ' + sideLabel + ' thì chưa — vua an toàn hơn');
+    if (sideCastled && !oppCastled) reasons.push({side: 'side', text: 'đã nhập thành trong khi ' + oppLabel + ' thì chưa — vua an toàn hơn'});
+    else if (oppCastled && !sideCastled) reasons.push({side: 'opp', text: 'đã nhập thành trong khi ' + sideLabel + ' thì chưa — vua an toàn hơn'});
+  }
+  if (fen) {
+    var _fp2 = fen.split(' ');
+    var _fEP2 = -1;
+    var _epStr2 = _fp2[3] || '-';
+    if (_epStr2 !== '-') { var _ef2 = FLS.indexOf(_epStr2.charAt(0)); var _er2 = parseInt(_epStr2.charAt(1),10)-1; if(_ef2>=0&&_er2>=0) _fEP2 = sq(_er2,_ef2); }
+    var _fCas2 = { WK: (_fp2[2]||'').indexOf('K')>=0, WQ: (_fp2[2]||'').indexOf('Q')>=0, BK: (_fp2[2]||'').indexOf('k')>=0, BQ: (_fp2[2]||'').indexOf('q')>=0 };
+
+    var _mr = _g_minorPieceReason(board, sideChar, oppChar);
+    if (_mr) reasons.push(_mr);
+    var _cr = _g_centerPawnReason(board, sideChar, oppChar);
+    if (_cr) reasons.push(_cr);
+    var _mmr = _g_majorMobilityReason(board, sideChar, oppChar, _fEP2, _fCas2);
+    if (_mmr) reasons.push(_mmr);
   }
 
   /* (2) đòn chiến thuật đang diễn ra — xem giải thích ở trên */
@@ -7928,7 +7996,15 @@ function _narrG3_postOpeningState(cls, evalPcts, gAnFens, gMoveTexts, gMoveInfo,
     }
   }
 
-  var reasonTxt = reasons.length ? ', chủ yếu do ' + reasons.join(' và ') : '';
+  var reasonTxt = '';
+  if (reasons.length) {
+    var leadSide = reasons[0].side;
+    var leadLabel = (leadSide === 'side') ? sideLabel : oppLabel;
+    var sameSideExtra = [];
+    for (var ri = 1; ri < reasons.length; ri++) { if (reasons[ri].side === leadSide) sameSideExtra.push(reasons[ri].text); }
+    reasonTxt = ', chủ yếu do ' + leadLabel + ' ' + reasons[0].text;
+    if (sameSideExtra.length) reasonTxt += ', ' + leadLabel + ' cũng ' + sameSideExtra.join(' và ');
+  }
 
   return 'Tính tới nước <b>' + moveNum + (sideChar === 'w' ? '.' : '...') + (gMoveTexts[boundary] || '')
        + '</b> (thời điểm ra khỏi khai cuộc): ' + leadTxt + reasonTxt + '.';
