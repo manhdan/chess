@@ -1242,7 +1242,7 @@ html.mp-mode #mobile-stack #eval-chart-svg { height: 101px !important; }
   <div class="board-outer">
     <div class="board" id="board"></div>
   </div>
-  <div id="lc-watermark" style="position:fixed;left:50%;bottom:4px;transform:translateX(-50%);font-size:0.7rem;color:#000;opacity:0.18;pointer-events:none;z-index:1;white-space:nowrap;user-select:none">update 21/09/2026</div>
+  <div id="lc-watermark" style="position:fixed;left:50%;bottom:4px;transform:translateX(-50%);font-size:0.7rem;color:#000;opacity:0.18;pointer-events:none;z-index:1;white-space:nowrap;user-select:none">update 22/09/2026</div>
   <svg id="coach-svg" viewBox="0 0 8 8" preserveAspectRatio="none">
     <defs>
       <marker id="arr-grn" markerWidth="2.2" markerHeight="2.2" refX="1.5" refY="1.1" orient="auto">
@@ -8519,10 +8519,10 @@ function _narrOverviewText(cls, evalPcts, sideChar, oppChar, sideLabel, oppLabel
       var _rangeTxt = '';
       if (_sideMinPct !== null && _sideMaxPct !== null && (_sideMaxPct - _sideMinPct) >= 30) {
         if (_sideMinPct <= 35 && _sideMaxPct >= 70) {
-          _rangeTxt = ': ' + sideLabel + ' từng chịu sức ép, có lúc chỉ còn ' + Math.round(_sideMinPct)
+          _rangeTxt = ': ' + (sideChar === 'w' ? 'Trắng' : 'Đen') + ' từng chịu sức ép, có lúc chỉ còn ' + Math.round(_sideMinPct)
             + '% thắng, nhưng dần giành lại thế chủ động và áp đảo hoàn toàn về cuối ván (lên tới ' + Math.round(_sideMaxPct) + '% thắng)';
         } else if (_sideMaxPct >= 70 && _sideMinPct > 35) {
-          _rangeTxt = ', ' + sideLabel + ' từng chiếm ưu thế lớn (cao nhất ' + Math.round(_sideMaxPct) + '% thắng) trước khi cục diện thay đổi';
+          _rangeTxt = ', ' + (sideChar === 'w' ? 'Trắng' : 'Đen') + ' từng chiếm ưu thế lớn (cao nhất ' + Math.round(_sideMaxPct) + '% thắng) trước khi cục diện thay đổi';
         }
       }
       volTxt = _rangeTxt
@@ -8543,7 +8543,7 @@ function _narrOverviewText(cls, evalPcts, sideChar, oppChar, sideLabel, oppLabel
       /* Nếu chính bên đang phân tích áp đảo xuyên suốt (trung bình >=60% VÀ chưa từng tụt dưới 60%) thì
          nói rõ luôn mốc thấp nhất để thấy mức áp đảo ổn định, thay vì chỉ nói chung chung "một chiều". */
       if (_sideAvgPct >= 60 && _sideMinPct !== null && _sideMinPct >= 60) {
-        volTxt = ' Thế trận nhìn chung nghiêng hẳn về bên ' + sideLabel + ' ngay từ khai cuộc và duy trì ưu thế áp đảo (trên '
+        volTxt = ' Thế trận nhìn chung nghiêng hẳn về bên ' + (sideChar === 'w' ? 'Trắng' : 'Đen') + ' ngay từ khai cuộc và duy trì ưu thế áp đảo (trên '
           + Math.round(_sideMinPct) + '% thắng) trong phần lớn ván đấu.';
       } else if (_avgWhitePct >= 60) volTxt = ' Thế trận nhìn chung là một chiều, nghiêng về bên Trắng.';
       else if (_avgWhitePct <= 40) volTxt = ' Thế trận nhìn chung là một chiều, nghiêng về bên Đen.';
@@ -9197,9 +9197,9 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
         '<b>' + Math.round(tacticalMisses/totalBad*100) + '% sai sót mang tính chiến thuật</b>. '
         + 'Trước mỗi nước, hãy ưu tiên kiểm tra các nước chiếu, bắt quân và đe dọa — đặc biệt là đòn phản công của đối thủ.'});
     } else if (positionalErrors / totalBad >= 0.6) {
-      insights.push({icon:'~', sev:'high', text:
-        '<b>' + Math.round(positionalErrors/totalBad*100) + '% lỗi là positional</b> (cả 2 nước đều yên tĩnh). '
-        + 'Gợi ý: chú ý cấu trúc tốt, an toàn vua, hoạt động quân khi chọn nước.'});
+      insights.push({icon:'🧩', sev:'high', text:
+        '<b>' + Math.round(positionalErrors/totalBad*100) + '% sai lầm là lỗi vị trí</b>, tức đi quân chưa tối ưu '
+        + 'nhưng không xuất phát từ một đòn chiến thuật rõ ràng. Gợi ý: chú ý đến hoạt động quân, cấu trúc tốt và an toàn vua.'});
     }
   }
   var _openingAlreadyFlagged = false;
@@ -9209,23 +9209,11 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
       + Math.round(worst.rate*100) + '% nước sai lầm/blunder).'});
     if (worst.ph === 'opening') _openingAlreadyFlagged = true;
   }
-  var earlyCount = topMistakes.filter(function(m){return m.moveNum<=15;}).length;
-  var lateCount  = topMistakes.filter(function(m){return m.moveNum>30;}).length;
-  if (topMistakes.length >= 5) {
-    /* ĐÃ SỬA: bỏ qua nếu đã báo "Lỗi tập trung ở khai cuộc" ở trên rồi —
-       2 chỉ số này (theo giai đoạn vật chất vs theo số nước ≤15) gần như
-       luôn cùng đúng/sai với nhau trên thực tế, ra 2 câu nói CÙNG 1 ý
-       ("lỗi nhiều ở đầu ván") chỉ khác cách đo — giữ 1 câu là đủ. */
-    if (earlyCount / topMistakes.length >= 0.45 && !_openingAlreadyFlagged) {
-      insights.push({icon:'📊', sev:'medium', text:
-        '<b>' + Math.round(earlyCount/topMistakes.length*100) + '% sai lầm xảy ra ở nước 1-15</b>. '
-        + 'Gợi ý: cẩn thận hơn trong khai cuộc, nên đi chính xác hơn, đừng vội tấn công khi chưa phát triển đủ quân.'});
-    } else if (lateCount / topMistakes.length >= 0.45) {
-      insights.push({icon:'📊', sev:'medium', text:
-        '<b>' + Math.round(lateCount/topMistakes.length*100) + '% sai lầm xảy ra ở nước 31+</b>. '
-        + 'Gợi ý: luyện tập tàn cuộc — đây có thể là điểm yếu chính.'});
-    }
-  }
+  /* ĐÃ BỎ (theo phát hiện của người dùng): mục "X% sai lầm ở nước 1-15 / nước 31+" dùng mốc SỐ NƯỚC CỐ ĐỊNH,
+     khác hẳn cách chia giai đoạn (khai cuộc/trung cuộc/tàn cuộc theo vật chất + an toàn vua) mà mục 📍 ngay
+     trên và bảng "Thống kê nước đi" đang dùng — 2 cách đo có thể ra kết luận khác nhau cho cùng 1 ván (VD
+     📍 nói "trung cuộc" nhưng mục này lại nói "nước 31+", đọc lên như 2 giai đoạn khác nhau, gây mâu thuẫn).
+     Giữ đúng 1 nguồn duy nhất (📍, phaseCount) cho nhất quán với bảng thống kê; không cần mục này nữa. */
 
   /* ── #1: Quản lý thời gian (dựa %clk trong PGN, nếu có) ──
      Đối chiếu thời điểm mắc sai lầm/blunder với thời gian còn lại trên đồng
@@ -9299,7 +9287,7 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
     var baseT = tcM ? parseInt(tcM[1], 10) : null;
     var incT = (tcM && tcM[2]) ? parseInt(tcM[2], 10) : 0;
     if (!baseT) return;
-    var lowThr = Math.max(20, baseT * 0.10);
+    var lowThr = Math.max(45, baseT * 0.10); /* sàn nâng 20 -> 45s theo yêu cầu; ván 10 phút vẫn ra ~60s (10% * 600) */
     var ampleThr = Math.max(2 * lowThr, baseT * 0.30);
     var sidesToCheck = (_detectedSide === 'white') ? ['w'] : (_detectedSide === 'black') ? ['b'] : ['w', 'b'];
     sidesToCheck.forEach(function(sc){
