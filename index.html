@@ -9104,13 +9104,21 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
 
   /* ── Bảng giai đoạn (CHỈ bên người chơi nếu đã xác định — xem _isPlayerMove ở vòng lặp trên) ── */
   var phaseLabelMap = {opening:'Khai cuộc', middlegame:'Trung cuộc', endgame:'Tàn cuộc'};
+  /* Ngưỡng số nước tối thiểu của 1 giai đoạn để được coi là "đủ mẫu" — dùng TỶ LỆ trên tổng số nước đã xét
+     (chính là tổng 3 hàng của bảng "Thống kê nước đi" bên dưới, cùng 1 nguồn dữ liệu phaseCount) thay vì
+     một số cố định (5 nước là quá nhiều với ván ngắn). 15% tổng số nước, tối thiểu 2 nước. VD ván 12 nước
+     tổng → cần 2 nước/giai đoạn là đủ; ván 60 nước → cần 9 nước mới đủ tin cậy để kết luận "tệ nhất". */
+  var _totalPhaseMoves = ['opening','middlegame','endgame'].reduce(function(sum, ph){
+    var d = phaseCount[ph]; return sum + d.ok + d.inaccuracy + d.mistake + d.blunder;
+  }, 0);
+  var _minPhaseMoves = Math.max(2, Math.round(_totalPhaseMoves * 0.15));
   var worst = null, worstRate = -1;
   ['opening','middlegame','endgame'].forEach(function(ph) {
     var d = phaseCount[ph];
     var tot = d.ok + d.inaccuracy + d.mistake + d.blunder;
     var bad = d.mistake + d.blunder;
     var rate = tot ? bad/tot : 0;
-    if (tot >= 3 && rate > worstRate) { worstRate = rate; worst = {ph:ph, tot:tot, bad:bad, rate:rate}; }
+    if (tot >= _minPhaseMoves && rate > worstRate) { worstRate = rate; worst = {ph:ph, tot:tot, bad:bad, rate:rate}; }
   });
 
   html += '<div class="' + _lcSecCls('phase') + '" style="margin:4px 0;padding:6px 8px;background:#fafafa;border:1px solid #e0e0e0;border-radius:4px">';
@@ -9153,8 +9161,8 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
   if (totalBad >= 3) {
     if (tacticalMisses / totalBad >= 0.55) {
       insights.push({icon:'⚔', sev:'high', text:
-        '<b>' + Math.round(tacticalMisses/totalBad*100) + '% lỗi là tactical</b> (bỏ lỡ ăn quân/chiếu). '
-        + 'Gợi ý: trước khi đi, hãy kiểm tra mọi nước ăn quân và chiếu khả dĩ — kể cả của đối thủ.'});
+        '<b>' + Math.round(tacticalMisses/totalBad*100) + '% sai sót mang tính chiến thuật</b>. '
+        + 'Trước mỗi nước, hãy ưu tiên kiểm tra các nước chiếu, bắt quân và đe dọa — đặc biệt là đòn phản công của đối thủ.'});
     } else if (positionalErrors / totalBad >= 0.6) {
       insights.push({icon:'~', sev:'high', text:
         '<b>' + Math.round(positionalErrors/totalBad*100) + '% lỗi là positional</b> (cả 2 nước đều yên tĩnh). '
@@ -9162,7 +9170,7 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
     }
   }
   var _openingAlreadyFlagged = false;
-  if (worst && worst.rate >= 0.25 && worst.tot >= 5) {
+  if (worst && worst.rate >= 0.25 && worst.tot >= _minPhaseMoves) {
     insights.push({icon:'📍', sev:'medium', text:
       '<b>Lỗi tập trung ở ' + phaseLabelMap[worst.ph].toLowerCase() + '</b> ('
       + Math.round(worst.rate*100) + '% nước sai lầm/blunder).'});
@@ -9180,7 +9188,7 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
         '<b>' + Math.round(earlyCount/topMistakes.length*100) + '% sai lầm xảy ra ở nước 1-15</b>. '
         + 'Gợi ý: cẩn thận hơn trong khai cuộc, nên đi chính xác hơn, đừng vội tấn công khi chưa phát triển đủ quân.'});
     } else if (lateCount / topMistakes.length >= 0.45) {
-      insights.push({icon:'📌', sev:'medium', text:
+      insights.push({icon:'📊', sev:'medium', text:
         '<b>' + Math.round(lateCount/topMistakes.length*100) + '% sai lầm xảy ra ở nước 31+</b>. '
         + 'Gợi ý: luyện tập tàn cuộc — đây có thể là điểm yếu chính.'});
     }
@@ -9230,9 +9238,9 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
     /* Chỉ hiện insight khi THẬT SỰ có vấn đề (tương quan rõ giữa thời gian
        thấp và sai lầm) — nếu ổn hoặc không đủ dữ liệu để kết luận, im lặng
        hoàn toàn, không cần báo "tốt" (theo yêu cầu, tránh nhiễu báo cáo). */
-    if (badMovesTotal >= 3 && lowTimeMoveCount >= 2) {
+    if (badMovesTotal >= 2 && lowTimeMoveCount >= 2) {
       var pctBadInLowTime = Math.round(badMovesInLowTime / badMovesTotal * 100);
-      if (pctBadInLowTime >= 35) {
+      if (pctBadInLowTime >= 25) {
         insights.push({icon:'⏳', sev:'high', text:
           pctBadInLowTime + '% (' + badMovesInLowTime + '/' + badMovesTotal + ') sai lầm xảy ra khi đồng hồ dưới '
           + Math.round(lowTimeThreshold) + 's — thiếu thời gian ảnh hưởng chất lượng nước đi.'
@@ -9272,7 +9280,7 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
         rem.push({idx: ti, before: bef, spent: Math.max(0, bef + incT - aft)});
       }
       var lateSpent = rem.filter(function(r){ return r.idx >= 10; }).map(function(r){ return r.spent; }).sort(function(a, b){ return a - b; });
-      if (lateSpent.length < 6) return;
+      if (lateSpent.length < 5) return;
       var median = lateSpent[Math.floor(lateSpent.length / 2)];
       if (median < 4) return;
       var hastyThr = median * 0.35;
@@ -9284,7 +9292,7 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
         else other++;
       });
       var totalBad = hasty + pressure + other;
-      if (hasty >= 2 && totalBad > 0 && hasty / totalBad >= 0.4) {
+      if (hasty >= 2 && totalBad > 0 && hasty / totalBad >= 0.3) {
         var prefix = (sidesToCheck.length === 2) ? ((sc === 'w' ? _whiteLabel : _blackLabel) + ': ') : '';
         insights.push({icon:'🚨', sev:'high', text: prefix + (prefix ? 'có ' : 'Có ')
           + hasty + ' sai lầm xảy ra do đi rất nhanh dù dư giả thời gian (nghĩ dưới ' + hastyThr.toFixed(1)
