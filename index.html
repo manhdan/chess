@@ -8459,13 +8459,10 @@ function _narrOverviewText(cls, evalPcts, sideChar, oppChar, sideLabel, oppLabel
     ? resultTxt.charAt(0).toUpperCase() + resultTxt.slice(1)
     : resultTxt;
 
-  /* ĐÃ SỬA (theo yêu cầu mới nhất): quay lại bỏ hẳn câu Khai cuộc khi
-     KHÔNG xác định được tên cụ thể (opnCand null) — không còn viết câu
-     "chưa xác định được tên cụ thể" nữa, im lặng bỏ qua cho gọn. Chỉ khi
-     có opnCand (đã tra được tên khai cuộc/biến thể) mới thêm câu này. */
-  var openingTxt = opnCand
-    ? ' Khai cuộc dùng ' + _narrLowerFirst(opnCand.text.replace(/^.*?:\s*/, '').replace(/\.$/, '')) + '.'
-    : '';
+  /* ĐÃ CHUYỂN (theo thảo luận với người dùng — phương án b): câu "Khai cuộc dùng X (ECO)." không còn nằm ở
+     Tổng quan nữa, đã dời sang mục riêng "Khai cuộc & thế trận ban đầu" (icon ➡️, luôn hiện, ghép chung với
+     câu đánh giá "Tính tới nước N... đang nhỉnh hơn/kém..." — xem chỗ push(2, ...) trong buildGameNarrative).
+     Tham số opnCand vẫn nhận vào hàm này nhưng không còn dùng để dựng câu Tổng quan nữa. */
 
   /* ĐÃ SỬA: khi KHÔNG có volCand (chưa đổi bên thắng ≥3 lần) — trước đây
      luôn nói cứng "không có nhiều lần đổi bên thắng đột ngột" dù ván có
@@ -8504,12 +8501,35 @@ function _narrOverviewText(cls, evalPcts, sideChar, oppChar, sideLabel, oppLabel
       if (Math.abs(_fAfter - _fBefore) < 25) continue;
       if ((_fBefore - 50) * (_fAfter - 50) < 0) _flipCount++;
     }
+    /* ĐÃ THÊM (theo yêu cầu "câu Tổng quan cần dài hơn để dễ hình dung diễn biến"): tính thêm % thắng
+       THẤP NHẤT và CAO NHẤT mà bên đang phân tích (sideChar) từng đạt được trong SUỐT ván (từ evalPcts đã
+       có sẵn, quy đổi theo góc nhìn sideChar) — kể được câu chuyện "lúc khó khăn nhất -> lúc áp đảo nhất"
+       mà không cần thêm bất kỳ phát hiện/logic mới nào. */
+    var _sideMinPct = null, _sideMaxPct = null;
+    for (var _rgi = 0; _rgi < evalPcts.length; _rgi++) {
+      var _rgW = evalPcts[_rgi];
+      if (_rgW === undefined || _rgW === null) continue;
+      var _rgS = (sideChar === 'w') ? _rgW : (100 - _rgW);
+      if (_sideMinPct === null || _rgS < _sideMinPct) _sideMinPct = _rgS;
+      if (_sideMaxPct === null || _rgS > _sideMaxPct) _sideMaxPct = _rgS;
+    }
     if (_flipCount >= 1) {
       var _finalWhitePct = evalPcts[evalPcts.length - 1];
       var _finalLeanColor = (_finalWhitePct === undefined) ? null : (_finalWhitePct >= 50 ? 'Trắng' : 'Đen');
-      volTxt = _finalLeanColor
-        ? ' Thế trận đổi chiều ' + _flipCount + ' lần, cuối trận ưu thế thắng nghiêng về bên ' + _finalLeanColor + '.'
-        : ' Thế trận đổi chiều ' + _flipCount + ' lần trong ván.';
+      var _rangeTxt = '';
+      if (_sideMinPct !== null && _sideMaxPct !== null && (_sideMaxPct - _sideMinPct) >= 30) {
+        if (_sideMinPct <= 35 && _sideMaxPct >= 70) {
+          _rangeTxt = ': ' + sideLabel + ' từng chịu sức ép, có lúc chỉ còn ' + Math.round(_sideMinPct)
+            + '% thắng, nhưng dần giành lại thế chủ động và áp đảo hoàn toàn về cuối ván (lên tới ' + Math.round(_sideMaxPct) + '% thắng)';
+        } else if (_sideMaxPct >= 70 && _sideMinPct > 35) {
+          _rangeTxt = ', ' + sideLabel + ' từng chiếm ưu thế lớn (cao nhất ' + Math.round(_sideMaxPct) + '% thắng) trước khi cục diện thay đổi';
+        }
+      }
+      volTxt = _rangeTxt
+        ? ' Thế trận đổi chiều ' + _flipCount + ' lần' + _rangeTxt + '.'
+        : (_finalLeanColor
+            ? ' Thế trận đổi chiều ' + _flipCount + ' lần, cuối trận ưu thế thắng nghiêng về bên ' + _finalLeanColor + '.'
+            : ' Thế trận đổi chiều ' + _flipCount + ' lần trong ván.');
     } else {
       var _pctSum = 0, _pctCount = 0;
       for (var _pi = 0; _pi < cls.length; _pi++) {
@@ -8519,14 +8539,20 @@ function _narrOverviewText(cls, evalPcts, sideChar, oppChar, sideLabel, oppLabel
         _pctSum += _p; _pctCount++;
       }
       var _avgWhitePct = _pctCount ? (_pctSum / _pctCount) : 50;
-      if (_avgWhitePct >= 60) volTxt = ' Thế trận nhìn chung là một chiều, nghiêng về bên Trắng.';
+      var _sideAvgPct = (sideChar === 'w') ? _avgWhitePct : (100 - _avgWhitePct);
+      /* Nếu chính bên đang phân tích áp đảo xuyên suốt (trung bình >=60% VÀ chưa từng tụt dưới 60%) thì
+         nói rõ luôn mốc thấp nhất để thấy mức áp đảo ổn định, thay vì chỉ nói chung chung "một chiều". */
+      if (_sideAvgPct >= 60 && _sideMinPct !== null && _sideMinPct >= 60) {
+        volTxt = ' Thế trận nhìn chung nghiêng hẳn về bên ' + sideLabel + ' ngay từ khai cuộc và duy trì ưu thế áp đảo (trên '
+          + Math.round(_sideMinPct) + '% thắng) trong phần lớn ván đấu.';
+      } else if (_avgWhitePct >= 60) volTxt = ' Thế trận nhìn chung là một chiều, nghiêng về bên Trắng.';
       else if (_avgWhitePct <= 40) volTxt = ' Thế trận nhìn chung là một chiều, nghiêng về bên Đen.';
       else volTxt = ' Thế trận nhìn chung khá cân bằng, không bên nào chiếm ưu thế rõ rệt.';
     }
   }
 
   return 'Ván đấu kéo dài <b>' + totalMoves + ' nước</b>' + accTxt + ' ' + resultTxtCapped + '.'
-       + openingTxt + volTxt;
+       + volTxt;
 }
 
 
@@ -8680,10 +8706,8 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
     winnerSide, accuracy, opnForOverview, volCand, termination, gAnFens, gMoveTexts, gAnScores
   ), undefined, true, '📖');
 
-  /* #2 Khai cuộc — ĐÃ BỎ theo yêu cầu: tên khai cuộc đã được ghép sẵn
-     vào câu #1 (Tổng quan ván đấu) qua opnForOverview, lặp lại thành
-     mục riêng là thừa. Không push gì ở đây nữa — số thứ tự #3, #4...
-     giữ nguyên như cũ, chỉ #2 biến mất khỏi khung. */
+  /* #2 Khai cuộc & thế trận ban đầu — được push NGAY SAU KHI có openingStateText (xem đoạn ~140 dòng dưới,
+     ngay sau khi _narrG3_postOpeningState() chạy xong), KHÔNG chờ tới đây. Đặt comment mốc ở đây để dễ tìm. */
 
   /* ══════════════════════════════════════════════════════════════════
      ĐÃ ĐỔI HƯỚNG (theo thảo luận với người dùng): thay vì ép đủ khung
@@ -8789,6 +8813,16 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
     (oppChar === 'w') ? whiteLabel : blackLabel, _hasCastleContrast
   );
   var openingStateIdx = _evalGraphOpeningEndIdx(gMoveInfo, gAnFens);
+  /* ĐÃ ĐỔI (theo thảo luận với người dùng — phương án b): mục "Khai cuộc & thế trận ban đầu" giờ LUÔN
+     hiện (nếu có dữ liệu) thay vì cạnh tranh điểm trong pool (trước đây điểm 35, thấp nhất — gần như luôn
+     bị các mục khác đè, hiếm khi lọt top). Ghép câu tên khai cuộc (trước đây nằm trong Tổng quan, đã dời
+     ra đây) với câu đánh giá thế trận sau khai cuộc thành 1 mục hoàn chỉnh, icon ➡️. Vẫn nằm trong luồng
+     sắp xếp lại theo thứ tự nước đi ở cuối hàm (đọc số nước từ chính câu "Tính tới nước N..." bên trong). */
+  var _openingNameTxt = opnForOverview
+    ? 'Khai cuộc dùng ' + _narrLowerFirst(opnForOverview.text.replace(/^.*?:\s*/, '').replace(/\.$/, '')) + '.'
+    : '';
+  var _openingSectionText = _openingNameTxt + (openingStateText ? (_openingNameTxt ? ' ' : '') + openingStateText : '');
+  if (_openingSectionText) push(2, 'Khai cuộc & thế trận ban đầu', _openingSectionText, undefined, true, '➡️');
 
   /* --- Quyết định hay nhất --- */
   var g6Pool = bySideSuffix(g1All).filter(function(c){ return c.positive === true && c.id.indexOf('g1-checkstreak') !== 0 && c.id.indexOf('g1-onlymove') !== 0 && c.id.indexOf('g1-drawsave') !== 0 && c.id.indexOf('g1-underpromo') !== 0 && c.id.indexOf('g1-tenacious') !== 0 && c.id.indexOf('g1-simplify') !== 0; })
@@ -8812,7 +8846,6 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
   mistakeCandidates.forEach(function(c){ pool.push(c); });
   if (missedText) pool.push({id: 'meta-missed-chances', score: missedScore || 50, text: missedText, moveIdx: missedFirstIdx, positive: false, icon: '🤦'});
   if (turningText) pool.push({id: 'meta-turning-point', score: 68, text: turningText, moveIdx: g5Result.idx, positive: g5Result.favorable, icon: (g5Result.favorable ? '📈' : '📉')});
-  if (openingStateText) pool.push({id: 'meta-opening-state', score: 35, text: openingStateText, moveIdx: openingStateIdx, icon: '📖'});
   if (g6Pool[0]) pool.push({id: g6Pool[0].id, score: g6Pool[0].score, text: g6Pool[0].text, moveIdx: _extractMoveIdxFromCandText(g6Pool[0].text, sideChar), positive: true, icon: g6Pool[0].icon});
   if (chkCand) {
     var _chkScore = chkCand.score; /* điểm đã tính sẵn theo độ dài chuỗi trong _deepG1_checkStreak */
@@ -8830,7 +8863,7 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
   /* Chọn 3-5 ý ĐIỂM CAO NHẤT (ván nào ít dữ liệu thì lấy hết những gì có,
      không ép đủ 3 nếu thực sự không có đủ candidate). */
   var poolSorted = pool.slice().sort(function(a, b){ return b.score - a.score; });
-  var selected = poolSorted.slice(0, Math.min(5, poolSorted.length));
+  var selected = poolSorted.slice(0, Math.min(7, poolSorted.length)); /* nâng từ 5 lên 7 theo yêu cầu — bớt tình trạng mục hay bị đẩy ra vì cạnh tranh điểm */
   var selectedIds = {};
   selected.forEach(function(c){ selectedIds[c.id] = true; });
 
