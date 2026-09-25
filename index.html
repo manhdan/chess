@@ -9154,7 +9154,7 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
   /* Chọn 3-5 ý ĐIỂM CAO NHẤT (ván nào ít dữ liệu thì lấy hết những gì có,
      không ép đủ 3 nếu thực sự không có đủ candidate). */
   var poolSorted = pool.slice().sort(function(a, b){ return b.score - a.score; });
-  var selected = poolSorted.slice(0, Math.min(7, poolSorted.length)); /* nâng từ 5 lên 7 theo yêu cầu — bớt tình trạng mục hay bị đẩy ra vì cạnh tranh điểm */
+  var selected = poolSorted.slice(0, Math.min(6, poolSorted.length)); /* giảm từ 7 xuống 6 theo yêu cầu */
   var selectedIds = {};
   selected.forEach(function(c){ selectedIds[c.id] = true; });
 
