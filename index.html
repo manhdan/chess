@@ -11,8 +11,8 @@ gtag('config', 'G-YJ1J2MJLZT');
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>ChessCoach10</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🜲</text></svg>">
+<title>ChessCoach11</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%9C%B2%3C/text%3E%3C/svg%3E">
 <style>
 :root {
   /* Màu ô bàn cờ — đổi qua setBoardTheme(), lưu localStorage để nhớ lựa
@@ -1372,8 +1372,8 @@ html.mp-mode #mobile-stack #eval-chart-svg { height: 101px !important; }
 /*!
  * chess-opening-detector.js (ban rut gon - chi khai cuoc pho bien)
  * Nhan dien ten khai cuoc tu chuoi nuoc di, thuan JavaScript ES5.
- * Khong phu thuoc thu vien ngoai -> chay duoc tren trinh duyet WebKit cu
- * (vd. Kindle Paperwhite 3) lan trinh duyet PC hien dai.
+ * Khong phu thuoc thu vien ngoai -> chay duoc tren nhieu trinh duyet
+ * (PC, tablet, dien thoai) hien dai.
  *
  * NOI DUNG: 31 khai cuoc pho bien nhat (Sicilian, Ruy Lopez, Italian Game,
  * French, Caro-Kann, Queen's Gambit, King's Indian, Nimzo-Indian, Grunfeld,
@@ -3022,58 +3022,7 @@ function attacked(board, sq2, byCol) {
   return false;
 }
 
-/* ── ĐẾM số quân đang chiếu vua (để phát hiện CHIẾU ĐÔI) ──
-   Bản sao của attacked() nhưng ĐẾM thay vì early-return true ở lần trúng
-   đầu tiên — cần cho isDoubleCheckMove() bên dưới. KHÔNG sửa attacked()
-   gốc (giữ nguyên early-exit boolean cho hiệu năng ở chỗ dùng cho sinh
-   nước đi hợp lệ), chỉ thêm bản đếm riêng dùng cho phân tích SEE. */
-function countAttackers(board, sq2, byCol) {
-  var r=rk(sq2),f=fl(sq2);
-  var i, nr, nf, pp, cnt=0;
-  for(var df=-1;df<=1;df+=2){
-    var pr=r-byCol,pf=f+df;
-    if(ob(pr,pf)&&board[sq(pr,pf)]===byCol) cnt++;
-  }
-  var kd=[[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
-  for(i=0;i<kd.length;i++){
-    nr=r+kd[i][0]; nf=f+kd[i][1];
-    if(ob(nr,nf)&&board[sq(nr,nf)]===byCol*2) cnt++;
-  }
-  var dd=[[-1,-1],[-1,1],[1,-1],[1,1]];
-  for(i=0;i<dd.length;i++){
-    nr=r+dd[i][0]; nf=f+dd[i][1];
-    while(ob(nr,nf)){
-      pp=board[sq(nr,nf)];
-      if(pp){if(pp===byCol*3||pp===byCol*5) cnt++; break;}
-      nr+=dd[i][0]; nf+=dd[i][1];
-    }
-  }
-  var sd=[[-1,0],[1,0],[0,-1],[0,1]];
-  for(i=0;i<sd.length;i++){
-    nr=r+sd[i][0]; nf=f+sd[i][1];
-    while(ob(nr,nf)){
-      pp=board[sq(nr,nf)];
-      if(pp){if(pp===byCol*4||pp===byCol*5) cnt++; break;}
-      nr+=sd[i][0]; nf+=sd[i][1];
-    }
-  }
-  var gd2=[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
-  for(i=0;i<gd2.length;i++){
-    nr=r+gd2[i][0]; nf=f+gd2[i][1];
-    if(ob(nr,nf)&&board[sq(nr,nf)]===byCol*6) cnt++;
-  }
-  return cnt;
-}
-/* side = bên ĐANG bị chiếu (đối phương của người vừa đi). true nếu vua của
-   "side" đang bị từ 2 quân trở lên chiếu cùng lúc (chiếu đôi) — theo luật
-   cờ, khi bị chiếu đôi, bên bị chiếu CHỈ được đi Vua (không thể ăn hoặc
-   chặn được cả 2 quân chiếu cùng lúc bằng 1 nước), nên MỌI quân đang tạo
-   ra chiếu đôi đều tuyệt đối an toàn khỏi bị ăn lại ở nước kế tiếp. */
-function isDoubleCheckMove(board, side) {
-  var king = side*6;
-  for (var i=0;i<64;i++) if (board[i]===king) return countAttackers(board, i, -side) >= 2;
-  return false;
-}
+
 
 /* ── Static Exchange Evaluation (SEE): kiểm tra "thí quân" dựa trên chuỗi exchange ──
    Trả về net material cho sideJustMoved khi quân của họ đứng trên toSq với pieceVal.
@@ -3143,6 +3092,59 @@ function inCheck(board, side) {
   var king=side*6;
   for(var i=0;i<64;i++) if(board[i]===king) return attacked(board,i,-side);
   return true;
+}
+
+/* ── ĐẾM số quân đang chiếu vua (để phát hiện CHIẾU ĐÔI) ──
+   Bản sao của attacked() nhưng ĐẾM thay vì early-return true ở lần trúng
+   đầu tiên — cần cho isDoubleCheckMove() bên dưới. KHÔNG sửa attacked()
+   gốc (giữ nguyên early-exit boolean cho hiệu năng ở chỗ dùng cho sinh
+   nước đi hợp lệ), chỉ thêm bản đếm riêng dùng cho phân tích SEE. */
+function countAttackers(board, sq2, byCol) {
+  var r=rk(sq2),f=fl(sq2);
+  var i, nr, nf, pp, cnt=0;
+  for(var df=-1;df<=1;df+=2){
+    var pr=r-byCol,pf=f+df;
+    if(ob(pr,pf)&&board[sq(pr,pf)]===byCol) cnt++;
+  }
+  var kd=[[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+  for(i=0;i<kd.length;i++){
+    nr=r+kd[i][0]; nf=f+kd[i][1];
+    if(ob(nr,nf)&&board[sq(nr,nf)]===byCol*2) cnt++;
+  }
+  var dd=[[-1,-1],[-1,1],[1,-1],[1,1]];
+  for(i=0;i<dd.length;i++){
+    nr=r+dd[i][0]; nf=f+dd[i][1];
+    while(ob(nr,nf)){
+      pp=board[sq(nr,nf)];
+      if(pp){if(pp===byCol*3||pp===byCol*5) cnt++; break;}
+      nr+=dd[i][0]; nf+=dd[i][1];
+    }
+  }
+  var sd=[[-1,0],[1,0],[0,-1],[0,1]];
+  for(i=0;i<sd.length;i++){
+    nr=r+sd[i][0]; nf=f+sd[i][1];
+    while(ob(nr,nf)){
+      pp=board[sq(nr,nf)];
+      if(pp){if(pp===byCol*4||pp===byCol*5) cnt++; break;}
+      nr+=sd[i][0]; nf+=sd[i][1];
+    }
+  }
+  var gd=[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+  for(i=0;i<gd.length;i++){
+    nr=r+gd[i][0]; nf=f+gd[i][1];
+    if(ob(nr,nf)&&board[sq(nr,nf)]===byCol*6) cnt++;
+  }
+  return cnt;
+}
+/* side = bên ĐANG bị chiếu (đối phương của người vừa đi). true nếu vua của
+   "side" đang bị từ 2 quân trở lên chiếu cùng lúc (chiếu đôi) — theo luật
+   cờ, khi bị chiếu đôi, bên bị chiếu CHỈ được đi Vua (không thể ăn hoặc
+   chặn được cả 2 quân chiếu cùng lúc bằng 1 nước), nên MỌI quân đang tạo
+   ra chiếu đôi đều tuyệt đối an toàn khỏi bị ăn lại ở nước kế tiếp. */
+function isDoubleCheckMove(board, side) {
+  var king = side*6;
+  for (var i=0;i<64;i++) if (board[i]===king) return countAttackers(board, i, -side) >= 2;
+  return false;
 }
 
 /* Khi engine trả bestmove NULL/(none) (0 nước hợp lệ): trước đây LUÔN coi
@@ -4116,6 +4118,83 @@ function _needsMultiPVBackfill(prevIdx){
 }
 
 /* ── Adapter: map dữ liệu ChessCoach2 → schema input của classifyMoveCore() ── */
+/* Đếm số nước đi hợp lệ tại 1 FEN — dùng chung cho isForced (nước i) và
+   cho chuỗi "gán cp bắt buộc" (xem chỗ dùng trong _buildClassifyInput).
+   Trả về null nếu FEN lỗi/không parse được (an toàn, không throw). */
+function _legalCountAtFen(fen){
+  if (!fen) return null;
+  try {
+    var _fp = fen.split(' ');
+    var _fb = boardArrayFromFen(fen);
+    var _fEP = -1;
+    var _epStr = _fp[3] || '-';
+    if (_epStr !== '-') { var _ef = FLS.indexOf(_epStr.charAt(0)); var _er = parseInt(_epStr.charAt(1),10)-1; if(_ef>=0&&_er>=0) _fEP=sq(_er,_ef); }
+    var _fCas = { WK: (_fp[2]||'').indexOf('K')>=0, WQ: (_fp[2]||'').indexOf('Q')>=0, BK: (_fp[2]||'').indexOf('k')>=0, BQ: (_fp[2]||'').indexOf('q')>=0 };
+    var _legals = legalMoves(_fb.board, _fb.turn, _fEP, _fCas);
+    return _legals.length;
+  } catch(e) { return null; }
+}
+
+/* Dùng cho chuỗi "gán cp bắt buộc" (xem _buildClassifyInput / _evalCpWhite):
+   idx có "đi tiếp an toàn" (không đưa thêm bất kỳ nghi vấn/lựa chọn nào vào
+   chuỗi) khi nước đã chơi tại idx (gUciHist[idx]) hoặc là nước HỢP LỆ DUY
+   NHẤT tại đó, HOẶC chính là nước engine tự đề xuất hạng 1 tại đúng vị trí
+   đó (gAnScores[idx].bestUci) — tức bên đi không hề có lựa chọn nào tốt
+   hơn theo chính engine, dù về luật vẫn còn nhiều nước hợp lệ khác.
+   Case cần tới nhánh 2: ván Lasker–Thomas 1912, 11.Qxh7+!! Kxh7 (bắt buộc
+   thật) 12.Nxf6+ Kh6 13.Neg4+ Kg5 14.h4+ Kf4 15.g3+ Kf3 16.Be2+ Kg2
+   17.Rh2+ Kg1 18.Kd2# — mọi nước ĐEN đều bắt buộc thật (chỉ 1 nước hợp
+   lệ), nhưng mọi nước TRẮNG xen giữa (Nxf6+, Neg4+, h4+, g3+, Be2+, Rh2+)
+   tuy khách quan là nước DUY NHẤT giữ được cuộc tấn công, về mặt luật vẫn
+   còn hàng chục nước hợp lệ khác — nếu chỉ xét "1 nước hợp lệ" (isForced
+   thuần), chuỗi sẽ dừng ngay sau Kxh7, cách thế chiếu hết thật tới 12 nửa
+   nước, không đủ xa để tránh horizon effect. Nhánh "trùng bestUci" cho
+   phép xuyên tiếp qua các nước trắng đó — vì chính engine (tại đúng vị trí
+   đó, độc lập, không phụ thuộc chuỗi) cũng xếp hạng 1 y hệt nước đã chơi,
+   nên không có gì để nghi ngờ/gây nhiễu khi xuyên qua. */
+function _chainAdvanceOk(idx){
+  if (_legalCountAtFen(gAnFens && gAnFens[idx]) === 1) return true;
+  var sc = gAnScores[idx];
+  if (sc && sc.bestUci && sc.bestUci.length >= 4
+      && typeof gUciHist !== 'undefined' && gUciHist && gUciHist[idx] === sc.bestUci) return true;
+  /* Nhánh 3 (MỚI, đã NỚI sau khi kiểm chứng thực tế) — "nước chiếu trong 1
+     chuỗi tấn công": ban đầu định bắt buộc thêm điều kiện "vị trí sau nó chỉ
+     còn đúng 1 nước đáp trả", nhưng kiểm chứng bằng 1 engine cờ độc lập
+     (python-chess) trên chính ván Lasker–Thomas 1912 cho thấy sau 12.Nxf6+
+     Vua Đen thực ra có 2 nước hợp lệ (Kh8 VÀ Kh6, không chỉ Kh6) — nên điều
+     kiện "chỉ 1 đáp trả" vẫn làm đứt chuỗi ngay tại chính mắt xích này, dù
+     MỌI mắt xích còn lại (Qxh7+, Neg4+, h4+, g3+, Be2+, Rh2+) đều literal-
+     forced 1 nước. Nới thành: CHỈ CẦN chính nước tại idx là 1 nước CHIẾU —
+     đủ để xuyên qua, không đòi hỏi đếm lại số nước đáp trả hợp lệ nữa.
+     Đánh đổi: rủi ro (có kiểm soát) là 1 vài "nước chiếu vu vơ" không thực
+     sự ép buộc cũng được xuyên qua ở VÁN KHÁC — nhưng vì kết quả cuối chuỗi
+     CHỈ được dùng để NÂNG played lên (Math.max/min ở _buildClassifyInput và
+     _evalCpWhite, không bao giờ dìm xuống dưới baseline), rủi ro này bị chặn
+     ở 1 chiều: nhiều nhất là hiển thị "lạc quan hơn thực tế" cho 1 chuỗi
+     chiếu không dẫn tới đâu, không bao giờ khiến 1 nước tốt bị chấm tệ đi. */
+  var _thisInfo = gMoveInfo && gMoveInfo[idx];
+  if (_thisInfo && _thisInfo.givesCheck) return true;
+  /* Nhánh 4 (MỚI, theo đề xuất người dùng) — "mate không tránh được dù chọn
+     nước nào": literal-1-nước-hợp-lệ (nhánh 1) chỉ là 1 TRƯỜNG HỢP RIÊNG của
+     ý tưởng lớn hơn "đối thủ không có cách nào thoát" — trường hợp tổng quát
+     là dù còn NHIỀU nước hợp lệ, tất cả đều dẫn tới thua (mate), chỉ khác
+     tốc độ. Case cụ thể: sau 12.Nxf6+, Đen còn 2 nước hợp lệ (Kh8: mate
+     nhanh hơn — mate-in-1; Kh6: mate chậm hơn, đúng nước đã chơi trong ván)
+     — không nước nào literal-1, cũng không nước nào trùng bestUci (bestUci
+     tại đó có thể LÀ Kh8 vì mate nhanh hơn, không phải Kh6 đã chơi), nên cả
+     nhánh 1 lẫn nhánh 2 đều bó tay.
+     Dữ kiện đáng tin: nếu CHÍNH gAnScores[idx] (vị trí TRƯỚC khi đi nước idx,
+     tức thế cờ bên sắp thua đang phải chọn) đã có m1 (mate) ÂM — nghĩa là
+     ngay cả PV1 (nước PHÒNG THỦ TỐT NHẤT theo chính engine tại đúng vị trí
+     đó) cũng dẫn tới bị chiếu hết — thì KHÔNG CẦN biết thêm nước nào khác:
+     mọi nước hợp lệ khác chỉ có thể tệ hơn hoặc bằng PV1 (vì PV1 theo định
+     nghĩa là tốt nhất), nên tất cả đều thua theo mate. Đủ điều kiện để coi
+     là "bắt buộc" (không cách nào tránh mate), không cần đếm legalCount. */
+  var _curSc = gAnScores[idx];
+  if (_curSc && typeof _curSc.m1 === 'number' && _curSc.m1 !== null && _curSc.m1 < 0) return true;
+  return false;
+}
+
 function _buildClassifyInput(i){
   var si = gAnScores[i], sn = gAnScores[i+1];
   if (!si || !sn) return null;
@@ -4145,6 +4224,69 @@ function _buildClassifyInput(i){
   var afterCP = anCP(sn.s1, sn.m1);      /* eval tại vị trí sau nước i (góc nhìn đối thủ) */
   var played  = -afterCP;                /* quy về góc nhìn người đi nước i */
 
+  /* ── MỚI (theo yêu cầu Dan) — "gán cp của chuỗi bắt buộc" cho nước i ──
+     sn (eval ngay sau nước i) là kết quả của 1 lượt search RIÊNG LẺ, dễ
+     dính horizon effect nếu chưa nhìn đủ xa để thấy hết hệ quả của 1
+     chuỗi ép buộc. Nếu vị trí ngay sau nước i (và/hoặc các nước tiếp theo)
+     CHỈ CÓ ĐÚNG 1 nước đi hợp lệ — tức đối thủ "không có cách nào khác" —
+     thì không hề tồn tại lựa chọn nào để tính sai lệch: cứ xuyên thẳng
+     qua chuỗi bắt buộc đó tới vị trí đầu tiên có ≥2 nước hợp lệ (hoặc hết
+     dữ liệu), rồi dùng ĐÚNG eval đã có sẵn tại điểm dừng làm giá trị
+     "played" của nước i. Đây là tổng quát hoá của cách mateActual đã làm
+     riêng cho trường hợp có mate (xem phần dưới) — áp dụng cho cả cp
+     thường, không chỉ mate.
+     Case gốc: 9.Qd8+ Kxd8 (Kxd8 là nước bắt buộc duy nhất) 10.Bg5+ — thay
+     vì dùng sn (eval ngay sau 9.Qd8+, có thể chưa thấy hết chuỗi ép), ta
+     xuyên qua Kxd8 (bắt buộc) rồi lấy thẳng eval ở vị trí trước 10.Bg5+
+     làm giá trị thật của 9.Qd8+.
+     Không tốn thêm bất kỳ query engine nào — chỉ đọc lại gAnScores đã có
+     sẵn trong pipeline (mỗi vị trí vốn đã được search đúng 1 lần), cộng
+     thêm vài lần đếm nước đi hợp lệ (rẻ, thuần luật cờ, không đụng engine).
+     Side-to-move ở index k giống mover của nước i khi (k-i) chẵn (mỗi nước
+     đổi lượt 1 lần) — dùng để quy điểm ở điểm dừng về đúng góc nhìn.
+     Điều kiện "đi tiếp an toàn" dùng _chainAdvanceOk() (không chỉ literal
+     1-nước-hợp-lệ) — xem comment chi tiết + case Lasker–Thomas 1912
+     (11.Qxh7+!!) tại định nghĩa hàm đó, phía trên _buildClassifyInput(). */
+  var _deepIdx = i + 1;
+  while (gAnFens && gAnFens[_deepIdx] && gAnScores[_deepIdx + 1]
+         && _chainAdvanceOk(_deepIdx)) {
+    _deepIdx++;
+  }
+  /* _deepMateActual: mate phát hiện được ở ĐIỂM DỪNG của chuỗi bắt buộc (nếu
+     có), quy về góc nhìn người đi nước i — dùng làm fallback cho mateActual
+     phía dưới khi các nhánh ưu tiên khác (PV2 root-exclusion, isBest, sn.m1
+     trực tiếp) đều không thấy được mate vì chưa đủ sâu (chính là trường hợp
+     11.Qxh7+!! — sn ngay sau nước chỉ thấy eval nông -75, không hề thấy mate
+     8 nửa nước sau đó). Không tính exact mate-in-N từ nước i (offset còn
+     thiếu quãng đường (_deepIdx-i)/2 phía trước) — chỉ cần ĐÚNG DẤU để kích
+     hoạt nhánh Brilliant-to-mate, xem classifyMoveCore Fix A. */
+  var _deepMateActual = null;
+  if (_deepIdx > i + 1 && gAnScores[_deepIdx]) {
+    var _deepSi = gAnScores[_deepIdx];
+    var _deepCP = anCP(_deepSi.s1, _deepSi.m1);
+    var _deepPlayed = ((_deepIdx - i) % 2 === 0) ? _deepCP : -_deepCP;
+    /* FIX (theo đề xuất dev, case 11.Qxh7+!! Lasker–Thomas 1912): TRƯỚC ĐÂY
+       code ghi đè THẲNG played=_deepPlayed bất kể tốt/xấu hơn giá trị played
+       gốc (tính từ sn, ngay sau nước i). Bug: nếu chuỗi dừng lại ở 1 điểm
+       GIỮA CHỪNG, NÔNG, CHƯA CHẠM tới mate/ưu thế thật (không có mate nào
+       được deep-reverify xác nhận dọc đường) thì eval tại điểm dừng đó chỉ
+       là NHIỄU — có thể tình cờ bi quan hơn cả sn ban đầu (đúng case này:
+       _deepPlayed lệch hẳn xuống dưới evalActual gốc dù chuỗi hoàn toàn
+       thắng thế), khiến cpLoss bị thổi phồng và nước brilliant bị chấm
+       "Mistake". Áp dụng lại đúng nguyên tắc evalBest=Math.max(best,played)
+       đã có sẵn cho trường hợp thường: chuỗi bắt buộc CHỈ ĐƯỢC dùng để NÂNG
+       played lên khi nó tốt hơn, KHÔNG BAO GIỜ dùng để dìm played xuống thấp
+       hơn giá trị đọc trực tiếp từ sn. */
+    played = Math.max(played, _deepPlayed);
+    if (typeof _deepSi.m1 === 'number' && _deepSi.m1 !== null) {
+      var _deepMateRaw = ((_deepIdx - i) % 2 === 0) ? _deepSi.m1 : -_deepSi.m1;
+      /* Chỉ giữ lại khi dương (mate CÓ LỢI cho người đi nước i) — mate bất lợi
+         ở cuối chuỗi bắt buộc không nên ghi đè mateActual (để các nhánh khác/
+         cpLoss thường xử lý như bình thường). */
+      if (_deepMateRaw > 0) _deepMateActual = _deepMateRaw;
+    }
+  }
+
   /* ── FIX BUG CC9 (case 9.Qd8+ trong ván Caro-Kann trap) ──
      Root-exclusion multipv (mpv_backfill) đôi khi tìm ra PV2 (si.s2/si.m2)
      TỐT HƠN HẲN PV1 (kể cả phát hiện mate mà PV1 không thấy) — đây là dữ
@@ -4159,14 +4301,6 @@ function _buildClassifyInput(i){
   if (_playedMatchesPV2) {
     best = anCP(si.s2, si.m2);
   }
-  /* KHÔNG động vào "played" ở đây (đã thử — sai): played/evalActual còn được
-     dùng làm baseline cpLoss cho MỌI nhánh classify khác (Mistake/Blunder/
-     Inaccuracy...), thay đổi nó theo PV2 có thể làm sai lệch classify của
-     CHÍNH nước này ở các nhánh không liên quan tới mate, hoặc ảnh hưởng dây
-     chuyền tới nước kế tiếp ở ván khác không có đặc điểm giống Qd8+. Nhánh
-     Brilliant-do-mate bên dưới (classifyMoveCore) chỉ cần đúng mateActual,
-     KHÔNG cần evalBest/cpLoss — nên chỉ sửa mateActual (xem field trả về
-     bên dưới), thu hẹp phạm vi ảnh hưởng tối đa. */
 
   /* evalBest = max(best, played): nếu played > best do MultiPV artifact (si.s1 underestimate),
      dùng played làm baseline để cpLoss = 0 (không phạt nước tốt hơn engine dự đoán) */
@@ -4340,22 +4474,9 @@ function _buildClassifyInput(i){
   if (isBest) evalBest = played;
 
   /* isForced: chỉ có đúng 1 nước hợp lệ tại vị trí này.
-     Tính từ gAnFens[i] bằng cách parse FEN và gọi legalMoves. */
-  var isForced = false;
-  var legalCount = null;
-  if (gAnFens && gAnFens[i]) {
-    try {
-      var _fp = gAnFens[i].split(' ');
-      var _fb = boardArrayFromFen(gAnFens[i]);
-      var _fEP = -1;
-      var _epStr = _fp[3] || '-';
-      if (_epStr !== '-') { var _ef = FLS.indexOf(_epStr.charAt(0)); var _er = parseInt(_epStr.charAt(1),10)-1; if(_ef>=0&&_er>=0) _fEP=sq(_er,_ef); }
-      var _fCas = { WK: (_fp[2]||'').indexOf('K')>=0, WQ: (_fp[2]||'').indexOf('Q')>=0, BK: (_fp[2]||'').indexOf('k')>=0, BQ: (_fp[2]||'').indexOf('q')>=0 };
-      var _legals = legalMoves(_fb.board, _fb.turn, _fEP, _fCas);
-      isForced = (_legals.length === 1);
-      legalCount = _legals.length;
-    } catch(e) { isForced = false; }
-  }
+     Dùng chung _legalCountAtFen() với chuỗi "gán cp bắt buộc" ở trên. */
+  var legalCount = _legalCountAtFen(gAnFens && gAnFens[i]);
+  var isForced = (legalCount === 1);
 
   /* givesCheck: nước i có chiếu vua đối thủ không — lấy từ gMoveInfo */
   var givesCheck = !!(info.givesCheck);
@@ -4372,15 +4493,36 @@ function _buildClassifyInput(i){
 
     mateBest:   si.m1,
     /* mateActual: quy về góc nhìn người đi nước i.
+       Ưu tiên 0: _playedMatchesPV2 + si.m2 > 0 → nước đã chơi trùng PV2 (không
+         phải PV1/bestUci), và root-exclusion multipv tìm ra PV2 CÓ mate mà PV1
+         không thấy (PV1 dừng ở 1 nước khác không mate) → mateActual = si.m2 - 1.
+         ── KHÔI PHỤC (phát hiện qua ván Lasker–Thomas 1912, 11.Qxh7+!!) ──
+         Nhánh này tồn tại trong bản ChessCoach10 (đúng comment "FIX BUG CC9
+         case 9.Qd8+ trong ván Caro-Kann trap" ở _playedMatchesPV2/isBest phía
+         trên) nhưng đã bị RƠI MẤT khi lên ChessCoach11B — isBest vẫn đúng
+         (dùng _playedMatchesPV2), nhưng mateActual lại quên hẳn nhánh PV2,
+         khiến các nước hy sinh mà PV1 (ở depth cơ bản) không tự tìm ra mate —
+         chỉ tìm ra qua PV2 nhờ root-exclusion multipv — bị tụt xuống tính theo
+         cpLoss thô (thấy mất quân nặng) → sai thành Blunder thay vì Brilliant.
        Ưu tiên 1: isBest + si.m1 > 0 → người chơi đi đúng nước mate → mateActual = si.m1 - 1.
        Ưu tiên 2: sn.m1 → đảo dấu về góc người đi nước i:
          sn.m1 > 0: đối thủ (side sau nước) sắp thắng → người đi thua → mateActual = -sn.m1 (âm)
          sn.m1 < 0: đối thủ sắp thua → người đi thắng → mateActual = -sn.m1 (dương)
        Ưu tiên 3: sn.s1 === -9999 (noMove = chiếu hết ngay) → mateActual = 0. */
+    /* Ưu tiên 4 (MỚI): _deepMateActual — mate tìm thấy ở ĐIỂM DỪNG của chuỗi
+       bắt buộc (xem _deepMateActual phía trên _buildClassifyInput), chỉ dùng
+       khi CẢ 4 nhánh ưu tiên trên đều null/0 (không nhánh nào tự thấy được
+       mate qua search độc lập tại chỗ). Case 11.Qxh7+!!: sn.m1=null (sn chỉ
+       thấy eval cp nông -75/-90, không phải mate), _playedMatchesPV2=false,
+       isBest phụ thuộc si.bestUci (không liên quan) → không nhánh nào trên
+       kích hoạt, mateActual rơi về null dù cả chuỗi là mate ép buộc thật.
+       Không dùng để GHI ĐÈ 1 giá trị mateActual đã có (kể cả 0 từ isImmediateCheckmate
+       thật) — chỉ lấp vào đúng chỗ trống null. */
     mateActual: (_playedMatchesPV2 && si.m2 !== null && si.m2 !== undefined && si.m2 > 0) ? (si.m2 - 1)
               : (isBest && si.m1 !== null && si.m1 > 0)   ? (si.m1 - 1)
               : (sn.m1 !== null && sn.m1 !== 0)           ? -sn.m1
               : (sn.s1 === -9999)                         ? 0
+              : (_deepMateActual !== null)                ? _deepMateActual
               : null,
     /* isImmediateCheckmate: TRUE chỉ khi ván đấu THỰC SỰ kết thúc ngay tại nước này
        (sn.s1===-9999, đối thủ hết nước đi hợp lệ vì đang bị chiếu hết).
@@ -4579,6 +4721,20 @@ function startAnalysis(){
 
   ANALYSIS_DEPTH = ANALYSIS_DEPTH_DEFAULT; /* luôn cố định — xem ghi chú "TẠM TẮT" ở trên */
 
+  /* [ChessCoach11B — GỘP 1 LƯỢT] Trước đây: chạy hết cả ván ở ANALYSIS_DEPTH,
+     xong xuôi mới quét PGN tìm "nước đáng ngờ" rồi chạy lại RIÊNG 1 lượt
+     Refining ở depth cao hơn cho các nước đó (2 lượt tuần tự, phải đợi lượt
+     1 xong mới biết và mới bắt đầu lượt 2).
+     Giờ: 3 quy tắc chọn nước (R1/R2/R3 trong _anCollectDeepReverifyTargets)
+     đã thuần cấu trúc (PGN + SEE qua gMoveInfo), không cần chờ eval — nên
+     tính được NGAY TỪ ĐÂY, trước khi bắn bất kỳ query engine nào. Từ đó mỗi
+     nước chỉ cần chạy ĐÚNG 1 LẦN, với depth phù hợp ngay từ đầu — không còn
+     lượt Refining riêng nữa (xem _anDepthForPos() và finishAnalysis()). */
+  gDeepReverifyDepthActive = _deepReverifyDepthForGame();
+  gAnDeepTargets = {};
+  var _preTargets = _anCollectDeepReverifyTargets();
+  for (var _pt = 0; _pt < _preTargets.length; _pt++) gAnDeepTargets[_preTargets[_pt]] = 1;
+
   gAnFens=gFenHistory.concat([boardToFen()]);
   gAnResultsMap={};
   gAnScores=[];
@@ -4631,6 +4787,15 @@ function startAnalysis(){
    truyền vào. Hệ số nhân theo depth: 1.6^(depth-12), chặn trần ở 6 lần
    để watchdog vẫn có tác dụng thật (không biến thành vô hạn) nếu worker
    THẬT SỰ bị treo (lỗi/crash) chứ không phải chỉ vì tính lâu. */
+/* [ChessCoach11B] Depth THẬT SỰ dùng cho vị trí posIdx: cao hơn (gDeepReverifyDepthActive)
+   nếu nước đi TỪ vị trí này nằm trong danh sách đã lọc sẵn từ PGN (gAnDeepTargets,
+   tính 1 lần ở đầu startAnalysis() — xem comment ở đó), ngược lại dùng ANALYSIS_DEPTH
+   mặc định. Thay thế hoàn toàn cơ chế Refining lượt 2 cũ. */
+function _anDepthForPos(posIdx){
+  if (gAnDeepTargets && gAnDeepTargets[posIdx]) return gDeepReverifyDepthActive;
+  return ANALYSIS_DEPTH;
+}
+
 function _anWatchdogMs(base, depthForSearch){
   var n = Math.max(1, gAnPool.length);
   var d = (typeof depthForSearch==='number') ? depthForSearch
@@ -4670,8 +4835,9 @@ function _anSlotAnalyzeNext(slot){
     slot.cur={d1:0,s1:0,m1:null, d2:0,s2:null,m2:null, d3:0,s3:null,m3:null, d4:0,s4:null,m4:null};
     slot.worker.postMessage('setoption name MultiPV value 2');
     slot.worker.postMessage('position fen '+gAnFens[slot.backfillIdx]);
-    slot.worker.postMessage('go depth '+ANALYSIS_DEPTH);
-    _armAnSlotWatchdog(slot, _anWatchdogMs(20000, ANALYSIS_DEPTH));
+    var _bfDepth = _anDepthForPos(slot.backfillIdx);
+    slot.worker.postMessage('go depth '+_bfDepth);
+    _armAnSlotWatchdog(slot, _anWatchdogMs(20000, _bfDepth));
     return;
   }
   slot.cur={d1:0,s1:0,m1:null, d2:0,s2:null,m2:null, d3:0,s3:null,m3:null, d4:0,s4:null,m4:null};
@@ -4679,8 +4845,9 @@ function _anSlotAnalyzeNext(slot){
   slot.cur.side=(_fenParts[1]==='w')?W:B;
   slot.worker.postMessage('setoption name MultiPV value 1');
   slot.worker.postMessage('position fen '+gAnFens[slot.pos]);
-  slot.worker.postMessage('go depth '+ANALYSIS_DEPTH);
-  _armAnSlotWatchdog(slot, _anWatchdogMs(20000, ANALYSIS_DEPTH));
+  var _mainDepth = _anDepthForPos(slot.pos);
+  slot.worker.postMessage('go depth '+_mainDepth);
+  _armAnSlotWatchdog(slot, _anWatchdogMs(20000, _mainDepth));
 }
 
 /* Xử lý 1 vị trí 0 nước hợp lệ HOÀN TOÀN Ở PHÍA CLIENT, không đụng gì tới
@@ -4796,8 +4963,9 @@ function _handleAnSlotMsg(slot, msg){
       slot.cur.side=_shallowSide;
       slot.worker.postMessage('setoption name MultiPV value 1');
       slot.worker.postMessage('position fen '+gAnFens[slot.pos]);
-      slot.worker.postMessage('go depth '+ANALYSIS_DEPTH);
-      _armAnSlotWatchdog(slot, _anWatchdogMs(20000, ANALYSIS_DEPTH));
+      var _mainDepth2 = _anDepthForPos(slot.pos);
+      slot.worker.postMessage('go depth '+_mainDepth2);
+      _armAnSlotWatchdog(slot, _anWatchdogMs(20000, _mainDepth2));
       return;
     }
 
@@ -5091,7 +5259,7 @@ function handleAnalysisMsg(msg){
       gAnCur.side=(_fenParts2[1]==='w')?W:B;
       lozzaPost('setoption name MultiPV value 1');
       lozzaPost('position fen '+gAnFens[gAnIdx]);
-      lozzaPost('go depth '+ANALYSIS_DEPTH);
+      lozzaPost('go depth '+_anDepthForPos(gAnIdx));
       _armAnWatchdog(20000);
       return;
     }
@@ -5279,7 +5447,7 @@ function analyzeNext(){
     gAnCur={d1:0,s1:0,m1:null, d2:0,s2:null,m2:null, d3:0,s3:null,m3:null, d4:0,s4:null,m4:null};
     lozzaPost('setoption name MultiPV value 2');
     lozzaPost('position fen '+gAnFens[gBackfillIdx]);
-    lozzaPost('go depth '+ANALYSIS_DEPTH);
+    lozzaPost('go depth '+_anDepthForPos(gBackfillIdx));
     _armAnWatchdog(20000);
     return;
   }
@@ -5291,7 +5459,7 @@ function analyzeNext(){
   gAnCur.side=(_fenParts[1]==='w')?W:B;
   lozzaPost('setoption name MultiPV value 1');
   lozzaPost('position fen '+gAnFens[gAnIdx]);
-  lozzaPost('go depth '+ANALYSIS_DEPTH);
+  lozzaPost('go depth '+_anDepthForPos(gAnIdx));
   _armAnWatchdog(20000);
 }
 
@@ -8933,7 +9101,7 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
     sections.push({num:num, title:title, text:text||'(chưa có nội dung)', kind:kind, plain:true, icon:icon});
   }
 
-  var sideChar = (detectedSide === 'black') ? 'b' : 'w'; /* mặc định 'w' nếu không xác định được bên */
+  var sideChar = (detectedSide === 'black') ? 'b' : (detectedSide === 'white') ? 'w' : (gFlip ? 'b' : 'w'); /* không nhận diện được tên → theo bên đang ở DƯỚI bàn cờ (gFlip) thay vì mặc định cứng Trắng */
 
   var g1All = buildDeepInsightsGroup1(cls, evalPcts, cpLosses, gAnFens, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel);
   var g2All = buildDeepInsightsGroup2(cls, cpLosses, gAnScores, gAnFens, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel);
@@ -9154,7 +9322,7 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
   /* Chọn 3-5 ý ĐIỂM CAO NHẤT (ván nào ít dữ liệu thì lấy hết những gì có,
      không ép đủ 3 nếu thực sự không có đủ candidate). */
   var poolSorted = pool.slice().sort(function(a, b){ return b.score - a.score; });
-  var selected = poolSorted.slice(0, Math.min(6, poolSorted.length)); /* giảm từ 7 xuống 6 theo yêu cầu */
+  var selected = poolSorted.slice(0, Math.min(6, poolSorted.length)); /* hạ từ 7 xuống 6 theo yêu cầu Dan */
   var selectedIds = {};
   selected.forEach(function(c){ selectedIds[c.id] = true; });
 
@@ -10016,65 +10184,160 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
    Giải pháp: với các vị trí NGHI NGỜ bị nhiễu (xem 2 điều kiện dưới), chạy
    lại 1 lần depth cao hơn (16) hoàn toàn ĐỘC LẬP (fresh, không cache) để có
    số liệu đáng tin cậy hơn, rồi GHI ĐÈ vào gAnScores trước khi classify. */
-var DEEP_REVERIFY_DEPTH       = 15; /* Tạm hạ từ 16→15 để tăng tốc — theo yêu cầu, chấp nhận độ tin cậy thấp hơn 1 chút */
+var DEEP_REVERIFY_DEPTH       = 15; /* Giá trị mặc định/fallback — depth THẬT SỰ dùng khi chạy
+   được tính động theo tổng PlyCount của ván qua _deepReverifyDepthForGame(), gán lại vào biến
+   này ngay trước mỗi lần chạy _anDeepReverifyPass (xem finishAnalysis). Base analysis (depth 12,
+   ANALYSIS_DEPTH) GIỮ NGUYÊN không đổi — chỉ độ sâu của bước reverify chọn lọc này thay đổi. */
+/* ── Suy luận độ sâu cần thiết (ván mẫu Reti–Tartakower 1910, xem thảo luận) ──
+   Nút thắt cổ chai: đánh giá 5...e5 cần nhìn xuyên ~11-12 ply raw mới thấy hết
+   chuỗi buộc dẫn tới 11.Bd8#. Ván càng NGẮN thì càng đủ "ngân sách thời gian"
+   để afford depth cao mà không kéo dài tổng thời gian phân tích cả ván lên
+   đáng kể, nên chia bậc theo PlyCount thay vì 1 mức cố định cho mọi ván:
+     PlyCount ≤ 80  → 16
+     PlyCount > 80  → 14 (ván dài, ưu tiên tốc độ, vẫn cao hơn base 12 đáng kể)
+   Base ANALYSIS_DEPTH=12 của TOÀN BỘ pass chính KHÔNG đổi — tránh rủi ro ảnh
+   hưởng thời gian/độ ổn định của luồng phân tích hiện có; chỉ các nước nằm
+   trong gAnDeepTargets mới dùng depth cao hơn này (xem _anDepthForPos()). */
+function _deepReverifyDepthForGame(){
+  var plyCount = (typeof gMoveTexts !== 'undefined' && gMoveTexts) ? gMoveTexts.length : 0;
+  /* Trần hạ từ 16 xuống 15 (theo yêu cầu Dan) để giảm thời gian deep-reverify
+     ở các ván có nhiều vị trí hy sinh+chiếu liên hoàn (VD Reti–Tartakower
+     1910) — depth 15 vẫn đủ sâu hơn hẳn base ANALYSIS_DEPTH=12 để bắt được
+     phần lớn horizon effect, mà tránh vùng cực chậm quan sát được ở depth 16
+     khi điểm gần MATE (aspiration window phải nới delta nhiều vòng). */
+  return (plyCount <= 80) ? 15 : 14;
+}
 var gDeepReverifyOverrides    = {}; /* { [i]: {beforeS1,beforeM1,afterS1,afterM1} } — reset mỗi lần startAnalysis() */
 var DEEP_REVERIFY_SAC_MIN_CP  = 220; /* = BRILLIANT_SAC_MIN_CP, khai riêng để không phụ thuộc thứ tự định nghĩa */
 var DEEP_REVERIFY_CPLOSS_MIN  = 20;  /* = ngưỡng cpLoss của Brilliant (brilliantBase/brilliantIndirect) */
 var DEEP_REVERIFY_CPLOSS_MAX  = 100; /* cận trên vùng "nghi nhiễu" — quá xa mốc Brilliant thì khả năng cao là sai thật, không phải nhiễu */
+/* Số nửa nước tối đa lùi ngược khi backward-reverify quanh 1 nước Brilliant/
+   Great Move nghi ngờ bị lệch nhãn do horizon effect (xem điều kiện C bên
+   dưới) — chặn để tránh cascade backward vô hạn trên các ván có chuỗi buộc
+   rất dài. */
+var gDeepReverifyDepthActive  = DEEP_REVERIFY_DEPTH; /* depth THẬT dùng cho lần chạy hiện tại — được tính lại theo PlyCount ván ngay trước mỗi _anDeepReverifyPass, xem finishAnalysis() */
+/* FIX BUG (hang treo ở "Analyzing X/X"): biến này bị THIẾU KHAI BÁO trước đây,
+   khiến điều kiện (C) trong _anCollectDeepReverifyTargets() ném ReferenceError
+   ngay khi gặp 1 nước Brilliant/Great Move (vd 9.Qd8+ trong ván Reti–Tartakower
+   1910) — làm finishAnalysis() crash giữa chừng, script dừng đột ngột trước khi
+   kịp đổi chữ nút sang "Refining X/X...", nên UI kẹt mãi ở dòng chữ cuối cùng
+   đã hiện ("Analyzing 22/22"). */
+var DEEP_REVERIFY_BACKWARD_MAX_PLIES = 6; /* lùi tối đa 6 nửa nước (3 nước mỗi bên) khi backward re-verify quanh 1 nước Brilliant/Great nghi bị lệch nhãn */
 
 /* Quét toàn bộ nước đã phân tích, đánh dấu vị trí cần re-verify. Đánh dấu
-   theo 2 điều kiện độc lập (thoả 1 trong 2 là đủ):
+   theo 3 điều kiện độc lập (thoả 1 trong 3 là đủ):
      (A) isSacrifice tại i, VÀ nước tại i+2 (CÙNG BÊN với i) là 1 nước chiếu
          — dấu hiệu "hy sinh mở đường cho chuỗi chiếu tiếp theo", loại vị
          trí chiến thuật cao dễ bị nhiễu. gMoveInfo[].givesCheck tính theo
          luật cờ thuần tuý (inCheck()), không phụ thuộc engine/Hash.
-     LỚP LỌC CHUNG (áp dụng TRƯỚC khi xét A hay B): nếu nhãn classify depth12
-     GỐC của i đã là Brilliant hoặc Great Move rồi thì BỎ QUA HẲN, không xét
-     A/B nữa — dù nó có thoả điều kiện "sac + chiếu cùng bên 2 ply sau" (A)
-     hay "cpLoss vùng nghi ngờ" (B) đi nữa, vì mục tiêu re-verify là NÂNG
-     HẠNG nước đang bị đánh giá thấp hơn thực tế, không phải để re-verify
-     nước đã đạt hạng cao sẵn — tốn thời gian vô ích.
-     (A) isSacrifice tại i, VÀ nước tại i+2 (CÙNG BÊN với i) là 1 nước chiếu.
-     (B) isSacrifice && materialLostCp>=220 && cpLoss thuộc (20,100]. */
-function _anCollectDeepReverifyTargets(){
-  var targets = [];
-  for (var i = 0; i < gMoveTexts.length; i++){
-    var ci = _buildClassifyInput(i);
-    if (!ci || !ci.isSacrifice) continue;
+     (B) isSacrifice && materialLostCp>=220 && cpLoss thuộc (20,100].
+     (C) MỚI — backward re-verify quanh nước đã được chấm Brilliant/Great
+         Move: xem ván Reti–Tartakower 1910 (9.Qd8+ đáng lẽ Brilliant nhưng
+         CC chấm Great, còn 10.Bg5+ đáng lẽ chỉ Great nhưng CC chấm Brilliant
+         — nhãn "chói" bị gắn nhầm cho nước cuối cùng lọt vào tầm nhìn depth
+         12, thay vì nước THỰC SỰ tạo ra bước ngoặt). Nếu nước i đã đạt nhãn
+         Brilliant/Great Move VÀ có ít nhất 1 nước chiếu hoặc hy sinh trong
+         DEEP_REVERIFY_BACKWARD_MAX_PLIES nửa nước liền trước (bất kể bên
+         nào) → nghi ngờ nhãn bị lệch chỗ do horizon effect, backward
+         re-verify TẤT CẢ các nước i-1..i-N (bao gồm cả nước ngay trước đó
+         của CHÍNH bên i, không chỉ đối phương) cộng với chính nước i, để
+         xem sau khi có eval sâu hơn cho toàn bộ chuỗi, nhãn có tự dịch
+         chuyển đúng chỗ hay không.
+     LỚP LỌC CHUNG cho (A)/(B) — KHÔNG áp dụng cho (C) vì (C) chủ đích nhắm
+     đúng vào các nước ĐÃ đạt hạng cao: nếu nhãn depth12 gốc của i đã là
+     Brilliant hoặc Great Move rồi thì BỎ QUA (A)/(B), vì mục tiêu của (A)/
+     (B) là NÂNG HẠNG nước đang bị đánh giá thấp hơn thực tế, không phải để
+     re-verify nước đã đạt hạng cao sẵn — tốn thời gian vô ích. */
+/* ══════════════════════════════════════════════════════════════════════
+   [ChessCoach11B — HƯỚNG ĐI MỚI, ĐANG THỬ NGHIỆM]
+   Thay toàn bộ 4 điều kiện (A)/(B)/(C)/(D) cũ (vốn phụ thuộc origLabel/
+   cpLoss lấy từ eval depth-12 ĐÃ CHẠY XONG) bằng 3 quy tắc THUẦN CẤU TRÚC
+   — chỉ dựa vào PGN + SEE, tính được NGAY khi đọc xong PGN, không cần
+   đợi bất kỳ query engine nào. Mục tiêu: cho phép sau này gộp Analyzing +
+   Refining thành 1 lượt duy nhất (mỗi nước biết trước cần depth 12 hay
+   depth cao hơn TRƯỚC khi bắt đầu search), thay vì phải chạy xong cả ván
+   ở depth 12 rồi mới biết nước nào cần chạy lại.
 
-    var origLabel = classifyMoveCore(ci); /* nhãn depth12 gốc — override chưa tồn tại ở bước quét này */
-    if (origLabel === "Brilliant" || origLabel === "Great Move") continue; /* LỚP LỌC CHUNG: đã đạt hạng cao sẵn, bỏ qua A/B luôn */
+   Đã verify bằng tay khớp ĐÚNG 4/4 nước bị classify sai trong ván mẫu
+   Reti–Tartakower 1910 (PlyCount 21): 5...e5, 8...Nxe4, 9.Qd8+, 10.Bg5+.
 
-    var cpLoss = Math.max(0, ci.evalBest - ci.evalActual);
-    /* ── FIX BUG CC9 GỐC (phát hiện qua case 21.Rxe4 — Xe đổi Tượng lỗ vật
-       chất bình thường, cpLoss GỐC đã rất rõ ràng (~883cp, Blunder thật), bị
-       re-verify oan rồi override sai thành Brilliant) ──
-       Nguyên nhân: điều kiện A (sac + chiếu 2 ply sau, cùng bên) TRƯỚC ĐÂY
-       không có ràng buộc cpLoss nào cả — trigger cả vào case ĐÃ RÕ RÀNG là
-       Blunder lớn (883cp), trong khi deep-reverify chỉ có ý nghĩa cho case
-       MƠ HỒ (cpLoss nhỏ, nghi ngờ do nhiễu/thiếu tầm nhìn — như axb4 gốc,
-       cpLoss chỉ ~50cp). Case đã rõ ràng (cpLoss lớn) không cần "khám phá
-       thêm" — re-verify vào đó chỉ tạo rủi ro (search độc lập tự bất ổn
-       định, có thể cho kết quả sai còn tệ hơn dữ liệu gốc).
-       Fix: bắt điều kiện A dùng CHUNG ràng buộc cpLoss với điều kiện B (vùng
-       DEEP_REVERIFY_CPLOSS_MIN..MAX) — chỉ re-verify khi cpLoss gốc còn nằm
-       trong vùng mơ hồ, không áp dụng cho Blunder đã hiển nhiên. */
-    /* ── FIX (case 5...e5 ván Reti–Tartakower 1910): biên dưới trước đây
-       dùng '>' (chặt), loại bỏ đúng cpLoss=20 (BẰNG DEEP_REVERIFY_CPLOSS_MIN)
-       dù nó thoả mọi phần khác của điều kiện A (isSacrifice + chiếu cùng bên
-       2 ply sau, từ 11...Qa5+) — đổi thành '>=' để nhận cả biên. */
-    var cpLossAmbiguous = (cpLoss >= DEEP_REVERIFY_CPLOSS_MIN && cpLoss <= DEEP_REVERIFY_CPLOSS_MAX);
-    var infoI  = gMoveInfo[i];
-    var infoI2 = gMoveInfo[i+2];
-    var condA = !!(infoI && infoI2 && infoI2.givesCheck && infoI2.side === infoI.side && cpLossAmbiguous);
-    var condB = (ci.materialLostCp >= DEEP_REVERIFY_SAC_MIN_CP && cpLossAmbiguous);
+   [CẬP NHẬT — theo yêu cầu Dan] Bỏ R3: rule này (tiếp nối chuỗi hy sinh+
+   chiếu 2 nửa nước trước, dùng bắt 10.Bg5+) làm số vị trí deep-reverify
+   lan rộng thêm 1 bậc nữa trên mỗi chuỗi hy sinh+chiếu liên hoàn — chính
+   dạng ván hay bị R1/R2 đánh dấu sẵn (Reti–Tartakower là ví dụ điển hình:
+   R1 bắt 9.Qd8+, R2 bắt 8...Nxe4, R3 lẽ ra bắt thêm 10.Bg5+) — cộng dồn
+   với chi phí mỗi vị trí deep-reverify đã tốn tới hàng chục giây (xem
+   _deepReverifyDepthForGame ở trên) khiến tổng thời gian phân tích các
+   ván kiểu này tăng vọt. Giữ lại R1+R2 (đủ bắt gốc chuỗi: chính nước hy
+   sinh + nước mồi ngay trước nó) — R3 chỉ mở rộng thêm 1 nước NỐI TIẾP
+   sau chuỗi, giá trị thêm không tương xứng chi phí. Hàm
+   _structuralIsSacrifice() vẫn giữ nguyên (R1/R2 đều cần).
 
-    if (condA || condB) targets.push(i);
+   2 quy tắc còn lại (đặt tên i = chỉ số nửa nước, 0-based):
+     R1 — Tự nó là hy sinh thật (SEE): isSac(i) → add i.
+         Bắt: 5...e5 (thí Tốt), 9.Qd8+ (thí Hậu).
+     R2 — Nước "mồi" ngay trước 1 cú hy sinh+chiếu: isSac(i) && givesCheck(i)
+         → add (i-1). Không cần biết nhãn Brilliant/Great của i (khác bản
+         cũ), chỉ cần bản thân i vừa hy sinh vừa chiếu là đủ nghi ngờ nước
+         TRƯỚC nó (i-1) đang "cắn mồi" ở depth nông.
+         Bắt: 8...Nxe4 (nghi vấn vì 9.Qd8+ ngay sau là hy sinh+chiếu).
+
+   isSac(k) dùng hàm _structuralIsSacrifice(k) mới — tách riêng phần SEE
+   ra khỏi _buildClassifyInput() vì hàm đó cần gAnScores[k] tồn tại
+   (return null nếu chưa có), trong khi bản thân SEE chỉ cần gMoveInfo[k]
+   (thuần vị trí quân trên bàn, không cần eval) — y hệt logic SEE gốc
+   trong _buildClassifyInput (kể cả 2 fix đã có: promotion dùng PVAL[1]
+   thay vì movedVal, và bỏ qua SEE khi là chiếu đôi/double-check). */
+function _structuralIsSacrifice(k){
+  if (k < 0 || k >= gMoveTexts.length) return false;
+  var info = gMoveInfo[k];
+  if (!info) return false;
+  if (info.intoAttack && info.boardAfter != null){
+    var _isPromoMove = !!(gUciHist && gUciHist[k] && gUciHist[k].length > 4);
+    var _seePieceVal = _isPromoMove ? PVAL[1] : info.movedVal;
+    var _isDoubleCheckMove = !!(info.givesCheck && isDoubleCheckMove(info.boardAfter, -info.side));
+    var seeVal = _isDoubleCheckMove ? 0 : seeOnSquare(info.boardAfter, info.toSq, _seePieceVal, info.side);
+    var seeValNet = seeVal + (info.capVal || 0);
+    return (seeValNet <= -50);
+  } else if (info.intoAttack){
+    var netLoss = (info.movedVal||0) - (info.capVal||0);
+    return (info.capVal === 0) || (netLoss > 100);
   }
+  return false;
+}
+
+function _anCollectDeepReverifyTargets(){
+  var targetSet = {};
+  function addTarget(idx){
+    if (idx < 0 || idx >= gMoveTexts.length) return;
+    /* Giữ nguyên fix treo pipeline: nước cuối ván (vd chiếu hết) không có
+       "vị trí sau nước" hợp lệ để deep-reverify. */
+    if (idx === gMoveTexts.length - 1) return;
+    targetSet[idx] = 1;
+  }
+
+  for (var i = 0; i < gMoveTexts.length; i++){
+    var infoI = gMoveInfo[i];
+    if (!infoI) continue;
+    var sacI = _structuralIsSacrifice(i);
+
+    /* R1 */
+    if (sacI) addTarget(i);
+
+    /* R2 — chính i vừa hy sinh vừa chiếu → nghi ngờ nước NGAY TRƯỚC (i-1) */
+    if (sacI && infoI.givesCheck) addTarget(i - 1);
+
+    /* R3 đã bỏ (theo yêu cầu Dan) — xem comment ở đầu hàm. */
+  }
+
+  var targets = [];
+  for (var key in targetSet) { if (targetSet.hasOwnProperty(key)) targets.push(+key); }
+  targets.sort(function(a, b){ return a - b; });
   return targets;
 }
 
-/* Chạy lại depth DEEP_REVERIFY_DEPTH, ĐỘC LẬP (fresh position query, không
+/* Chạy lại depth gDeepReverifyDepthActive (tính động theo PlyCount ván — xem
+   _deepReverifyDepthForGame), ĐỘC LẬP (fresh position query, không
    dùng gAnScores cache), cho từng vị trí bị đánh dấu.
    ── VIẾT LẠI SAU BUG NHIỄM CHÉO (xem comment ở _buildClassifyInput) ──
    2 thay đổi so với bản đầu:
@@ -10155,7 +10418,7 @@ function _anDeepReverifyPass(indices, cb){
     function runQuery(fenIdx){
       w.postMessage('stop');
       w.postMessage('position fen ' + gAnFens[fenIdx]);
-      w.postMessage('go depth ' + DEEP_REVERIFY_DEPTH);
+      w.postMessage('go depth ' + gDeepReverifyDepthActive);
     }
     runQuery(i);
   }
@@ -10182,15 +10445,12 @@ function _hideLcWatermark(){
 }
 
 function finishAnalysis(){
-  /* Lozza không hỗ trợ 'searchmoves' trong lệnh go → Pass C không hoạt động
-     và gây treo nếu có nhiều position forced liên tiếp (stack từ _runPass2Next đệ quy).
-     Bỏ Pass C, dùng MultiPV s2 với clamp đã có trong _buildClassifyInput. */
-  var targets = _anCollectDeepReverifyTargets();
-  if (targets.length){
-    _anDeepReverifyPass(targets, function(){ _finishAnalysisRender(); });
-  } else {
-    _finishAnalysisRender();
-  }
+  /* [ChessCoach11B] KHÔNG còn lượt Refining riêng nữa — mọi nước đã được
+     chạy ĐÚNG 1 LẦN với depth phù hợp ngay từ đầu (xem _anDepthForPos(),
+     gAnDeepTargets tính sẵn ở đầu startAnalysis()). _anCollectDeepReverify
+     Targets()/_anDeepReverifyPass() vẫn giữ nguyên trong file (không xoá)
+     để dễ so sánh/rollback, nhưng không còn được gọi ở đây nữa. */
+  _finishAnalysisRender();
 }
 
 /* ── _runPass2Next đã bị loại bỏ (Lozza không hỗ trợ searchmoves) ── */
@@ -10313,6 +10573,29 @@ function _finishAnalysisRender(){
       evalPcts[_mi+1] = _pct2;
     }
   }
+  /* ── FIX (case 11.Qxh7+!! Lasker–Thomas 1912, đồng bộ với chuỗi bắt buộc
+     đã dùng cho nhãn ở _buildClassifyInput và cột cp ở _evalCpWhite) ──
+     Vòng lặp _mi phía trên chỉ kế thừa % ĐÚNG 1 BƯỚC (khi vị trí i đã biết
+     mate qua PV1/PV2 VÀ nước chơi khớp bestUci/uci2 tại chỗ) — không xuyên
+     được cả 1 chuỗi bắt buộc DÀI (chuỗi check-forced nhiều nước liền, qua
+     _chainAdvanceOk — đã có nhánh check-forced dùng chung với nhãn/cột cp).
+     Thiếu bước này, đồ thị vẫn hiện lên-xuống dọc theo cả 8 nửa nước
+     Qxh7+...Kd2# dù nhãn "Brilliant" và cột cp đã đúng, vì đồ thị là 1 mảng
+     TÁCH RIÊNG (evalPcts), không tự động ăn theo 2 chỗ kia.
+     Xuyên qua TOÀN BỘ chuỗi bắt buộc bằng đúng _chainAdvanceOk (nhất quán
+     100% với nhãn/cột cp), rồi gán ĐỀU giá trị % tại điểm dừng cuối chuỗi
+     cho mọi vị trí dọc đường — vì bản chất cả chuỗi chỉ là 1 thế cờ ép buộc
+     duy nhất chưa phân nhánh, evalPcts dọc đường chỉ là nhiễu shallow-search
+     tại từng điểm, không phản ánh đúng thế cờ thật. */
+  for (var _pi = 0; _pi < evalPcts.length - 1; _pi++) {
+    var _pDeep = _pi + 1;
+    while (gAnFens && gAnFens[_pDeep] && gAnScores[_pDeep + 1] && _chainAdvanceOk(_pDeep)) {
+      _pDeep++;
+    }
+    if (_pDeep > _pi + 1 && evalPcts[_pDeep] !== undefined) {
+      for (var _pk = _pi + 1; _pk <= _pDeep; _pk++) evalPcts[_pk] = evalPcts[_pDeep];
+    }
+  }
   for(var i=0;i<gMoveTexts.length;i++){
     var si=gAnScores[i], sn=gAnScores[i+1];
     if(!si||!sn){ cpLosses.push(null); continue; }
@@ -10363,7 +10646,7 @@ function _finishAnalysisRender(){
      Excellent được cho điểm thấp hơn 1 chút (80) vì bản thân tier này vẫn có
      cpLoss > 0 (dù nhỏ), không nên chấm ngang tuyệt đối với Best/Book/Forced/
      Brilliant/Great (cpLoss ≈ 0). Các tier còn lại giữ nguyên 100. */
-  var GOOD_TIERS = {brilliant:100, great:100, great_defense:100, best:100, excellent:80, book:100, forced:100};
+  var GOOD_TIERS = {brilliant:100, great:100, great_defense:100, best:100, excellent:90, book:100, forced:100};
   var accW=[], accB=[];
   for(var i=0;i<gMoveTexts.length;i++){
     var side=(gMoveInfo[i]&&gMoveInfo[i].side===W)?'w':'b';
@@ -10560,6 +10843,46 @@ function _finishAnalysisRender(){
     if (si && si.uci2 && si.uci2 === gUciHist[i] && si.m2 !== null && si.m2 !== undefined && si.m2 !== 0) {
       var mateInN2 = (si.side === W) ? si.m2 : -si.m2;
       return mateInN2 >= 0 ? (9999 - Math.abs(mateInN2)) : -(9999 - Math.abs(mateInN2));
+    }
+    /* MỚI (theo yêu cầu Dan) — đồng bộ với "gán cp của chuỗi bắt buộc" đã
+       thêm trong _buildClassifyInput() (xem comment chi tiết ở đó). Bảng
+       này TRƯỚC ĐÂY đọc thẳng sn = gAnScores[i+1] độc lập (không đi qua
+       _buildClassifyInput), nên dù cpLoss/nhãn Brilliant đã tính đúng
+       theo chuỗi bắt buộc, CỘT CP hiển thị ở đây vẫn ra số shallow cũ
+       (VD 9.Qd8+ vẫn hiện +14cp dù nhãn/cpLoss đã đúng) — sửa cho khớp.
+       Nếu ngay sau nước i, đối thủ chỉ có ĐÚNG 1 nước đi hợp lệ (và có
+       thể cả chuỗi tiếp theo cũng vậy), xuyên qua chuỗi bắt buộc đó tới
+       vị trí đầu tiên có ≥2 nước hợp lệ (hoặc hết dữ liệu) rồi dùng thẳng
+       eval đã có sẵn tại điểm dừng (không tốn thêm query engine).
+       ── FIX (case 11.Qxh7+!! Lasker–Thomas 1912, đồng bộ với fix đã áp
+       dụng ở _buildClassifyInput/played) ──
+       Bug cũ: return THẲNG giá trị tại điểm dừng chuỗi (_deepIdx2), bất kể
+       nó tốt hay TỆ HƠN baseline (sn).
+       ── SỬA LẠI LẦN 2 (phát hiện qua case 11...Kxh7/13...Kg5/14...Kf4 vẫn
+       kẹt ở số cũ dù chuỗi đã xuyên được tới tận mate) ──
+       Bản vá lần 1 (min/max theo "bên vừa đi nước i") SAI HƯỚNG: cp ở hàm
+       này luôn quy về góc nhìn TRẮNG tuyệt đối (không phải "tốt cho người
+       vừa đi"), nên khi bên vừa đi là ĐEN (VD 11...Kxh7), code lấy
+       Math.min(baseline, deep) — nếu deep là tin TỐT cho Trắng (VD mate,
+       +999) thì min lại LOẠI BỎ tin tốt đó, giữ nguyên baseline xấu (-296)!
+       Ngược hẳn ý muốn.
+       Nhận ra: khái niệm "chỉ nâng không dìm" chỉ có ý nghĩa khi so sánh 2
+       giá trị CÙNG QUY VỀ 1 GÓC NHÌN CỐ ĐỊNH (mover-of-move-i, như "played"
+       trong _buildClassifyInput) để tránh phạt oan 1 nước tốt — áp dụng
+       kiểu đó cho cp-Trắng TUYỆT ĐỐI (không đổi theo mover) là lắp sai khái
+       niệm. Từ khi _chainAdvanceOk có thêm nhánh 3 (chiếu-ép) + nhánh 4
+       (mate không tránh được dù chọn nước nào, xác nhận bằng chính m1 của
+       engine, không phải đoán), mọi bước xuyên chuỗi đều đã được XÁC NHẬN
+       bắt buộc thật — điểm dừng cuối chuỗi đáng tin y hệt 1 lần search độc
+       lập bình thường (baseline), không có lý do gì để nghi ngờ/so sánh nữa
+       → dùng THẲNG giá trị đó, bỏ hẳn Math.max/min. */
+    var _deepIdx2 = i + 1;
+    while (gAnFens && gAnFens[_deepIdx2] && gAnScores[_deepIdx2 + 1]
+           && _chainAdvanceOk(_deepIdx2)) {
+      _deepIdx2++;
+    }
+    if (_deepIdx2 > i + 1 && gAnScores[_deepIdx2]) {
+      return anCPwhite(gAnScores[_deepIdx2]);
     }
     if(sn.m1 !== null && sn.m1 !== 0){
       /* m1 > 0: side-to-move chiếu hết đối thủ trong m1 nước.
@@ -11286,6 +11609,7 @@ var ANALYSIS_HASH_TOTAL_MB=576;  /* ĐÃ CHỐT CỐ ĐỊNH cùng với ANALYSI
    trên 1 bộ nhiều ván mẫu, không chỉ 1 ván — tránh lặp lại vòng luẩn quẩn đã gặp khi
    chỉnh riêng lẻ từng ngưỡng theo đúng 1 ván test. */
 var gAnPool=[];          /* [{worker,id,ready,_active,phase,cur,shallowCur,shallowResult,pos,chunkStart,chunkEnd,backfillIdx,watchdogTimer,watchdogGen}] */
+var gAnDeepTargets = {}; /* [ChessCoach11B] set các chỉ số nước (posIdx) cần chạy depth cao ngay từ lượt phân tích chính — tính 1 lần ở đầu startAnalysis(), xem _anDepthForPos() */
 var gAnResultsMap={};    /* idx (số) → kết quả 1 vị trí — nơi các worker ghi song song; gAnScores chỉ build từ đây SAU KHI xong toàn bộ */
 var gAnDoneCount=0;      /* số vị trí đã phân tích xong (không tính riêng backfill) */
 var gAnTotalCount=0;     /* tổng số vị trí cần phân tích của ván hiện tại */
@@ -13474,7 +13798,7 @@ function exitMobileLayout() {
 }
 
 /* Ngưỡng nhận diện "điện thoại, màn dọc": vừa portrait vừa màn hẹp — để
-   không ảnh hưởng iPad/tablet đang xoay dọc hay PC/Kindle (luôn ngang). */
+   không ảnh hưởng iPad/tablet đang xoay dọc hay PC (luôn ngang). */
 function _isMobilePortrait() {
   return window.innerHeight > window.innerWidth && window.innerWidth <= 768;
 }
@@ -16182,7 +16506,7 @@ function requestHint() {
 </script>
 
 <script id="lozza-source" type="text/plain">
-// Polyfill console cho WebKit cu (Kindle PPW3 khong co console trong Worker)
+// Polyfill console cho trinh duyet/WebKit cu (mot so Worker khong co console)
 if (typeof console === 'undefined') {
   var console = {
     log: function() {},
@@ -21040,6 +21364,7 @@ if (nodeHost) {
   });
 
 }
+
 
 </script>
 </body>
