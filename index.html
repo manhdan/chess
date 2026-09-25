@@ -12,6 +12,7 @@ gtag('config', 'G-YJ1J2MJLZT');
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>ChessCoach10</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🜲</text></svg>">
 <style>
 :root {
   /* Màu ô bàn cờ — đổi qua setBoardTheme(), lưu localStorage để nhớ lựa
@@ -3021,7 +3022,58 @@ function attacked(board, sq2, byCol) {
   return false;
 }
 
-
+/* ── ĐẾM số quân đang chiếu vua (để phát hiện CHIẾU ĐÔI) ──
+   Bản sao của attacked() nhưng ĐẾM thay vì early-return true ở lần trúng
+   đầu tiên — cần cho isDoubleCheckMove() bên dưới. KHÔNG sửa attacked()
+   gốc (giữ nguyên early-exit boolean cho hiệu năng ở chỗ dùng cho sinh
+   nước đi hợp lệ), chỉ thêm bản đếm riêng dùng cho phân tích SEE. */
+function countAttackers(board, sq2, byCol) {
+  var r=rk(sq2),f=fl(sq2);
+  var i, nr, nf, pp, cnt=0;
+  for(var df=-1;df<=1;df+=2){
+    var pr=r-byCol,pf=f+df;
+    if(ob(pr,pf)&&board[sq(pr,pf)]===byCol) cnt++;
+  }
+  var kd=[[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+  for(i=0;i<kd.length;i++){
+    nr=r+kd[i][0]; nf=f+kd[i][1];
+    if(ob(nr,nf)&&board[sq(nr,nf)]===byCol*2) cnt++;
+  }
+  var dd=[[-1,-1],[-1,1],[1,-1],[1,1]];
+  for(i=0;i<dd.length;i++){
+    nr=r+dd[i][0]; nf=f+dd[i][1];
+    while(ob(nr,nf)){
+      pp=board[sq(nr,nf)];
+      if(pp){if(pp===byCol*3||pp===byCol*5) cnt++; break;}
+      nr+=dd[i][0]; nf+=dd[i][1];
+    }
+  }
+  var sd=[[-1,0],[1,0],[0,-1],[0,1]];
+  for(i=0;i<sd.length;i++){
+    nr=r+sd[i][0]; nf=f+sd[i][1];
+    while(ob(nr,nf)){
+      pp=board[sq(nr,nf)];
+      if(pp){if(pp===byCol*4||pp===byCol*5) cnt++; break;}
+      nr+=sd[i][0]; nf+=sd[i][1];
+    }
+  }
+  var gd2=[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+  for(i=0;i<gd2.length;i++){
+    nr=r+gd2[i][0]; nf=f+gd2[i][1];
+    if(ob(nr,nf)&&board[sq(nr,nf)]===byCol*6) cnt++;
+  }
+  return cnt;
+}
+/* side = bên ĐANG bị chiếu (đối phương của người vừa đi). true nếu vua của
+   "side" đang bị từ 2 quân trở lên chiếu cùng lúc (chiếu đôi) — theo luật
+   cờ, khi bị chiếu đôi, bên bị chiếu CHỈ được đi Vua (không thể ăn hoặc
+   chặn được cả 2 quân chiếu cùng lúc bằng 1 nước), nên MỌI quân đang tạo
+   ra chiếu đôi đều tuyệt đối an toàn khỏi bị ăn lại ở nước kế tiếp. */
+function isDoubleCheckMove(board, side) {
+  var king = side*6;
+  for (var i=0;i<64;i++) if (board[i]===king) return countAttackers(board, i, -side) >= 2;
+  return false;
+}
 
 /* ── Static Exchange Evaluation (SEE): kiểm tra "thí quân" dựa trên chuỗi exchange ──
    Trả về net material cho sideJustMoved khi quân của họ đứng trên toSq với pieceVal.
@@ -4107,6 +4159,14 @@ function _buildClassifyInput(i){
   if (_playedMatchesPV2) {
     best = anCP(si.s2, si.m2);
   }
+  /* KHÔNG động vào "played" ở đây (đã thử — sai): played/evalActual còn được
+     dùng làm baseline cpLoss cho MỌI nhánh classify khác (Mistake/Blunder/
+     Inaccuracy...), thay đổi nó theo PV2 có thể làm sai lệch classify của
+     CHÍNH nước này ở các nhánh không liên quan tới mate, hoặc ảnh hưởng dây
+     chuyền tới nước kế tiếp ở ván khác không có đặc điểm giống Qd8+. Nhánh
+     Brilliant-do-mate bên dưới (classifyMoveCore) chỉ cần đúng mateActual,
+     KHÔNG cần evalBest/cpLoss — nên chỉ sửa mateActual (xem field trả về
+     bên dưới), thu hẹp phạm vi ảnh hưởng tối đa. */
 
   /* evalBest = max(best, played): nếu played > best do MultiPV artifact (si.s1 underestimate),
      dùng played làm baseline để cpLoss = 0 (không phạt nước tốt hơn engine dự đoán) */
@@ -4161,9 +4221,43 @@ function _buildClassifyInput(i){
   var seeVal = 0;
   var seeValNet = 0; /* = seeVal + capVal đã ăn ở nước khởi đầu — net THẬT của cả chuỗi đổi quân */
   var isSacrifice = false;
+  /* ĐÃ THÊM — FIX BUG: nước PHONG CẤP (promotion, VD f8=Q) có info.movedVal
+     = giá trị QUÂN PHONG (Hậu=900), không phải giá trị Tốt gốc (100). Nếu
+     quân vừa phong bị ăn lại ngay, SEE dùng thẳng movedVal=900 làm "quân bị
+     mất" — coi như ta vừa liều 1 Hậu SẴN CÓ, trong khi thực chất ta chỉ bỏ
+     ra đúng 1 Tốt (Hậu là "quà thêm" miễn phí từ luật phong cấp, không phải
+     tài sản đã có từ trước). Hậu quả: 1 nước phong Tốt ăn hời (VD 75.f8=Q
+     Rxf8 76.Kxf8 — đổi đúng 1 Tốt lấy 1 Xe, LÃI ~400cp) bị SEE tính ngược
+     thành "lỗ ~400cp" (coi mất Hậu 900 chỉ đổi lại được Xe 500), kích hoạt
+     nhầm điều kiện Brilliant dù đây chỉ là 1 nước phong cấp + đổi quân có
+     lợi bình thường, không hề "hy sinh". Fix: dùng giá trị TỐT GỐC (PVAL[1])
+     làm pieceVal cho SEE khi đây là nước phong cấp — phản ánh đúng tài sản
+     THỰC SỰ đang bị đem ra mạo hiểm. */
+  var _isPromoMove = !!(gUciHist && gUciHist[i] && gUciHist[i].length > 4);
+  var _seePieceVal = _isPromoMove ? PVAL[1] : info.movedVal;
   if(info.intoAttack && info.boardAfter != null){
-    /* Dùng boardAfter (board SAU khi đi): quân ta đã ở toSq, SEE tính exchange từ đó */
-    seeVal = seeOnSquare(info.boardAfter, info.toSq, info.movedVal, info.side);
+    /* ── FIX BUG (case 10.Bg5+ bị gán nhầm "hy sinh 330cp" dẫn tới Brilliant
+       sai — xem ván Reti–Tartakower 1910) ──
+       Nguyên nhân: seeOnSquare()/smallestAttacker() chỉ nhìn thuần vị trí
+       quân trên bàn cờ để tìm "quân nào có thể ăn lại", HOÀN TOÀN không biết
+       luật CHIẾU ĐÔI (double check) — khi 1 nước tạo ra chiếu đôi (ở đây:
+       Tượng chiếu trực tiếp d8-g5 + Xe d1 chiếu lộ qua cột d cùng lúc), bên
+       bị chiếu theo luật cờ CHỈ được đi Vua, không thể ăn lại bằng bất kỳ
+       quân nào khác dù quân đó "về mặt hình học" đang tấn công ô đích (ở
+       đây: Mã e4 tấn công g5, nhưng KHÔNG được phép ăn vì vẫn phải giải
+       quyết chiếu của Xe). SEE cũ không biết điều này nên tính nhầm Tượng
+       "sắp bị Mã ăn" → materialLostCp=330 ảo, kích hoạt sai điều kiện
+       Brilliant cho 1 nước THỰC RA hoàn toàn an toàn.
+       Fix: nếu nước này tạo chiếu đôi cho đối phương, quân vừa đi được coi
+       là an toàn tuyệt đối (bỏ qua SEE) — đúng luật cờ trong MỌI trường hợp,
+       không chỉ riêng ván này. */
+    var _isDoubleCheckMove = !!(info.givesCheck && isDoubleCheckMove(info.boardAfter, -info.side));
+    if (_isDoubleCheckMove) {
+      seeVal = 0;
+    } else {
+      /* Dùng boardAfter (board SAU khi đi): quân ta đã ở toSq, SEE tính exchange từ đó */
+      seeVal = seeOnSquare(info.boardAfter, info.toSq, _seePieceVal, info.side);
+    }
     seeValNet = seeVal + (info.capVal || 0);
     isSacrifice = (seeValNet <= -50);
   } else if(info.intoAttack){
@@ -4283,7 +4377,8 @@ function _buildClassifyInput(i){
          sn.m1 > 0: đối thủ (side sau nước) sắp thắng → người đi thua → mateActual = -sn.m1 (âm)
          sn.m1 < 0: đối thủ sắp thua → người đi thắng → mateActual = -sn.m1 (dương)
        Ưu tiên 3: sn.s1 === -9999 (noMove = chiếu hết ngay) → mateActual = 0. */
-    mateActual: (isBest && si.m1 !== null && si.m1 > 0)  ? (si.m1 - 1)
+    mateActual: (_playedMatchesPV2 && si.m2 !== null && si.m2 !== undefined && si.m2 > 0) ? (si.m2 - 1)
+              : (isBest && si.m1 !== null && si.m1 > 0)   ? (si.m1 - 1)
               : (sn.m1 !== null && sn.m1 !== 0)           ? -sn.m1
               : (sn.s1 === -9999)                         ? 0
               : null,
@@ -5797,7 +5892,7 @@ function _deepG1_soundSacrifice(cls, evalPcts, gAnFens, gMoveInfo, gMoveTexts, s
          còn lại (best/excellent/good/...) → "đẹp mắt". */
       var _sacAdj = (cls[i] === 'brilliant') ? 'thiên tài' : (cls[i] === 'great') ? 'xuất sắc' : 'đẹp mắt';
       return {
-        id: 'g1-soundsac-' + sideChar, group: 1, score: 78, sev: 'low', positive: true, icon: '♻️',
+        id: 'g1-soundsac-' + sideChar, group: 1, score: 78, sev: 'low', positive: true, icon: '♻️', moveIdx: i,
         text: sideLabel + ': nước thí quân ' + _sacAdj + ' ở <b>' + moveNum + (mvSide === 'w' ? '.' : '...') + (gMoveTexts[i] || '')
             + '</b>! Đánh đổi ' + Math.round(netDrop) + 'cp vật chất để đổi lấy một thế ép chiếu hết (Forced Mate). '
             + 'Sự sụt giảm về điểm vật chất được chuyển hóa hoàn toàn thành đòn dứt điểm ván đấu.'
@@ -5811,7 +5906,7 @@ function _deepG1_soundSacrifice(cls, evalPcts, gAnFens, gMoveInfo, gMoveTexts, s
     var _GREAT_CLS_SAC = {best:1, brilliant:1, great:1, great_defense:1, excellent:1};
     var _sacScore = _GREAT_CLS_SAC[cls[i]] ? 75 : 55;
     return {
-      id: 'g1-soundsac-' + sideChar, group: 1, score: _sacScore, sev: 'low', positive: true, icon: '♻️',
+      id: 'g1-soundsac-' + sideChar, group: 1, score: _sacScore, sev: 'low', positive: true, icon: '♻️', moveIdx: i,
       text: sideLabel + ': thí quân hợp lý ở nước <b>' + moveNum + (mvSide === 'w' ? '.' : '...')
           + (gMoveTexts[i] || '') + '</b> — hiệu số vật chất giảm khoảng ' + Math.round(netDrop)
           + 'cp ngay sau phản ứng của đối phương, nhưng % thắng gần như không đổi, cho thấy có đủ bù đắp (thế trận/thời cơ) cho quân đã mất.'
@@ -5819,6 +5914,69 @@ function _deepG1_soundSacrifice(cls, evalPcts, gAnFens, gMoveInfo, gMoveTexts, s
   }
   return null;
 }
+
+/* ĐÃ THÊM: Nêu bật nước cờ Brilliant (!!) — trước đây engine có gắn nhãn
+   "brilliant" cho từng nước (cls[i]==='brilliant') nhưng KHÔNG có candidate
+   riêng nào đảm bảo nêu ra nó trong báo cáo: chỉ có _deepG1_soundSacrifice
+   ở trên TÌNH CỜ nhắc tới nếu nước đó vừa khớp thêm đủ mọi điều kiện phụ
+   (netDrop >= MIN_SAC_CP, %thắng không tụt quá MAX_PCT_DROP...) — 1 nước
+   Brilliant thật sự (bản thân nhãn đã do bộ phân loại xác nhận rồi, không
+   cần suy luận lại) vẫn có thể trượt hết các điều kiện phụ đó và biến mất
+   hoàn toàn khỏi báo cáo. Giờ quét THẲNG cls[] tìm nhãn 'brilliant' của
+   đúng bên đang phân tích — có là chắc chắn nêu ra, điểm rất cao (90) để
+   gần như luôn lọt top, không phụ thuộc heuristic nào khác. */
+/* ĐÃ SỬA theo yêu cầu:
+   1) excludeIdxs — các nước Brilliant đã được MỤC KHÁC (vd _deepG1_soundSacrifice)
+      nhắc tới rồi thì bỏ ra khỏi danh sách ở đây, tránh nói trùng cùng 1 nước
+      2 lần trong báo cáo. Nếu sau khi loại trừ không còn nước nào → không tạo
+      candidate này nữa (return null) thay vì hiện câu rỗng/trùng.
+   2) Random hoá cả phần mở đầu (2 dạng) lẫn phần kết (5 dạng) mỗi lần sinh
+      báo cáo, để đỡ nhàm chán khi gặp lại cùng 1 mẫu câu nhiều ván khác nhau. */
+function _deepG1_brilliantMoves(cls, gMoveInfo, gMoveTexts, sideChar, sideLabel, excludeIdxs) {
+  var _excl = {};
+  if (excludeIdxs) { for (var e = 0; e < excludeIdxs.length; e++) { _excl[excludeIdxs[e]] = 1; } }
+  var idxs = [];
+  for (var i = 0; i < cls.length; i++) {
+    if (cls[i] !== 'brilliant') continue;
+    var mvSide = (gMoveInfo[i] && gMoveInfo[i].side === W) ? 'w' : 'b';
+    if (mvSide !== sideChar) continue;
+    if (_excl[i]) continue; /* đã được mục khác nhắc tới rồi -> bỏ qua, tránh lặp */
+    idxs.push(i);
+  }
+  if (!idxs.length) return null;
+  var moveTxts = idxs.map(function(i){
+    var moveNum = Math.floor(i / 2) + 1;
+    return moveNum + (sideChar === 'w' ? '.' : '...') + (gMoveTexts[i] || '');
+  });
+  var moveTxtHtml = '<b>' + moveTxts.join('</b>, <b>') + '</b>';
+  var countWord = (idxs.length >= 2) ? (idxs.length + ' nước Brilliant') : '1 nước Brilliant';
+
+  var _outros = [
+    'thoạt nhìn tưởng hy sinh quân vô lý nhưng thực chất là nước đi hay nhất mà một kỳ thủ bình thường khó nhận ra!',
+    'nước hy sinh quân táo bạo nhưng tuyệt hảo, vượt xa tầm tính toán thông thường.',
+    'nước đi hy sinh quân tinh tế và rất mạnh, một kỳ thủ thường sẽ khó nhìn ra.',
+    'thoạt nhìn như sai lầm nhưng lại là phương án tối ưu tuyệt đối!',
+    'cú hy sinh quân thiên tài vượt tầm tính toán thông thường!'
+  ];
+  var outro = _outros[Math.floor(Math.random() * _outros.length)];
+  var outroCap = outro.charAt(0).toUpperCase() + outro.slice(1);
+
+  var text;
+  if (Math.random() < 0.5) {
+    /* Dạng A: "...tìm ra 2 nước Brilliant!! bất ngờ ở nước 11.axb4, 13.Qxc6+, <outro thường>" */
+    text = sideLabel + ': tìm ra ' + countWord + '!! bất ngờ ở nước ' + moveTxtHtml + ', ' + outro;
+  } else {
+    /* Dạng B: "...tìm ra 2 nước Brilliant (11.axb4, 13.Qxc6+)! <Outro viết hoa>" */
+    text = sideLabel + ': tìm ra ' + countWord + ' (' + moveTxtHtml + ')! ' + outroCap;
+  }
+
+  return {
+    id: 'g1-brilliant-' + sideChar, group: 1, score: 90, sev: 'low', positive: true, icon: '💎',
+    text: text,
+    brilliantIdxs: idxs
+  };
+}
+
 
 /* 2) "Bước ngoặt" máy móc: nước có |delta %thắng| lớn nhất trong TOÀN
    VÁN mà KHÔNG bị cls đánh dấu lỗi (tức chủ động tạo ra, không phải đối
@@ -6039,6 +6197,18 @@ function _deepG1_onlyMove(cls, gMoveInfo, gMoveTexts, sideChar, sideLabel) {
     var ci = _buildClassifyInput(i);
     if (!ci || ci.isForced || ci.isImmediateRecapture || ci.isImmediateCheckmate) continue;
     if (ci.legalCount !== null && ci.legalCount < 5) continue; /* dưới 5 nước hợp lệ -> quá dễ nhìn ra, không tính là "khó nhận ra" */
+    /* ĐÃ THÊM: nếu nước này chỉ đơn giản là ĂN 1 quân đang bị treo hoặc
+       ăn HỜI (được nhiều hơn mất khi tính luôn nước đối phương ăn lại
+       — VD Tượng ăn Xe rồi bị Xe ăn lại: vẫn lãi ~200cp) thì KHÔNG tính
+       là "khó nhận ra" — bất kỳ ai cũng sẽ ăn quân có lợi rõ ràng như
+       vậy, "phương án khác thiệt hại nặng" chỉ vì phương án khác là
+       KHÔNG ăn quân, không phải vì nước này đặc biệt tinh tế.
+       ĐÃ SỬA: trước đây chỉ loại khi ăn HOÀN TOÀN miễn phí (không bị ăn
+       lại gì cả) — bỏ sót case ăn hời có đổi quân theo sau (đối phương
+       ăn lại quân mình, nhưng mình vẫn lãi đậm) như 18.Bxd8 Rxd8 (Tượng
+       đổi lấy Xe, lãi ~200cp) — case này thực tế cũng hiển nhiên không
+       kém, chỉ cần so giá trị quân là biết ngay nên ăn. */
+    if (ci.ownCaptureCp >= 300 && (ci.ownCaptureCp - ci.nextOpponentCaptureCp) >= 150) continue;
     if (ci.eval2ndBest === null || ci.eval2ndBest === undefined) continue;
     var cpLoss = Math.max(0, ci.evalBest - ci.evalActual);
     if (!ci.isBest && cpLoss > 20) continue;
@@ -6342,6 +6512,8 @@ function buildDeepInsightsGroup1(cls, evalPcts, cpLosses, gAnFens, gMoveInfo, gM
     if (wm) out.push(wm);
     var ss = _deepG1_soundSacrifice(cls, evalPcts, gAnFens, gMoveInfo, gMoveTexts, sideChar, label);
     if (ss) out.push(ss);
+    var bril = _deepG1_brilliantMoves(cls, gMoveInfo, gMoveTexts, sideChar, label, (ss && ss.moveIdx != null) ? [ss.moveIdx] : null);
+    if (bril) out.push(bril);
     var tm = _deepG1_topTurningMove(cls, evalPcts, gMoveInfo, gMoveTexts, sideChar, label);
     if (tm) out.push(tm);
     var bs = _deepG1_bestMoveStreak(cls, gMoveInfo, gMoveTexts, sideChar, label);
@@ -8416,7 +8588,7 @@ function _narrLowerFirst(str) {
   return str.charAt(0).toLowerCase() + str.slice(1);
 }
 
-function _narrOverviewText(cls, evalPcts, sideChar, oppChar, sideLabel, oppLabel, winnerSide, accuracy, opnCand, volCand, termination, gAnFens, gMoveTexts, gAnScores) {
+function _narrOverviewText(cls, evalPcts, sideChar, oppChar, sideLabel, oppLabel, winnerSide, accuracy, opnCand, volCand, termination, gAnFens, gMoveTexts, gAnScores, gMoveInfo) {
   var totalMoves = Math.ceil(cls.length / 2);
 
   /* ĐÃ THÊM: bôi đậm riêng TÊN người chơi (nếu có) trong câu #1 — CHỈ áp
@@ -8425,6 +8597,14 @@ function _narrOverviewText(cls, evalPcts, sideChar, oppChar, sideLabel, oppLabel
      dùng chung biến sideLabel gốc). Nếu sideLabel có dạng "Tên (Màu)"
      thì bôi đậm phần Tên; nếu chỉ là "Trắng"/"Đen" (không có tên thật)
      thì giữ nguyên, không có gì để bôi đậm riêng. */
+  /* ĐÃ THÊM: tách riêng tên người chơi (không kèm "(Trắng)"/"(Đen)") để
+     dùng cho câu nhắc nước Brilliant ở cuối — muốn nói "Edward Lasker đã
+     có..." thay vì lặp lại "Trắng đã có...". Nếu sideLabel không có tên
+     thật (chỉ "Trắng"/"Đen") thì dùng lại chính nó. */
+  var _plainName = sideLabel;
+  var _nameMatch = /^([^(]+)\(/.exec(sideLabel);
+  if (_nameMatch) _plainName = _nameMatch[1].trim();
+
   sideLabel = sideLabel.replace(/^([^(]+)\(/, 'Kỳ thủ <b>$1</b>(');
 
   /* Lý do kết thúc — ĐÃ SỬA: trước đây CHỈ đọc chuỗi [Termination] trong
@@ -8627,8 +8807,24 @@ function _narrOverviewText(cls, evalPcts, sideChar, oppChar, sideLabel, oppLabel
     }
   }
 
+  /* ĐÃ THÊM: nêu số nước Brilliant (!!) ngay trong Tổng quan — nổi bật
+     nhất trong toàn ván nên xứng đáng được nhắc tới ở đây (ngoài mục
+     riêng "Nước cờ Brilliant" nếu lọt top 3-5). */
+  var brilliantTxt = '';
+  if (gMoveInfo) {
+    var _brilCount = 0;
+    for (var _bi = 0; _bi < cls.length; _bi++) {
+      if (cls[_bi] !== 'brilliant') continue;
+      var _bSide = (gMoveInfo[_bi] && gMoveInfo[_bi].side === W) ? 'w' : 'b';
+      if (_bSide === sideChar) _brilCount++;
+    }
+    if (_brilCount >= 1) {
+      brilliantTxt = ' ' + _plainName + ' đã có ' + (_brilCount >= 2 ? _brilCount + ' nước đi Thiên tài' : '1 nước đi Thiên tài') + ' trong ván này!';
+    }
+  }
+
   return 'Ván đấu kéo dài <b>' + totalMoves + ' nước</b>' + accTxt + ' ' + resultTxtCapped + '.'
-       + volTxt;
+       + volTxt + brilliantTxt;
 }
 
 
@@ -8676,9 +8872,10 @@ var LEFTOVER_ID_MAP = {
      sách "chưa xếp" thay vì biến mất. */
   'meta-opening-state':  45,
   'meta-turning-point':  46,
-  'meta-missed-chances': 47
+  'meta-missed-chances': 47,
+  'g1-brilliant':        48
 };
-var NUM_AFTER_MAP = 48; /* candidate lạ chưa có trong bảng -> đánh số nối tiếp từ đây */
+var NUM_AFTER_MAP = 49; /* candidate lạ chưa có trong bảng -> đánh số nối tiếp từ đây */
 
 /* ── Tiêu đề hiển thị cho từng loại candidate khi lọt vào top 3-5 ý
    chính (xem buildGameNarrative, phần "POOL HỢP NHẤT"). Không cần phủ
@@ -8693,6 +8890,7 @@ var _NARR_BULLET_TITLE_MAP = {
   'meta-turning-point':  'Bước ngoặt đầu tiên',
   'meta-opening-state':  'Trạng thái sau khai cuộc',
   'g1-soundsac':         'Quyết định hay nhất',
+  'g1-brilliant':        'Nước cờ Brilliant',
   'g1-bishoppair':       'Quyết định hay nhất',
   'g1-turnmove':         'Quyết định hay nhất',
   'g1-streak':           'Quyết định hay nhất',
@@ -8779,7 +8977,7 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
   push(1, 'Tổng quan', _narrOverviewText(
     cls, evalPcts, sideChar, oppChar, sideLabel,
     (oppChar === 'w') ? whiteLabel : blackLabel,
-    winnerSide, accuracy, opnForOverview, volCand, termination, gAnFens, gMoveTexts, gAnScores
+    winnerSide, accuracy, opnForOverview, volCand, termination, gAnFens, gMoveTexts, gAnScores, gMoveInfo
   ), undefined, true, '📖');
 
   /* #2 Khai cuộc & thế trận ban đầu — được push NGAY SAU KHI có openingStateText (xem đoạn ~140 dòng dưới,
@@ -8870,6 +9068,19 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
   var transitionText = g5Result ? _narrG11_transition(g5Result, g11Pool, evalPcts, gMoveInfo, sideChar, sideLabel) : null;
   var turningText = g5Result ? (g5Result.text + (transitionText ? ' ' + transitionText : '')) : null;
 
+  /* ĐÃ THÊM: nếu "Bước ngoặt" và "Sai lầm quan trọng nhất" cùng nhắc
+     ĐÚNG 1 nước, ưu tiên "Bước ngoặt" (đã kể chuyện đầy đủ hơn: % thắng
+     đổi thế nào + giai đoạn chuyển hoá) và bỏ hẳn dòng "Sai lầm quan
+     trọng" trùng nước đó — tránh nói 2 lần cùng 1 nước theo 2 kiểu khác
+     nhau. Đánh dấu vào _dupMistakeIds để mục "chưa xếp" ở cuối cũng
+     không lặp lại nó. */
+  if (turningText && g5Result && g5Result.idx >= 0) {
+    mistakeCandidates = mistakeCandidates.filter(function(c){
+      if (c.moveIdx === g5Result.idx) { _dupMistakeIds.push(c.id); return false; }
+      return true;
+    });
+  }
+
   /* --- Đánh giá lối chơi — MỖI ý (an toàn Vua, cột mở, cấu trúc Tốt...)
      giờ cạnh tranh RIÊNG LẺ thay vì gộp cứng 1 khối như bản 14-mục cũ,
      để có thể chọn/loại từng ý theo đúng độ quan trọng của chính nó.
@@ -8901,7 +9112,7 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
   if (_openingSectionText) push(2, 'Khai cuộc & thế trận ban đầu', _openingSectionText, undefined, true, '➡️');
 
   /* --- Quyết định hay nhất --- */
-  var g6Pool = bySideSuffix(g1All).filter(function(c){ return c.positive === true && c.id.indexOf('g1-checkstreak') !== 0 && c.id.indexOf('g1-onlymove') !== 0 && c.id.indexOf('g1-drawsave') !== 0 && c.id.indexOf('g1-underpromo') !== 0 && c.id.indexOf('g1-tenacious') !== 0 && c.id.indexOf('g1-simplify') !== 0; })
+  var g6Pool = bySideSuffix(g1All).filter(function(c){ return c.positive === true && c.id.indexOf('g1-checkstreak') !== 0 && c.id.indexOf('g1-onlymove') !== 0 && c.id.indexOf('g1-drawsave') !== 0 && c.id.indexOf('g1-underpromo') !== 0 && c.id.indexOf('g1-tenacious') !== 0 && c.id.indexOf('g1-simplify') !== 0 && c.id.indexOf('g1-brilliant') !== 0; })
                      .sort(function(a,b){ return b.score - a.score; });
   /* Chuỗi chiếu liên hoàn: trước đây nằm chung g6Pool nên chỉ có 1 ý "Quyết định hay nhất" được vào pool
      (thường bị ý điểm cao hơn như bước ngoặt tự tạo chiếm chỗ) → chuỗi chiếu đẹp mắt không bao giờ được khen.
@@ -8916,12 +9127,16 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
   bySideSuffix(g1All).forEach(function(c){ if (c.id.indexOf('g1-underpromo') === 0) underCand = c; });
   var onlyCand = null; /* Nước đi duy nhất: cũng xét riêng, không tranh suất g6Pool[0] */
   bySideSuffix(g1All).forEach(function(c){ if (c.id.indexOf('g1-onlymove') === 0) onlyCand = c; });
+  var brilCand = null; /* Nước cờ Brilliant: xét riêng, điểm rất cao (90) — gần như luôn lọt top,
+     không tranh suất "Quyết định hay nhất" (g6Pool[0]) với các loại insight khác. */
+  bySideSuffix(g1All).forEach(function(c){ if (c.id.indexOf('g1-brilliant') === 0) brilCand = c; });
 
   /* --- Gộp TẤT CẢ thành 1 pool duy nhất để chấm điểm + chọn top 3-5 --- */
   var pool = [];
   mistakeCandidates.forEach(function(c){ pool.push(c); });
   if (missedText) pool.push({id: 'meta-missed-chances', score: missedScore || 50, text: missedText, moveIdx: missedFirstIdx, positive: false, icon: '🤦'});
   if (turningText) pool.push({id: 'meta-turning-point', score: 68, text: turningText, moveIdx: g5Result.idx, positive: g5Result.favorable, icon: (g5Result.favorable ? '📈' : '📉')});
+  if (brilCand) pool.push({id: brilCand.id, score: brilCand.score, text: brilCand.text, moveIdx: brilCand.brilliantIdxs ? brilCand.brilliantIdxs[0] : _extractMoveIdxFromCandText(brilCand.text, sideChar), positive: true, icon: brilCand.icon});
   if (g6Pool[0]) pool.push({id: g6Pool[0].id, score: g6Pool[0].score, text: g6Pool[0].text, moveIdx: _extractMoveIdxFromCandText(g6Pool[0].text, sideChar), positive: true, icon: g6Pool[0].icon});
   if (chkCand) {
     var _chkScore = chkCand.score; /* điểm đã tính sẵn theo độ dài chuỗi trong _deepG1_checkStreak */
@@ -8957,7 +9172,17 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
      gặp theo thứ tự nước đi (selected đã sắp theo moveIdx ở trên); màu
      nền = màu chung nếu mọi ý trong nhóm cùng loại ưu/nhược điểm, còn
      lẫn lộn thì để màu mặc định. */
-  var _titleGroups = {}, _titleOrder = [];
+  /* ĐÃ SỬA BUG THỨ TỰ: trước đây gom TẤT CẢ item cùng tiêu đề vào 1
+     group bất kể chúng có liền kề nhau trong thứ tự nước đi hay không
+     (dùng object keyed theo title + vị trí "lần đầu gặp title" để chèn
+     group) — khiến 1 item ở nước 42 bị "kéo ngược" lên đứng cạnh item
+     cùng tiêu đề ở nước 12, trong khi 1 item ở GIỮA (khác tiêu đề,
+     cũng ở nước 12) lại bị đẩy xuống sau, ra thứ tự đọc lộn xộn
+     (12 → 42 → 12). Giờ dùng mảng TUẦN TỰ theo đúng `selected` (đã
+     sort theo moveIdx): chỉ gộp vào group hiện tại nếu tiêu đề trùng
+     với block NGAY TRƯỚC ĐÓ (liền kề thật sự); khác tiêu đề hoặc không
+     liền kề thì mở block mới — giữ đúng mạch thời gian nước đi. */
+  var _blocks = [];
   selected.forEach(function(c){
     var baseId = _selfin_baseId(c.id);
     var title = _narrTitleForBaseId(baseId);
@@ -8972,7 +9197,6 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
        đi có lợi/hại rõ ràng để tô màu theo phe. */
     else if (baseId === 'meta-opening-state') kind = undefined;
     else kind = c.positive ? 'good' : 'bad';
-    if (!_titleGroups[title]) { _titleGroups[title] = {fixedNum: fixedNum, texts: [], kinds: []}; _titleOrder.push(title); }
     /* ĐÃ SỬA — LỖI THỰC TẾ: nhiều candidate (VD g1-streak, g3-king-center)
        vẫn dùng nhãn kiểu cũ "Tên — Trắng: ..." (chưa migrate hết). Hàm
        dọn nhãn ở renderer (_deepStripName) xoá TỪ ĐẦU DÒNG tới hết phần
@@ -8981,13 +9205,18 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
        bạn báo). Giờ dọn "Tên — " (nếu có) NGAY TẠI ĐÂY, TRƯỚC khi ghép
        icon vào, để icon luôn đứng sau bước dọn, không bao giờ bị xoá. */
     var _cleanedForIcon = c.text.replace(/^[^:<]*—\s*(?=(Trắng|Đen):)/, '');
-    _titleGroups[title].texts.push((c.icon || '') + ' ' + _cleanedForIcon);
-    _titleGroups[title].kinds.push(kind);
+    var _lineText = (c.icon || '') + ' ' + _cleanedForIcon;
+    var _last = _blocks.length ? _blocks[_blocks.length - 1] : null;
+    if (_last && _last.title === title) {
+      _last.texts.push(_lineText);
+      _last.kinds.push(kind);
+    } else {
+      _blocks.push({fixedNum: fixedNum, title: title, texts: [_lineText], kinds: [kind]});
+    }
   });
-  _titleOrder.forEach(function(title){
-    var g = _titleGroups[title];
+  _blocks.forEach(function(g){
     var sameKind = g.kinds.every(function(k){ return k === g.kinds[0]; });
-    push(g.fixedNum, title, g.texts.join('<br>'), sameKind ? g.kinds[0] : undefined, true);
+    push(g.fixedNum, g.title, g.texts.join('<br>'), sameKind ? g.kinds[0] : undefined, true);
   });
 
   /* #14 Kết luận — ĐÃ BỎ theo yêu cầu (thừa: #1 Tổng quan đã nói ai
@@ -9004,7 +9233,7 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
      trong bảng sẽ tự rơi xuống cuối, đánh số nối tiếp từ NUM_AFTER_MAP để
      không bao giờ mất dữ liệu. */
   var usedIds = {};
-  [volCand, opnForOverview].concat(g6Pool[0] ? [g6Pool[0]] : [], chkCand ? [chkCand] : [], onlyCand ? [onlyCand] : [], underCand ? [underCand] : [], tenCand ? [tenCand] : [], simCand ? [simCand] : [], reversalCand ? [reversalCand] : [], drawThrowCand ? [drawThrowCand] : [], drawSaveCand ? [drawSaveCand] : [], g7Pool, g8Pool, g11Pool, g12Pool)
+  [volCand, opnForOverview].concat(g6Pool[0] ? [g6Pool[0]] : [], chkCand ? [chkCand] : [], onlyCand ? [onlyCand] : [], underCand ? [underCand] : [], tenCand ? [tenCand] : [], simCand ? [simCand] : [], reversalCand ? [reversalCand] : [], drawThrowCand ? [drawThrowCand] : [], drawSaveCand ? [drawSaveCand] : [], brilCand ? [brilCand] : [], g7Pool, g8Pool, g11Pool, g12Pool)
     .forEach(function(c){ if (c) usedIds[c.id] = true; });
   _dupMistakeIds.forEach(function(id){ usedIds[id] = true; }); /* xem comment ở chỗ tạo _dupMistakeIds */
   var leftoverFromPool = pool.filter(function(c){ return !selectedIds[c.id]; });
@@ -9174,12 +9403,12 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
      số ACPL hay không — tránh trùng lặp (nếu insight đã hiện số + nhận định,
      Tóm tắt không cần nhắc lại số đó lần nữa). */
   function _acplJudgment(v){
-    /* Các mức theo yêu cầu: < 5 rất tốt; 5-7 tốt; 7-60 hơi cao; > 60 giữ như cũ (60-120 khá cao, > 120 rất cao). Không còn vùng im lặng. */
+    /* Các mức theo yêu cầu: < 5 rất tốt; 5-10 tốt; 10-60 hơi cao; > 60 giữ như cũ (60-120 khá cao, > 120 rất cao). Không còn vùng im lặng. */
     if (v > 0 && v < 5) return {tag:'rất tốt', sev:'low', icon:'✅',
       hint:'Chơi gần như hoàn hảo trong ván này!'};
-    if (v >= 5 && v < 7) return {tag:'tốt', sev:'low', icon:'✅',
+    if (v >= 5 && v < 10) return {tag:'tốt', sev:'low', icon:'✅',
       hint:'Chơi rất chính xác trong ván này!'};
-    if (v >= 7 && v <= 60) return {tag:'hơi cao', sev:'low', icon:'📈',
+    if (v >= 10 && v <= 60) return {tag:'hơi cao', sev:'low', icon:'📈',
       hint:'Chơi tương đối ổn nhưng còn vài nước chưa chính xác!'};
     if (v > 120) return {tag:'rất cao', sev:'high', icon:'📉',
       hint:'Nhiều sai lầm lớn — nên chậm lại, kiểm tra kỹ trước khi đi quân, đặc biệt các nước ăn quân/chiếu của đối thủ.'};
@@ -9830,7 +10059,11 @@ function _anCollectDeepReverifyTargets(){
        Fix: bắt điều kiện A dùng CHUNG ràng buộc cpLoss với điều kiện B (vùng
        DEEP_REVERIFY_CPLOSS_MIN..MAX) — chỉ re-verify khi cpLoss gốc còn nằm
        trong vùng mơ hồ, không áp dụng cho Blunder đã hiển nhiên. */
-    var cpLossAmbiguous = (cpLoss > DEEP_REVERIFY_CPLOSS_MIN && cpLoss <= DEEP_REVERIFY_CPLOSS_MAX);
+    /* ── FIX (case 5...e5 ván Reti–Tartakower 1910): biên dưới trước đây
+       dùng '>' (chặt), loại bỏ đúng cpLoss=20 (BẰNG DEEP_REVERIFY_CPLOSS_MIN)
+       dù nó thoả mọi phần khác của điều kiện A (isSacrifice + chiếu cùng bên
+       2 ply sau, từ 11...Qa5+) — đổi thành '>=' để nhận cả biên. */
+    var cpLossAmbiguous = (cpLoss >= DEEP_REVERIFY_CPLOSS_MIN && cpLoss <= DEEP_REVERIFY_CPLOSS_MAX);
     var infoI  = gMoveInfo[i];
     var infoI2 = gMoveInfo[i+2];
     var condA = !!(infoI && infoI2 && infoI2.givesCheck && infoI2.side === infoI.side && cpLossAmbiguous);
@@ -9860,7 +10093,7 @@ function _anDeepReverifyPass(indices, cb){
   var doneCount = 0;
   var total = indices.length;
   function updateProgressUi(){
-    if (btnEl) btnEl.innerHTML = '\u{1F50D} Reverifying ' + doneCount + '/' + total + '...';
+    if (btnEl) btnEl.innerHTML = '\u{1F50D} Refining ' + doneCount + '/' + total + '...';
   }
   function maybeFinish(){
     if (doneCount >= total) cb();
@@ -10112,15 +10345,29 @@ function _finishAnalysisRender(){
     if(loss===null) return 100;
     return Math.max(0,Math.min(100,103.1668*Math.exp(-0.04354*loss)-3.1669));
   }
-  /* Accuracy: tính theo tỉ lệ đếm (Brilliant+Great+Best+Excellent+Book)/Tổng số nước
+  /* Accuracy: tính theo tỉ lệ đếm (Brilliant+Great+Best+Excellent+Book+Forced)/Tổng số nước
      mỗi bên — thay cho công thức win%-cpLoss kiểu chess.com/lichess thực tế dùng.
-     Đơn giản/trực quan hơn nhưng thô hơn (nhị phân đạt/không đạt 1 trong 5 tier
-     cao nhất, không phân biệt mức độ trong cùng 1 nước). */
-  var GOOD_TIERS = {brilliant:1, great:1, great_defense:1, best:1, excellent:1, book:1};
+     Đơn giản/trực quan hơn nhưng thô hơn (nhị phân đạt/không đạt 1 trong các tier
+     cao nhất, không phân biệt mức độ trong cùng 1 nước).
+     ĐÃ SỬA BUG: thiếu 'forced' trong GOOD_TIERS — nước "Forced" (chỉ có ĐÚNG 1
+     nước hợp lệ, VD bị chiếu liên hoàn phải chạy Vua) không hề là sai lầm (không
+     có lựa chọn nào khác để so sánh), cpLoss của nó luôn ~0 nên KHÔNG kéo ACPL
+     xuống, nhưng trước đây lại bị tính là "trượt" trong Accuracy vì 'forced'
+     không nằm trong GOOD_TIERS — khiến 1 chuỗi bị chiếu ép buộc-phải-chạy-Vua
+     (như ván Lasker–Thomas 1912, Đen có 6 nước Forced liền) làm Accuracy tụt
+     rất thấp (41%) dù ACPL vẫn "hơi cao" bình thường (26.1) — 2 số liệu MÂU
+     THUẪN nhau do đúng lỗi thiếu sót này, không phải vì đo 2 thứ khác nhau.
+     Nơi khác trong code (CLS_TO_BUCKET) đã xếp forced chung nhóm "ok" với
+     book/best từ trước — sửa GOOD_TIERS cho khớp logic đó. */
+  /* Accuracy: đếm theo tier như cũ, nhưng KHÔNG còn nhị phân 100/0 tuyệt đối —
+     Excellent được cho điểm thấp hơn 1 chút (80) vì bản thân tier này vẫn có
+     cpLoss > 0 (dù nhỏ), không nên chấm ngang tuyệt đối với Best/Book/Forced/
+     Brilliant/Great (cpLoss ≈ 0). Các tier còn lại giữ nguyên 100. */
+  var GOOD_TIERS = {brilliant:100, great:100, great_defense:100, best:100, excellent:80, book:100, forced:100};
   var accW=[], accB=[];
   for(var i=0;i<gMoveTexts.length;i++){
     var side=(gMoveInfo[i]&&gMoveInfo[i].side===W)?'w':'b';
-    var hit = GOOD_TIERS[cls[i]] ? 100 : 0;
+    var hit = GOOD_TIERS[cls[i]] !== undefined ? GOOD_TIERS[cls[i]] : 0;
     if(side==='w') accW.push(hit);
     else           accB.push(hit);
   }
@@ -20793,7 +21040,6 @@ if (nodeHost) {
   });
 
 }
-
 
 </script>
 </body>
