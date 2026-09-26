@@ -5875,7 +5875,81 @@ var OPENING_FAMILY_VI = {
   'Center Game': 'Khai cuộc Trung tâm',
   'London System': 'Hệ thống London'
 };
+/* Dựng {familyVi, familyEn, variation, eco, display} từ tag [Opening]/[ECO]
+   đọc thẳng trong PGN gốc (xem gPgnOpeningTag/gPgnEcoTag, gán ở
+   _analyzeTabRunWithText). openingTag dạng "Family" hoặc "Family: Variation"
+   (chuẩn PGN chess.com/lichess), giống hệt cách tách hit.name của
+   ChessOpeningBook — tái dùng luôn OPENING_FAMILY_VI để dịch, không dịch
+   được thì giữ tên gốc tiếng Anh (còn hơn không có gì). */
+function _openingFullFromHeaderTag(openingTag, ecoTag) {
+  if (!openingTag) return null;
+  var familyEn = openingTag, variation = null;
+  var colonIdx = openingTag.indexOf(':');
+  if (colonIdx !== -1) {
+    familyEn = openingTag.slice(0, colonIdx).trim();
+    variation = openingTag.slice(colonIdx + 1).trim();
+  }
+  var familyVi = OPENING_FAMILY_VI[familyEn] || familyEn;
+  var eco = ecoTag || '';
+  return {
+    familyVi: familyVi,
+    familyEn: familyEn,
+    variation: variation,
+    eco: eco,
+    display: familyVi + (variation ? ' biến ' + variation : '') + (eco ? ' (' + eco + ')' : '')
+  };
+}
+/* Tìm family khai cuộc nếu CHỈ nhìn đúng NƯỚC ĐI ĐẦU TIÊN (dùng để phát
+   hiện transposition — so sánh với family thật lấy từ tag PGN/opening book
+   full). Chỉ khớp khi ECO_OPENINGS có 1 entry mà chuỗi nước đi của nó
+   NGẮN GỌN đúng bằng 1 nước (VD "c2c4" → English Opening) — không cố khớp
+   những entry dài hơn ở đây, vì mục đích chỉ là mô phỏng lại đúng kiểu suy
+   luận "nhìn nước đầu là đoán tên" gây ra bug ban đầu. */
+function _firstMoveOpeningFamily(gUciHist) {
+  if (!gUciHist || !gUciHist.length) return null;
+  /* SỬA LỖI (ReferenceError: ECO_OPENINGS is not defined): ECO_OPENINGS
+     KHÔNG phải biến global — nó là biến cục bộ bên trong IIFE tạo ra
+     ChessOpeningBook (xem "(function (global) { ... var ECO_OPENINGS = [...";
+     chỉ được lộ ra ngoài qua ChessOpeningBook.ECO_OPENINGS trong object
+     `api` cuối module. Gọi thẳng tên "ECO_OPENINGS" như biến global (như
+     bản vá trước) ném ReferenceError, làm cả buildGameNarrative bị try/catch
+     nuốt lỗi, khiến TOÀN BỘ phần "Phân tích ván đấu" hiện trống trơn — dù
+     chỉ 1 mục con (khai cuộc) bị lỗi. */
+  if (typeof ChessOpeningBook === 'undefined' || !ChessOpeningBook.ECO_OPENINGS) return null;
+  var _ecoOpenings = ChessOpeningBook.ECO_OPENINGS;
+  var first = gUciHist[0];
+  for (var k = 0; k < _ecoOpenings.length; k++) {
+    if (_ecoOpenings[k][3] === first) return _ecoOpenings[k][0];
+  }
+  return null;
+}
 function _lookupOpeningFull(gUciHist) {
+  /* Ưu tiên 1 (MỚI, theo đề xuất dev) — ECO/Opening ghi sẵn trong PGN gốc:
+     đáng tin hơn hẳn 1 detector tự suy luận từ trình tự nước đi (dù có
+     opening book đầy đủ), vì đây là dữ liệu do CHÍNH nguồn phát hành ván
+     đấu (chess.com, lichess, FIDE broadcast...) đã xác định — tính đúng
+     luôn cả TRANSPOSITION (chuyển vị), thứ mà 1 detector chỉ nhìn nước đi
+     dễ bỏ sót hoặc nhận nhầm theo NƯỚC ĐẦU TIÊN.
+     Case cụ thể gây bug: PGN ghi ECO "E71" + Opening "King's Indian
+     Defense: Karpov System", nhưng ván bắt đầu 1.c4 → detector cũ gọi nhầm
+     "Khai cuộc Anh (A10)" dù đã chuyển hẳn sang King's Indian từ nước 4.
+     CHỈ dùng khi PGN THỰC SỰ có tag Opening (gPgnOpeningTag) — không suy
+     đoán khi PGN không có tag này (fallback xuống Ưu tiên 2 bên dưới). */
+  if (typeof gPgnOpeningTag !== 'undefined' && gPgnOpeningTag) {
+    var hdrFull = _openingFullFromHeaderTag(gPgnOpeningTag, gPgnEcoTag);
+    if (hdrFull) {
+      /* Phát hiện transposition: so family thật (từ tag) với family suy ra
+         nếu CHỈ nhìn nước đầu — khác nhau thì đánh dấu để câu tường thuật
+         nói rõ "bắt đầu bằng X nhưng chuyển sang Y" thay vì chỉ nói Y suông. */
+      var _firstFam = _firstMoveOpeningFamily(gUciHist);
+      if (_firstFam && _firstFam !== hdrFull.familyEn) {
+        hdrFull.transposedFrom = _firstFam;
+      }
+      return hdrFull;
+    }
+  }
+  /* Ưu tiên 2 (fallback) — opening book/move-tree tự suy luận từ nước đi,
+     như cũ, dùng khi PGN không có tag [Opening]. */
   if (typeof ChessOpeningBook === 'undefined' || !gUciHist || !gUciHist.length) return null;
   /* ĐÃ SỬA (chống crash): thư viện ngoài mới nhúng, chưa test hết mọi
      trường hợp (VD phong cấp, nhập thành lạ...) — nếu nó ném lỗi thì chỉ
@@ -5896,7 +5970,7 @@ function _lookupOpeningFull(gUciHist) {
       familyVi: familyVi,
       variation: variation,
       eco: hit.eco,
-      display: familyVi + (variation ? ', biến ' + variation : '') + ' (' + hit.eco + ')'
+      display: familyVi + (variation ? ' biến ' + variation : '') + ' (' + hit.eco + ')'
     };
   } catch (_openingErr) {
     console.error('[ChessCoach] ChessOpeningBook lỗi, bỏ qua nhận diện khai cuộc:', _openingErr);
@@ -5908,7 +5982,8 @@ function _deepG0_openingName(gUciHist) {
   if (!full) return null;
   return {
     id: 'g0-opening', group: 0, score: 30, sev: 'low', positive: true, icon: '📖',
-    text: 'Khai cuộc: <b>' + full.display + '</b>.'
+    text: 'Khai cuộc: <b>' + full.display + '</b>.',
+    transposedFrom: full.transposedFrom || null
   };
 }
 
@@ -7906,6 +7981,113 @@ function buildDeepInsightsGroup5(cls, cpLosses, gMoveInfo, gAnFens, gMoveTexts, 
   return out;
 }
 
+/* ============================================================
+   NHÓM 6 (MỚI) — ƯU THẾ CHẤT (Material Imbalance)
+   Theo đề xuất dev: Tool trước đây chỉ theo dõi Tốt (isolated/doubled...ở
+   Nhóm 4) mà hoàn toàn "mù" trước thay đổi CHẤT LƯỢNG quân — đổi Xe lấy
+   Tượng/Mã (thí chất ăn Tốt bù lại), mất Hậu, hay đơn giản là 1 bên có
+   nhiều điểm chất hơn hẳn dù không mất quân theo kiểu "ăn hụt". Khác hẳn
+   Nhóm 4 (chỉ nhìn cấu trúc Tốt), nhóm này nhìn TẬP HỢP quân nặng+nhẹ
+   (Hậu/Xe/Tượng/Mã) của 2 bên, không quan tâm số Tốt.
+   ============================================================ */
+
+/* Đếm quân theo LOẠI (không tính Tốt/Vua) cho 1 màu tại 1 bàn cờ (board
+   array kiểu boardArrayFromFen().board). */
+function _g6_pieceProfile(board, color) {
+  var Q = (color === 'w') ? WQ : BQ, R = (color === 'w') ? WR : BR,
+      Bp = (color === 'w') ? WB : BB, N = (color === 'w') ? WN : BN;
+  var p = {Q:0, R:0, B:0, N:0};
+  for (var s = 0; s < 64; s++) {
+    var pc = board[s];
+    if (pc === Q) p.Q++; else if (pc === R) p.R++; else if (pc === Bp) p.B++; else if (pc === N) p.N++;
+  }
+  return p;
+}
+function _g6_profileKey(p) { return 'Q' + p.Q + 'R' + p.R + 'B' + p.B + 'N' + p.N; }
+function _g6_profilePoints(p) { return p.Q * 9 + p.R * 5 + p.B * 3 + p.N * 3; }
+/* Mô tả ngắn gọn 1 bộ quân, VD {R:2} -> "2 Xe", {R:1,B:1} -> "1 Xe + 1 Tượng".
+   Bỏ qua loại quân = 0. */
+function _g6_describeProfile(p) {
+  var parts = [];
+  if (p.Q > 0) parts.push(p.Q + ' Hậu');
+  if (p.R > 0) parts.push(p.R + ' Xe');
+  if (p.B > 0) parts.push(p.B + ' Tượng');
+  if (p.N > 0) parts.push(p.N + ' Mã');
+  return parts.length ? parts.join(' + ') : 'không còn quân nặng/nhẹ nào';
+}
+
+/* Tìm mốc BẮT ĐẦU của tình trạng chất lượng hiện tại (ở ply cuối cùng có
+   dữ liệu): quét NGƯỢC từ cuối, tìm ply SỚM NHẤT mà từ đó tới hết ván,
+   profile (của CẢ 2 màu, ghép lại thành 1 key) không đổi — đó là mốc
+   "ổn định" gần nhất, tránh báo nhầm mốc là ngay lúc vừa xảy ra trao đổi
+   gần cuối ván nếu tình trạng đó thực ra đã tồn tại từ lâu hơn. */
+function _g6_findStableStart(gAnFens, endIdx) {
+  if (!gAnFens || !gAnFens[endIdx]) return endIdx;
+  var endBoard = boardArrayFromFen(gAnFens[endIdx]).board;
+  var endKey = _g6_profileKey(_g6_pieceProfile(endBoard, 'w')) + '|' + _g6_profileKey(_g6_pieceProfile(endBoard, 'b'));
+  var start = endIdx;
+  for (var i = endIdx - 1; i >= 0; i--) {
+    if (!gAnFens[i]) break;
+    var b = boardArrayFromFen(gAnFens[i]).board;
+    var k = _g6_profileKey(_g6_pieceProfile(b, 'w')) + '|' + _g6_profileKey(_g6_pieceProfile(b, 'b'));
+    if (k !== endKey) break;
+    start = i;
+  }
+  return start;
+}
+
+function _deepG6_materialImbalance(gAnFens, gMoveTexts, sideChar, sideLabel, oppLabel) {
+  if (!gAnFens || !gAnFens.length) return null;
+  var endIdx = gAnFens.length - 1;
+  var board = boardArrayFromFen(gAnFens[endIdx]).board;
+  var mine = _g6_pieceProfile(board, sideChar);
+  var oppChar = (sideChar === 'w') ? 'b' : 'w';
+  var opp = _g6_pieceProfile(board, oppChar);
+  var myKey = _g6_profileKey(mine), oppKey = _g6_profileKey(opp);
+  if (myKey === oppKey) return null; /* 2 bên còn ĐÚNG cùng 1 bộ quân — không có gì để báo */
+
+  var myPts = _g6_profilePoints(mine), oppPts = _g6_profilePoints(opp);
+  var diff = myPts - oppPts;
+  /* Chỉ báo khi chênh lệch đủ lớn để có ý nghĩa thực chiến — dưới 2 điểm
+     (VD chỉ hơn 1 Tốt quy đổi lặt vặt do làm tròn) thì bỏ qua, tránh nhiễu
+     với những khác biệt không đáng kể. */
+  if (Math.abs(diff) < 2) return null;
+
+  var startIdx = _g6_findStableStart(gAnFens, endIdx);
+  var startMoveNum = Math.floor(startIdx / 2) + 1;
+  var startSideCh = (startIdx % 2 === 0) ? '.' : '...';
+
+  var aheadChar = (diff > 0) ? sideChar : oppChar;
+  var aheadLabel = (aheadChar === sideChar) ? sideLabel : oppLabel;
+  var aheadProfile = (aheadChar === sideChar) ? mine : opp;
+  var behindProfile = (aheadChar === sideChar) ? opp : mine;
+  var isPositive = (aheadChar === sideChar);
+
+  var text = 'Từ nước <b>' + startMoveNum + startSideCh + (gMoveTexts[startIdx] || '') + '</b>, '
+      + aheadLabel + ' thi đấu với lợi thế hơn chất: ' + _g6_describeProfile(aheadProfile)
+      + ' đối đầu ' + _g6_describeProfile(behindProfile) + ' (chênh khoảng ' + Math.abs(diff) + ' điểm chất).';
+
+  return {
+    id: 'g6-material-' + sideChar, group: 6, score: 58, sev: (Math.abs(diff) >= 4) ? 'high' : 'medium',
+    icon: '⚖️', positive: isPositive, text: text, moveIdx: startIdx
+  };
+}
+
+function buildDeepInsightsGroup6(gAnFens, gMoveTexts, detectedSide, whiteLabel, blackLabel) {
+  var out = [];
+  function pushForSide(sideChar, label, oppLabel) {
+    var mi = _deepG6_materialImbalance(gAnFens, gMoveTexts, sideChar, label, oppLabel);
+    if (mi) out.push(mi);
+  }
+  if (detectedSide === 'white') pushForSide('w', whiteLabel + ' — Trắng', blackLabel + ' — Đen');
+  else if (detectedSide === 'black') pushForSide('b', blackLabel + ' — Đen', whiteLabel + ' — Trắng');
+  else { pushForSide('w', whiteLabel + ' — Trắng', blackLabel + ' — Đen'); }
+  /* Chỉ cần tính 1 lần (không lặp cho cả 2 bên như các nhóm khác) vì đây là
+     SỰ KIỆN CHUNG của bàn cờ — tính từ góc nhìn 1 bên là đủ suy ra bên kia,
+     tránh tạo ra 2 candidate trùng lặp nội dung khi detectedSide === null. */
+  return out;
+}
+
 
 /* ============================================================
    LỚP CHỌN CUỐI — Trọng số + Lọc đa dạng (theo tài liệu, có điều
@@ -8052,6 +8234,7 @@ function buildDeepInsightsAll(cls, evalPcts, cpLosses, gAnScores, gAnFens, gMove
   all = all.concat(buildDeepInsightsGroup3(gAnFens, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel));
   all = all.concat(buildDeepInsightsGroup4(gAnFens, detectedSide, whiteLabel, blackLabel));
   all = all.concat(buildDeepInsightsGroup5(cls, cpLosses, gMoveInfo, gAnFens, gMoveTexts, winnerSide, detectedSide, whiteLabel, blackLabel, evalPcts));
+  all = all.concat(buildDeepInsightsGroup6(gAnFens, gMoveTexts, detectedSide, whiteLabel, blackLabel));
   /* Nhóm 6 (Quản lý thời gian): bỏ qua theo yêu cầu — tái dùng logic
      có sẵn ở "Gợi ý từ pattern lỗi" cũ khi ghép vào HTML, không có
      ở đây. */
@@ -8209,8 +8392,8 @@ function _g_centerPawnReason(board, sideChar, oppChar) {
     return c;
   }
   var mine = pawnCount(sideChar), opp = pawnCount(oppChar);
-  if (mine - opp >= 1) return {side: 'side', text: 'có Tốt chiếm trung tâm tốt hơn (' + mine + ' vs ' + opp + ')'};
-  if (opp - mine >= 1) return {side: 'opp', text: 'có Tốt chiếm trung tâm tốt hơn (' + opp + ' vs ' + mine + ')'};
+  if (mine - opp >= 1) return {side: 'side', text: 'có Tốt chiếm trung tâm tốt hơn'};
+  if (opp - mine >= 1) return {side: 'opp', text: 'có Tốt chiếm trung tâm tốt hơn'};
   return null;
 }
 
@@ -8226,8 +8409,8 @@ function _g_majorMobilityReason(board, sideChar, oppChar, ep, cas) {
   }
   var mine = mobility(sideChar), opp = mobility(oppChar);
   if (mine === null || opp === null) return null;
-  if (mine - opp >= 4) return {side: 'side', text: 'có Xe/Hậu cơ động hơn hẳn (' + mine + ' vs ' + opp + ' nước khả dĩ)'};
-  if (opp - mine >= 4) return {side: 'opp', text: 'có Xe/Hậu cơ động hơn hẳn (' + opp + ' vs ' + mine + ' nước khả dĩ)'};
+  if (mine - opp >= 4) return {side: 'side', text: 'có Xe/Hậu cơ động hơn'};
+  if (opp - mine >= 4) return {side: 'opp', text: 'có Xe/Hậu cơ động hơn'};
   return null;
 }
 
@@ -8258,9 +8441,10 @@ function _narrG3_postOpeningState(cls, evalPcts, gAnFens, gMoveTexts, gMoveInfo,
     }
   }
 
-  var who = (pct >= 55) ? sideLabel : (pct <= 45) ? oppLabel : null;
-  var leadTxt = who
-    ? who + ' đang nhỉnh hơn (' + Math.round(who === sideLabel ? pct : (100 - pct)) + '% thắng)'
+  var whoChar = (pct >= 55) ? sideChar : (pct <= 45) ? oppChar : null;
+  var whoGeneric = whoChar ? ((whoChar === 'w') ? 'Bên trắng' : 'Bên đen') : null;
+  var leadTxt = whoGeneric
+    ? whoGeneric + ' đang nhỉnh hơn (' + Math.round(whoChar === sideChar ? pct : (100 - pct)) + '% thắng)'
     : 'thế trận cân bằng, chưa bên nào rõ ưu thế';
 
   /* ĐANG TRONG ĐÒN CHIẾN THUẬT / PHỐI HỢP CHIẾU HẾT: khi thế cờ tại mốc này "nhỉnh hơn" là do 1 đòn đang diễn ra
@@ -8339,11 +8523,10 @@ function _narrG3_postOpeningState(cls, evalPcts, gAnFens, gMoveTexts, gMoveInfo,
   var reasonTxt = '';
   if (reasons.length) {
     var leadSide = reasons[0].side;
-    var leadLabel = (leadSide === 'side') ? sideLabel : oppLabel;
     var sameSideExtra = [];
     for (var ri = 1; ri < reasons.length; ri++) { if (reasons[ri].side === leadSide) sameSideExtra.push(reasons[ri].text); }
-    reasonTxt = ', chủ yếu do ' + leadLabel + ' ' + reasons[0].text;
-    if (sameSideExtra.length) reasonTxt += ', ' + leadLabel + ' cũng ' + sameSideExtra.join(' và ');
+    reasonTxt = ', chủ yếu do ' + reasons[0].text;
+    if (sameSideExtra.length) reasonTxt += ' và ' + sameSideExtra.join(' và ');
   }
 
   return 'Tính tới nước <b>' + moveNum + (sideChar === 'w' ? '.' : '...') + (gMoveTexts[boundary] || '')
@@ -9078,7 +9261,7 @@ var _NARR_BULLET_TITLE_MAP = {
 function _narrTitleForBaseId(baseId) {
   if (_NARR_BULLET_TITLE_MAP[baseId]) return _NARR_BULLET_TITLE_MAP[baseId];
   if (baseId.indexOf('g2-') === 0) return 'Tình huống chiến thuật';
-  if (baseId.indexOf('g3-') === 0 || baseId.indexOf('g4-') === 0) return 'Đánh giá cách chơi';
+  if (baseId.indexOf('g3-') === 0 || baseId.indexOf('g4-') === 0 || baseId.indexOf('g6-') === 0) return 'Đánh giá cách chơi';
   if (baseId.indexOf('g5-') === 0) return 'Giai đoạn ván đấu';
   return 'Diễn biến đáng chú ý';
 }
@@ -9108,6 +9291,7 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
   var g3All = buildDeepInsightsGroup3(gAnFens, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel);
   var g4All = buildDeepInsightsGroup4(gAnFens, detectedSide, whiteLabel, blackLabel);
   var g5All = buildDeepInsightsGroup5(cls, cpLosses, gMoveInfo, gAnFens, gMoveTexts, winnerSide, detectedSide, whiteLabel, blackLabel, evalPcts);
+  var g6All = buildDeepInsightsGroup6(gAnFens, gMoveTexts, detectedSide, whiteLabel, blackLabel);
 
   function byPrefix(arr, prefix){ return arr.filter(function(c){ return c.id.indexOf(prefix) === 0; }); }
   /* ĐÃ SỬA — LỖI NGHIÊM TRỌNG: indexOf('-' + sideChar) tìm chuỗi con ở
@@ -9253,7 +9437,7 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
      giờ cạnh tranh RIÊNG LẺ thay vì gộp cứng 1 khối như bản 14-mục cũ,
      để có thể chọn/loại từng ý theo đúng độ quan trọng của chính nó.
      ĐÃ CHUYỂN LÊN TRƯỚC "Trạng thái sau khai cuộc" (xem lý do bên dưới). */
-  var g12Pool = bySideSuffix(g3All.concat(g4All, byPrefix(g5All, 'g5-outofbook'), byPrefix(g5All, 'g5-opening-trap')));
+  var g12Pool = bySideSuffix(g3All.concat(g4All, g6All, byPrefix(g5All, 'g5-outofbook'), byPrefix(g5All, 'g5-opening-trap')));
 
   /* --- Trạng thái sau khai cuộc — 1 candidate, điểm thấp hơn (thông tin
      nền, ít khi là điều "đáng nói nhất" của cả ván).
@@ -9273,9 +9457,22 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
      bị các mục khác đè, hiếm khi lọt top). Ghép câu tên khai cuộc (trước đây nằm trong Tổng quan, đã dời
      ra đây) với câu đánh giá thế trận sau khai cuộc thành 1 mục hoàn chỉnh, icon ➡️. Vẫn nằm trong luồng
      sắp xếp lại theo thứ tự nước đi ở cuối hàm (đọc số nước từ chính câu "Tính tới nước N..." bên trong). */
-  var _openingNameTxt = opnForOverview
-    ? 'Khai cuộc dùng ' + _narrLowerFirst(opnForOverview.text.replace(/^.*?:\s*/, '').replace(/\.$/, '')) + '.'
-    : '';
+  var _openingNameTxt = '';
+  if (opnForOverview) {
+    var _opnDisplay = _narrLowerFirst(opnForOverview.text.replace(/^.*?:\s*/, '').replace(/\.$/, ''));
+    if (opnForOverview.transposedFrom && gMoveTexts && gMoveTexts[0]) {
+      /* MỚI (theo đề xuất dev) — ván có CHUYỂN VỊ (transposition): nước đầu
+         tiên thuộc 1 khai cuộc khác (VD 1.c4 = Khai cuộc Anh) nhưng đã
+         chuyển hẳn sang khai cuộc thật của cả ván (lấy từ tag PGN, chính
+         xác hơn) từ vài nước sau đó — nói rõ cả 2 vế thay vì chỉ nói tên
+         cuối cùng suông (dễ khiến người đọc tưởng ván chơi đúng khai cuộc
+         đó ngay từ nước 1). */
+      _openingNameTxt = 'Ván đấu bắt đầu bằng nước 1.' + gMoveTexts[0]
+        + ' nhưng chuyển sang ' + _opnDisplay + '.';
+    } else {
+      _openingNameTxt = 'Khai cuộc dùng ' + _opnDisplay + '.';
+    }
+  }
   var _openingSectionText = _openingNameTxt + (openingStateText ? (_openingNameTxt ? ' ' : '') + openingStateText : '');
   if (_openingSectionText) push(2, 'Khai cuộc & thế trận ban đầu', _openingSectionText, undefined, true, '➡️');
 
@@ -9405,7 +9602,7 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
     .forEach(function(c){ if (c) usedIds[c.id] = true; });
   _dupMistakeIds.forEach(function(id){ usedIds[id] = true; }); /* xem comment ở chỗ tạo _dupMistakeIds */
   var leftoverFromPool = pool.filter(function(c){ return !selectedIds[c.id]; });
-  var leftoverFromG1G5 = g1All.concat(g2All, g3All, g4All, g5All).filter(function(c){ return !usedIds[c.id]; });
+  var leftoverFromG1G5 = g1All.concat(g2All, g3All, g4All, g5All, g6All).filter(function(c){ return !usedIds[c.id]; });
   var leftover = leftoverFromPool.concat(leftoverFromG1G5);
   leftover.sort(function(a, b){
     var na = LEFTOVER_ID_MAP[_selfin_baseId(a.id)] || 9999;
@@ -12950,6 +13147,20 @@ function analyzeTabRun() {
 
 function _analyzeTabRunWithText(raw) {
   gLastRawPgnText = raw; /* lưu lại PGN thô (có %clk) để buildMoveReport dùng cho phân tích quản lý thời gian */
+  /* MỚI (theo đề xuất dev): đọc thẳng tag [ECO "..."] / [Opening "..."] có sẵn
+     trong PGN gốc (do nguồn phát hành ván đấu — chess.com, lichess, FIDE
+     broadcast... — đã tự xác định) TRƯỚC KHI tách phần header bỏ đi ở
+     parsePgnToUcis(). Ưu tiên dùng dữ liệu này khi tìm tên khai cuộc, vì nó
+     đáng tin hơn hẳn 1 detector tự suy luận từ trình tự nước đi — đặc biệt
+     đúng trong các ván CÓ CHUYỂN VỊ (transposition), nơi chỉ nhìn nước đầu
+     (VD 1.c4) sẽ gọi nhầm tên (VD "Khai cuộc Anh") dù ván đã chuyển hẳn
+     sang 1 khai cuộc khác (VD King's Indian) từ vài nước sau đó.
+     Reset về null mỗi lần chạy để KHÔNG bị dính tag của PGN trước đó nếu
+     PGN mới không có tag này. */
+  var _hdrOpn = raw.match(/\[Opening\s+"([^"]*)"\]/);
+  var _hdrEco = raw.match(/\[ECO\s+"([^"]*)"\]/);
+  gPgnOpeningTag = _hdrOpn ? _hdrOpn[1].trim() : null;
+  gPgnEcoTag = _hdrEco ? _hdrEco[1].trim() : null;
   var ucis = parsePgnToUcis(raw);
   if (ucis && ucis.length) {
     /* Nếu quá trình đọc PGN dừng giữa chừng (gặp nước không nhận dạng được),
@@ -13468,6 +13679,8 @@ function extractPgnResultToken(pgn){
    trong 1 trong 2 loại ngoặc đó (độ sâu > 0) thì bỏ qua ký tự, không copy
    ra kết quả. */
 var gLastRawPgnText = ''; /* PGN thô gần nhất (giữ nguyên %clk...) — dùng cho phân tích quản lý thời gian trong báo cáo */
+var gPgnOpeningTag = null; /* Tag [Opening "..."] đọc thẳng từ PGN gốc (nếu có) — ưu tiên hơn detector tự suy luận từ nước đi, xem _lookupOpeningFull() */
+var gPgnEcoTag = null;     /* Tag [ECO "..."] đọc thẳng từ PGN gốc (nếu có), đi kèm gPgnOpeningTag */
 
 function stripPgnCommentsAndVariations(s) {
   var out = '';
