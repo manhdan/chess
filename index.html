@@ -1243,7 +1243,7 @@ html.mp-mode #mobile-stack #eval-chart-svg { height: 101px !important; }
   <div class="board-outer">
     <div class="board" id="board"></div>
   </div>
-  <div id="lc-watermark" style="position:fixed;left:50%;bottom:4px;transform:translateX(-50%);font-size:0.7rem;color:#000;opacity:0.18;pointer-events:none;z-index:1;white-space:nowrap;user-select:none">update 25/09/2026</div>
+  <div id="lc-watermark" style="position:fixed;left:50%;bottom:4px;transform:translateX(-50%);font-size:0.7rem;color:#000;opacity:0.18;pointer-events:none;z-index:1;white-space:nowrap;user-select:none">update 28/09/2026</div>
   <svg id="coach-svg" viewBox="0 0 8 8" preserveAspectRatio="none">
     <defs>
       <marker id="arr-grn" markerWidth="2.2" markerHeight="2.2" refX="1.5" refY="1.1" orient="auto">
@@ -4157,23 +4157,42 @@ function _chainAdvanceOk(idx){
   var sc = gAnScores[idx];
   if (sc && sc.bestUci && sc.bestUci.length >= 4
       && typeof gUciHist !== 'undefined' && gUciHist && gUciHist[idx] === sc.bestUci) return true;
-  /* Nhánh 3 (MỚI, đã NỚI sau khi kiểm chứng thực tế) — "nước chiếu trong 1
-     chuỗi tấn công": ban đầu định bắt buộc thêm điều kiện "vị trí sau nó chỉ
-     còn đúng 1 nước đáp trả", nhưng kiểm chứng bằng 1 engine cờ độc lập
-     (python-chess) trên chính ván Lasker–Thomas 1912 cho thấy sau 12.Nxf6+
-     Vua Đen thực ra có 2 nước hợp lệ (Kh8 VÀ Kh6, không chỉ Kh6) — nên điều
-     kiện "chỉ 1 đáp trả" vẫn làm đứt chuỗi ngay tại chính mắt xích này, dù
-     MỌI mắt xích còn lại (Qxh7+, Neg4+, h4+, g3+, Be2+, Rh2+) đều literal-
-     forced 1 nước. Nới thành: CHỈ CẦN chính nước tại idx là 1 nước CHIẾU —
-     đủ để xuyên qua, không đòi hỏi đếm lại số nước đáp trả hợp lệ nữa.
-     Đánh đổi: rủi ro (có kiểm soát) là 1 vài "nước chiếu vu vơ" không thực
-     sự ép buộc cũng được xuyên qua ở VÁN KHÁC — nhưng vì kết quả cuối chuỗi
-     CHỈ được dùng để NÂNG played lên (Math.max/min ở _buildClassifyInput và
-     _evalCpWhite, không bao giờ dìm xuống dưới baseline), rủi ro này bị chặn
-     ở 1 chiều: nhiều nhất là hiển thị "lạc quan hơn thực tế" cho 1 chuỗi
-     chiếu không dẫn tới đâu, không bao giờ khiến 1 nước tốt bị chấm tệ đi. */
+  /* Nhánh 3 (SỬA LẠI sau khi phát hiện lỗi qua case 34.Bd6, ván Samackhat–
+     MUHLUFFY 2026) — "nước chiếu ĐỦ TỐT trong 1 chuỗi tấn công":
+     Bản trước (nới quá tay): CHO QUA bất kỳ nước chiếu nào tại idx, không
+     cần biết nước chiếu đó có phải lựa chọn tốt hay không. Lỗi lộ ra khi
+     nước chiếu ĐANG XÉT chỉ là 1 nước TẦM THƯỜNG (VD 34...Qxa4+) trong khi
+     đối thủ thực ra có 1 nước MẠNH HƠN HẲN không phải là chiếu ngay (hoặc
+     là chiếu khác) — ở đây cụ thể là sn.bestUci="a1d1" (Qd1+, engine chấm
+     +9.92 cho Đen) nhưng ván thật lại đi 34...Qxa4+ (uci a1a4, một nước
+     CHIẾU nhưng YẾU HƠN NHIỀU). Vì Qxa4+ vẫn "givesCheck", nhánh 3 cũ cho
+     qua vô điều kiện, khiến chuỗi "played" của 34.Bd6 bị kéo dài xuyên qua
+     cả 1 đoạn diễn biến về sau của ván THẬT (không liên quan gì tới việc
+     đánh giá bản thân nước Bd6), và vì Math.max chỉ được phép NÂNG (không
+     dìm), số liệu bị "rửa" từ -4.64 (đúng, Bd6 thua rõ) thành +1.31 (sai
+     hoàn toàn) — khiến Bd6 bị chấm nhầm thành Brilliant.
+     SỬA: chỉ cho qua khi nước chiếu đó, dù không trùng bestUci literal của
+     engine, vẫn ĐỦ TỐT — so sánh trực tiếp eval THỰC TẾ sau khi đi nước đó
+     (từ gAnScores[idx+1], quy về góc nhìn bên vừa đi tại idx) với chính
+     eval TỐT NHẤT có thể tại idx (từ gAnScores[idx].s1/m1) — nếu chênh
+     lệch không quá 100cp (dung sai nhỏ cho sai số shallow-search bình
+     thường), coi là "đủ tốt để tin cậy", cho qua; nếu KÉM HẲN (như Qxa4+
+     kém Qd1+ tới hơn 1400cp trong case này), KHÔNG cho qua nữa — chuỗi sẽ
+     dừng lại đúng chỗ, dùng thẳng eval thật ngay sau nước đang xét (sn),
+     đúng là -4.64 cho Bd6, không bị "rửa" qua chuỗi đi lạc. */
   var _thisInfo = gMoveInfo && gMoveInfo[idx];
-  if (_thisInfo && _thisInfo.givesCheck) return true;
+  if (_thisInfo && _thisInfo.givesCheck) {
+    var _idxSc = gAnScores[idx], _nextSc = gAnScores[idx + 1];
+    if (_idxSc && _nextSc && typeof _idxSc.s1 === 'number' && typeof _nextSc.s1 === 'number') {
+      var _bestAtIdx = anCP(_idxSc.s1, _idxSc.m1);          /* góc nhìn bên vừa đi (mover) tại idx */
+      var _actualAfterRaw = anCP(_nextSc.s1, _nextSc.m1);   /* góc nhìn đối thủ, ở vị trí SAU nước idx */
+      var _actualFromMoverView = -_actualAfterRaw;
+      var QUALITY_TOLERANCE_CP = 100;
+      if (_actualFromMoverView >= _bestAtIdx - QUALITY_TOLERANCE_CP) return true;
+    }
+    /* Thiếu dữ liệu để kiểm chứng chất lượng, hoặc nước chiếu đó THỰC SỰ
+       kém hẳn best -> KHÔNG cho qua (khác bản cũ luôn return true ở đây). */
+  }
   /* Nhánh 4 (MỚI, theo đề xuất người dùng) — "mate không tránh được dù chọn
      nước nào": literal-1-nước-hợp-lệ (nhánh 1) chỉ là 1 TRƯỜNG HỢP RIÊNG của
      ý tưởng lớn hơn "đối thủ không có cách nào thoát" — trường hợp tổng quát
@@ -5949,7 +5968,44 @@ function _lookupOpeningFull(gUciHist) {
     }
   }
   /* Ưu tiên 2 (fallback) — opening book/move-tree tự suy luận từ nước đi,
-     như cũ, dùng khi PGN không có tag [Opening]. */
+     như cũ, dùng khi PGN không có tag [Opening]. Nếu book cũng không nhận
+     ra (book LITE chỉ ~130 dòng, thiếu nhiều khai cuộc như Réti/Zukertort/
+     KIA...) mà PGN CÓ tag [ECO] (chess.com thường chỉ ghi ECO, không ghi
+     Opening) thì rơi xuống Ưu tiên 3 (_ecoCoarseFull) thay vì im lặng. */
+  var _bookFull = _lookupOpeningFromBook(gUciHist);
+  if (_bookFull) return _bookFull;
+  /* Ưu tiên 3 — chỉ có mã ECO từ PGN: gọi tên NHÓM khai cuộc theo dải mã. */
+  if (typeof gPgnEcoTag !== 'undefined' && gPgnEcoTag) return _ecoCoarseFull(gPgnEcoTag);
+  return null;
+}
+/* Dải mã ECO -> tên NHÓM khai cuộc (thô, không phải biến thể cụ thể). Chỉ dùng
+   khi không có tên khai cuộc chi tiết nào khác; mã đúng nhưng tên chỉ ở mức nhóm. */
+function _ecoCoarseName(eco) {
+  var m = /^([A-E])(\d{2})$/i.exec(String(eco || '').trim());
+  if (!m) return null;
+  var L = m[1].toUpperCase(), n = parseInt(m[2], 10);
+  if (L === 'A') {
+    if (n <= 9) return 'nhóm khai cuộc bên sườn (Réti/Zukertort/Bird...)';
+    if (n <= 39) return 'nhóm Khai cuộc Anh';
+    if (n <= 44) return 'nhóm khai cuộc Tốt Hậu (1.d4)';
+    if (n <= 49) return 'hệ thống Ấn Độ (1.d4 Nf6)';
+    if (n <= 79) return 'Ấn Độ Vua/Benoni/Volga';
+    return 'Phòng thủ Hà Lan';
+  }
+  if (L === 'B') { if (n <= 9) return 'phòng thủ nửa mở (Pirc/Alekhine...)'; if (n <= 19) return 'Phòng thủ Caro-Kann'; return 'Phòng thủ Sicilia'; }
+  if (L === 'C') { if (n <= 19) return 'Phòng thủ Pháp'; if (n <= 59) return 'nhóm khai cuộc mở (1.e4 e5)'; return 'Ruy Lopez'; }
+  if (L === 'D') { if (n <= 5) return 'nhóm khai cuộc Tốt Hậu (Zukertort/London/hệ thống)'; if (n <= 69) return 'Gambit Hậu'; return 'Phòng thủ Grünfeld'; }
+  if (L === 'E') { if (n <= 9) return 'Catalan'; if (n <= 19) return 'Phòng thủ Ấn Độ Hậu'; if (n <= 59) return 'Phòng thủ Nimzo-Ấn Độ'; return 'Phòng thủ Ấn Độ Vua'; }
+  return null;
+}
+function _ecoCoarseFull(eco) {
+  var nm = _ecoCoarseName(eco);
+  if (!nm) return null;
+  var code = String(eco).trim().toUpperCase();
+  return { familyVi: nm, familyEn: null, variation: null, eco: code, coarse: true,
+           display: nm };
+}
+function _lookupOpeningFromBook(gUciHist) {
   if (typeof ChessOpeningBook === 'undefined' || !gUciHist || !gUciHist.length) return null;
   /* ĐÃ SỬA (chống crash): thư viện ngoài mới nhúng, chưa test hết mọi
      trường hợp (VD phong cấp, nhập thành lạ...) — nếu nó ném lỗi thì chỉ
@@ -6439,7 +6495,12 @@ function _deepG1_onlyMove(cls, gMoveInfo, gMoveTexts, sideChar, sideLabel) {
     if (SKIP[cls[i]]) continue;
     var ci = _buildClassifyInput(i);
     if (!ci || ci.isForced || ci.isImmediateRecapture || ci.isImmediateCheckmate) continue;
-    if (ci.legalCount !== null && ci.legalCount < 5) continue; /* dưới 5 nước hợp lệ -> quá dễ nhìn ra, không tính là "khó nhận ra" */
+    /* SIẾT LẠI (phản hồi người dùng, case 35.Kh3 ván Samackhat–MUHLUFFY:
+       Trắng đang bị chiếu, chỉ ~6 nước hợp lệ, đã tàn cuộc — không thể
+       coi là "khó nhận ra"). Ngưỡng cũ 5 quá thấp; nâng lên 10: dưới 10
+       nước hợp lệ nghĩa là thế cờ hẹp/đơn giản (thường do đang bị chiếu
+       hoặc tàn cuộc), việc chọn đúng nước không đủ đặc biệt để khen. */
+    if (ci.legalCount !== null && ci.legalCount < 10) continue;
     /* ĐÃ THÊM: nếu nước này chỉ đơn giản là ĂN 1 quân đang bị treo hoặc
        ăn HỜI (được nhiều hơn mất khi tính luôn nước đối phương ăn lại
        — VD Tượng ăn Xe rồi bị Xe ăn lại: vẫn lãi ~200cp) thì KHÔNG tính
@@ -6738,6 +6799,156 @@ function _deepG1_reversal(cls, evalPcts, gMoveInfo, gMoveTexts, sideChar, sideLa
   return null;
 }
 
+/* ── "Cơ hội bị bỏ lỡ của đối thủ" (MỚI, Dạng 4 theo đề xuất dev —
+   "Missed Chance") ──
+   Câu chuyện cần bắt: sideChar mắc 1 sai lầm lớn (hoặc bất kỳ lý do gì)
+   khiến oppChar có ưu thế lớn (≥60% thắng), nhưng rồi CHÍNH oppChar lại
+   tự đánh mất phần lớn ưu thế đó qua NHỮNG SAI LẦM CỦA HỌ (không phải vì
+   sideChar phản công xuất sắc) — tức "được trao lại" chứ không phải "tự
+   giành lại". Case mẫu: 17...h5?? (Đen) -> Trắng lên ~70-80%+, nhưng
+   18.Bb5?!, 19.Bd3?!, 25.Nc6? (toàn lỗi của Trắng) -> Đen dần trở về cân
+   bằng, chứ Đen không hề có 1 nước phản công ngoạn mục nào trong đoạn đó.
+   ĐIỀU KIỆN chặt để tránh báo bừa:
+   1) Có 1 mốc oppChar đạt đỉnh ≥60% thắng.
+   2) Sau đỉnh đó, oppChar có ÍT NHẤT 1 nước tự mắc lỗi (mistake/blunder/
+      inaccuracy theo cls) trước khi sideChar hồi phục lại ~50%.
+   3) Trong SUỐT đoạn hồi phục đó, sideChar KHÔNG có nước nào tự tạo 1
+      bước ngoặt lớn (≥25 điểm %) của riêng mình — nếu có, đó là "tự giành
+      lại" (đã có category khác lo, VD g1-topTurningMove), không phải
+      "được đối thủ trao". */
+function _deepG1_missedChance(cls, evalPcts, gMoveInfo, gMoveTexts, sideChar, sideLabel, oppLabel) {
+  var oppChar = (sideChar === 'w') ? 'b' : 'w';
+  var SWING_MIN = 25, PEAK_MIN = 60, RECOVER_MIN = 48;
+  var startIdx = -1, peakOppPct = 0, peakIdx = -1;
+  for (var i = 0; i < cls.length; i++) {
+    var beforeOpp = _deepPct(evalPcts, i, oppChar), afterOpp = _deepPct(evalPcts, i + 1, oppChar);
+    if (beforeOpp === null || afterOpp === null) continue;
+    if (startIdx < 0 && (afterOpp - beforeOpp) >= SWING_MIN && afterOpp >= PEAK_MIN) startIdx = i;
+    if (startIdx >= 0 && afterOpp > peakOppPct) { peakOppPct = afterOpp; peakIdx = i; }
+  }
+  if (startIdx < 0 || peakOppPct < PEAK_MIN) return null;
+
+  var badMovesOfOpp = [], recoveredIdx = -1;
+  for (var j = peakIdx + 1; j < cls.length; j++) {
+    var mvSideJ = (gMoveInfo[j] && gMoveInfo[j].side === W) ? 'w' : 'b';
+    if (mvSideJ === oppChar && (cls[j] === 'mistake' || cls[j] === 'blunder' || cls[j] === 'inaccuracy')) {
+      badMovesOfOpp.push(j);
+    }
+    /* Chặn điều kiện 3 ngay trong lúc quét: nếu sideChar tự tạo swing lớn
+       ở đây -> đây là "tự giành lại", không phải "được trao" -> bỏ hẳn. */
+    if (mvSideJ === sideChar) {
+      var bK = _deepPct(evalPcts, j, sideChar), aK = _deepPct(evalPcts, j + 1, sideChar);
+      if (bK !== null && aK !== null && (aK - bK) >= SWING_MIN) return null;
+    }
+    var sidePctHere = _deepPct(evalPcts, j + 1, sideChar);
+    if (sidePctHere !== null && sidePctHere >= RECOVER_MIN) { recoveredIdx = j; break; }
+  }
+  if (!badMovesOfOpp.length || recoveredIdx < 0) return null;
+
+  var movesTxt = badMovesOfOpp.slice(0, 3).map(function (idx) {
+    var mn = Math.floor(idx / 2) + 1, sc = (idx % 2 === 0) ? '.' : '...';
+    return mn + sc + (gMoveTexts[idx] || '');
+  }).join(', ');
+  var startMoveNum = Math.floor(startIdx / 2) + 1, startSideCh = (startIdx % 2 === 0) ? '.' : '...';
+  var text = 'Sau nước <b>' + startMoveNum + startSideCh + (gMoveTexts[startIdx] || '') + '</b>, '
+      + oppLabel + ' có thể duy trì ưu thế lớn (lên tới ' + Math.round(peakOppPct) + '% thắng), nhưng các nước <b>'
+      + movesTxt + '</b> đã dần trả lại cơ hội cho ' + sideLabel + ', đưa ván đấu trở lại cân bằng.';
+  return {
+    id: 'g1-missedchance-' + sideChar, group: 1, score: 64, sev: 'medium', icon: '🔄', positive: true,
+    text: text
+  };
+}
+
+/* ── "Comeback / Recovery" (MỚI, Dạng 4 theo đề xuất dev) ──
+   Khác "Cơ hội bị bỏ lỡ của đối thủ" (nhấn vào việc ĐỐI PHƯƠNG tự làm
+   hỏng), mục này nhấn vào chính SỰ LỘI NGƯỢC DÒNG của bên đang xét — đo
+   đáy thấp nhất họ từng rơi vào và đỉnh phục hồi sau đó, KHÔNG cần biết
+   cụ thể vì sao (có thể do đối phương tự sai, có thể do chính họ chơi
+   chắc tay dần) — đây là 1 THỐNG KÊ khác góc nhìn, có thể cùng tồn tại
+   với "Cơ hội bị bỏ lỡ" cho cùng 1 giai đoạn của ván (2 cách kể cùng 1
+   câu chuyện, dev liệt kê là 2 hạng mục riêng trong bảng đề xuất). */
+function _deepG1_comeback(cls, evalPcts, sideChar, sideLabel) {
+  var LOW_MAX = 30, RECOVER_MIN = 45, MIN_GAP_PLIES = 6, SWING_MIN = 25;
+  if (!evalPcts || !evalPcts.length) return null;
+  var lowIdx = -1, lowPct = 101;
+  for (var i = 0; i < evalPcts.length; i++) {
+    var p = _deepPct(evalPcts, i, sideChar);
+    if (p !== null && p < lowPct) { lowPct = p; lowIdx = i; }
+  }
+  if (lowIdx < 0 || lowPct > LOW_MAX) return null;
+  /* SỬA (phát hiện qua case ván Olympiad — Đen đáy 25% ở nước 23, vẫn kẹt
+     quanh 43% tới tận nước 39, rồi 40.Rxf5?? của Trắng mới kéo vọt lên
+     74-96%): TRƯỚC ĐÂY quét thẳng tới điểm CAO NHẤT trong toàn bộ phần
+     còn lại của ván (recoverPct=96% ở nước 53), bất kể điểm cao đó đến từ
+     việc chính bên này CHƠI TỐT DẦN hay từ 1 CÚ SWING LỚN RIÊNG BIỆT do
+     đối phương tự sai (đã có "Bước ngoặt quyết định" lo đúng việc đó) —
+     khiến câu chuyện "lội ngược dòng" bỏ qua mất mốc quan trọng nhất
+     (nước 39, vẫn chỉ 43%) và mô tả sai bản chất thành 1 quá trình leo
+     dần liên tục từ đáy tới đỉnh, trong khi thực ra phần lớn quãng đó gần
+     như dậm chân, chỉ đúng 1 nước (40.Rxf5??) mới tạo bước nhảy.
+     Nay DỪNG quét ngay TRƯỚC 1 swing ≥25% đầu tiên gặp phải sau đáy — chỉ
+     tính phần "leo dần" THỰC SỰ (không đến từ 1 cú swing lớn tách biệt).
+     Nếu phần leo dần đó tự nó đã đạt RECOVER_MIN, coi là "Comeback" hợp
+     lệ; nếu quãng đó chỉ dậm chân (không đạt), coi như KHÔNG có màn lội
+     ngược dòng thực sự — cú nhảy sau đó đã có "Bước ngoặt quyết định"
+     kể riêng, đúng câu chuyện hơn là gộp nhầm vào đây. */
+  var recoverIdx = -1, recoverPct = lowPct;
+  for (var j = lowIdx + 1; j < evalPcts.length; j++) {
+    var pPrev = _deepPct(evalPcts, j - 1, sideChar), pCur = _deepPct(evalPcts, j, sideChar);
+    if (pPrev !== null && pCur !== null && Math.abs(pCur - pPrev) >= SWING_MIN) break; /* chạm 1 swing lớn -> dừng, phần sau thuộc về "bước ngoặt" khác */
+    if (pCur !== null && pCur > recoverPct) { recoverPct = pCur; recoverIdx = j; }
+  }
+  if (recoverIdx < 0 || recoverPct < RECOVER_MIN) return null;
+  if (recoverIdx - lowIdx < MIN_GAP_PLIES) return null; /* phục hồi tức thì trong 1-2 nước là "bước ngoặt tự tạo" (đã có category khác), không phải "lội ngược dòng" trải dài */
+  var lowMoveNum = Math.floor(lowIdx / 2) + 1;
+  var recoverMoveNum = Math.floor(recoverIdx / 2) + 1;
+  var colorWord = (sideChar === 'w') ? 'Trắng' : 'Đen';
+  var text = colorWord + ' từng chỉ còn <b>' + Math.round(lowPct) + '% thắng</b> (khoảng nước <b>' + lowMoveNum
+      + '</b>) nhưng đã lội ngược dòng, nâng dần lên <b>' + Math.round(recoverPct) + '% thắng</b> vào khoảng nước <b>'
+      + recoverMoveNum + '</b> — một màn hồi phục đáng chú ý.';
+  return {
+    id: 'g1-comeback-' + sideChar, group: 1, score: 52, sev: 'medium', icon: '📈', positive: true,
+    text: text
+  };
+}
+
+/* ── "Bỏ lỡ cơ hội thắng lớn" (MỚI — Missed Win, TỰ THÂN) ──
+   Khác "Cơ hội bị bỏ lỡ của đối thủ" (_deepG1_missedChance — cần ĐỐI
+   PHƯƠNG có ≥1 nước sai để 'trả lại' ưu thế) và khác "Bước ngoặt quyết
+   định" (_narrG5_decisiveTurningMove — yêu cầu ván phải có winnerSide rõ
+   ràng khớp đúng hướng swing, KHÔNG áp dụng được cho ván HOÀ), hàm này chỉ
+   cần đúng 1 điều kiện đơn giản: chính bên đang xét (sideChar) đang ở thế
+   ÁP ĐẢO RÕ RỆT (≥85%) rồi TỰ TAY đánh 1 nước khiến % thắng của chính họ
+   SỤT MẠNH (≥30 điểm) — không quan tâm ván sau đó thắng/thua/hoà, không
+   quan tâm đối phương có sai gì hay không. Case cần bắt: 50.f6 (Trắng tự
+   làm hỏng ván đang thắng 96% xuống 53%, cuối cùng hoà) và 34...Qxa4+
+   (Đen tự làm hỏng ván đang thắng 97% xuống 62%). Chỉ báo cáo NƯỚC GÂY
+   THIỆT HẠI LỚN NHẤT (nếu có nhiều) để tránh spam, vì đây là lỗi tự thân
+   của chính 1 nước, không phải câu chuyện trải dài như Missed Chance. */
+function _deepG1_selfMissedWin(cls, evalPcts, gMoveInfo, gMoveTexts, sideChar, sideLabel) {
+  var HIGH_MIN = 85, DROP_MIN = 30;
+  var worstIdx = -1, worstBefore = 0, worstAfter = 0, worstDrop = 0;
+  for (var i = 0; i < cls.length; i++) {
+    var mvSide = (gMoveInfo[i] && gMoveInfo[i].side === W) ? 'w' : 'b';
+    if (mvSide !== sideChar) continue;
+    var before = _deepPct(evalPcts, i, sideChar), after = _deepPct(evalPcts, i + 1, sideChar);
+    if (before === null || after === null) continue;
+    if (before < HIGH_MIN) continue;
+    var drop = before - after;
+    if (drop >= DROP_MIN && drop > worstDrop) { worstDrop = drop; worstIdx = i; worstBefore = before; worstAfter = after; }
+  }
+  if (worstIdx < 0) return null;
+  var moveNum = Math.floor(worstIdx / 2) + 1;
+  var mvSideCh = (worstIdx % 2 === 0) ? '.' : '...';
+  var text = sideLabel + ' bỏ lỡ cơ hội thắng lớn ở nước <b>' + moveNum + mvSideCh + (gMoveTexts[worstIdx] || '')
+      + '</b>: khả năng thắng của chính họ sụt từ <b>' + Math.round(worstBefore) + '%</b> xuống chỉ còn <b>'
+      + Math.round(worstAfter) + '%</b> — một cơ hội đáng tiếc.';
+  return {
+    id: 'g1-selfmissedwin-' + sideChar, group: 1, score: 60, sev: 'high', icon: '💔', positive: false,
+    text: text
+  };
+}
+
 function buildDeepInsightsGroup1(cls, evalPcts, cpLosses, gAnFens, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel) {
   var out = [];
   var vol = _deepG1_turningVolatility(cls, evalPcts);
@@ -6774,6 +6985,10 @@ function buildDeepInsightsGroup1(cls, evalPcts, cpLosses, gAnFens, gMoveInfo, gM
     if (up) out.push(up);
     var td = _deepG1_tenaciousDefense(cls, evalPcts, gMoveInfo, gMoveTexts, sideChar, label);
     if (td) out.push(td);
+    var mc = _deepG1_missedChance(cls, evalPcts, gMoveInfo, gMoveTexts, sideChar, label, (sideChar === 'w') ? (blackLabel + ' — Đen') : (whiteLabel + ' — Trắng'));
+    if (mc) out.push(mc);
+    var cb = _deepG1_comeback(cls, evalPcts, sideChar, label);
+    if (cb) out.push(cb);
     var sm = _deepG1_simplification(cls, evalPcts, gAnFens, gMoveInfo, gMoveTexts, sideChar, label);
     if (sm) out.push(sm);
     var rv = _deepG1_reversal(cls, evalPcts, gMoveInfo, gMoveTexts, sideChar, label);
@@ -6782,6 +6997,15 @@ function buildDeepInsightsGroup1(cls, evalPcts, cpLosses, gAnFens, gMoveInfo, gM
   if (detectedSide === 'white') pushForSide('w', whiteLabel + ' — Trắng');
   else if (detectedSide === 'black') pushForSide('b', blackLabel + ' — Đen');
   else { pushForSide('w', whiteLabel + ' — Trắng'); pushForSide('b', blackLabel + ' — Đen'); }
+  /* MỚI — "Bỏ lỡ cơ hội thắng lớn" (tự thân): gọi cho CẢ 2 bên bất kể
+     detectedSide, vì đây là sự kiện khách quan của mỗi kỳ thủ (VD ván
+     Samackhat–MUHLUFFY: 34...Qxa4+ là của Đen, 50.f6 là của Trắng — muốn
+     báo cả hai dù đang phân tích từ góc nhìn 1 bên). Mỗi bên tối đa 1
+     candidate (nước gây thiệt hại lớn nhất của bên đó). */
+  var smwW = _deepG1_selfMissedWin(cls, evalPcts, gMoveInfo, gMoveTexts, 'w', whiteLabel + ' — Trắng');
+  if (smwW) out.push(smwW);
+  var smwB = _deepG1_selfMissedWin(cls, evalPcts, gMoveInfo, gMoveTexts, 'b', blackLabel + ' — Đen');
+  if (smwB) out.push(smwB);
   return out;
 }
 
@@ -7231,7 +7455,7 @@ function _g3_fenAtOwnMove(gAnFens, sideChar, moveNum) {
 /* ── King Safety: (a) còn kẹt cột d/e sau 12 nước riêng, (b) vỡ
    Tốt che chắn sau khi đã nhập thành (kiểm tra ở vị trí cuối cùng
    có phân tích). ── */
-function _deepG3_kingSafety(gAnFens, gMoveInfo, sideChar, sideLabel) {
+function _deepG3_kingSafety(gAnFens, gMoveInfo, sideChar, sideLabel, winnerSide, evalPcts) {
   var fen12 = _g3_fenAtOwnMove(gAnFens, sideChar, 12);
   if (fen12) {
     var p12 = boardArrayFromFen(fen12);
@@ -7241,11 +7465,39 @@ function _deepG3_kingSafety(gAnFens, gMoveInfo, sideChar, sideLabel) {
     if (kingSq >= 0) {
       var kf = fl(kingSq);
       if (kf === 3 || kf === 4) {
-        return {
-          id: 'g3-king-center-' + sideChar, group: 3, score: 62, sev: 'medium', icon: '🏰',
-          text: sideLabel + ': sau 12 nước vẫn chưa nhập thành, Vua còn kẹt ở cột '
-              + FLS.charAt(kf).toUpperCase() + ' gần trung tâm — dễ thành mục tiêu tấn công sớm.'
-        };
+        /* MỚI (theo yêu cầu người dùng) — trước đây luôn báo insight này
+           bất kể kết quả ván (kể cả khi bên đó THẮNG, việc "chưa nhập
+           thành" hoá ra chẳng gây hại gì thực tế, báo ra chỉ gây nhiễu).
+           Giờ CHỈ trả về khi ĐỦ CẢ 2 điều kiện:
+           (a) bên này rốt cuộc THUA ván — nếu thắng hoặc hoà thì việc
+               chưa nhập thành rõ ràng không phải vấn đề, bỏ qua hẳn.
+           (b) có BẰNG CHỨNG cụ thể: ngay tại mốc nước 12 (gần cuối khai
+               cuộc, đúng lúc đang xét) % thắng của bên này đã RÕ RỆT kém
+               (≤40%) — tức thời điểm Vua còn kẹt giữa cũng chính là lúc
+               thế cờ đã bất lợi, chứ không phải 2 việc không liên quan.
+           Không có (b), dù thua ván, không đủ căn cứ QUY nguyên nhân thua
+           về việc chưa nhập thành (có thể thua vì lý do hoàn toàn khác ở
+           giai đoạn sau, chẳng liên quan gì tới an toàn Vua đầu ván).
+           Đồng thời HẠ ưu tiên (score 62 → 38, thấp hơn hẳn most other
+           g3 candidates) để khi CÓ đủ bằng chứng, insight này cũng ít có
+           cơ hội chiếm 1 trong 6 vị trí chính hơn — đúng ý "ít xuất hiện
+           hơn" người dùng yêu cầu, chỉ trồi lên khi thực sự nổi bật. */
+        var _sideLost = ((winnerSide === 'white' || winnerSide === 'w') && sideChar === 'b')
+                      || ((winnerSide === 'black' || winnerSide === 'b') && sideChar === 'w');
+        var _fenIdx12 = (sideChar === 'w') ? 12 * 2 - 1 : 12 * 2; /* trùng fenIdx tính trong _g3_fenAtOwnMove(sideChar,12) */
+        var _myPctAt12 = null;
+        if (evalPcts && evalPcts[_fenIdx12] !== undefined) {
+          _myPctAt12 = (sideChar === 'w') ? evalPcts[_fenIdx12] : (100 - evalPcts[_fenIdx12]);
+        }
+        var _hasEvidence = (_myPctAt12 !== null && _myPctAt12 <= 40);
+        if (_sideLost && _hasEvidence) {
+          return {
+            id: 'g3-king-center-' + sideChar, group: 3, score: 38, sev: 'medium', icon: '🏰',
+            text: sideLabel + ': sau 12 nước vẫn chưa nhập thành, Vua còn kẹt ở cột '
+                + FLS.charAt(kf).toUpperCase() + ' gần trung tâm — dễ thành mục tiêu tấn công sớm'
+                + ' (tại mốc này % thắng đã giảm còn ' + Math.round(_myPctAt12) + '%, và đây cũng là ván đã để thua).'
+          };
+        }
       }
     }
   }
@@ -7349,9 +7601,9 @@ function _deepG3_centerControl(gAnFens, sideChar, sideLabel) {
   if (oppAvg - myAvg < 1.5) return null;
   return {
     id: 'g3-center-' + sideChar, group: 3, score: 50, sev: 'low', icon: '🎯',
-    text: sideLabel + ': đối thủ kiểm soát trung tâm (d4/e4/d5/e5) tốt hơn rõ rệt trong phần lớn ván ('
-        + oppAvg.toFixed(1) + ' vs ' + myAvg.toFixed(1) + ' quân/tốt trung bình mỗi lần đo) — '
-        + 'các quân của bạn thiếu không gian cơ động.'
+    text: 'Bên ' + ((oppChar === 'w') ? 'Trắng' : 'Đen') + ' kiểm soát trung tâm (d4/e4/d5/e5) tốt hơn rõ rệt trong phần lớn ván ('
+        + oppAvg.toFixed(1) + ' vs ' + myAvg.toFixed(1) + ' quân/tốt trung bình mỗi lần đo) khiến các quân của '
+        + ((sideChar === 'w') ? 'Trắng' : 'Đen') + ' thiếu không gian cơ động.'
   };
 }
 
@@ -7521,10 +7773,10 @@ function _deepG3_castleContrast(gMoveInfo, gMoveTexts, sideChar, sideLabel, oppL
   return null;
 }
 
-function buildDeepInsightsGroup3(gAnFens, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel) {
+function buildDeepInsightsGroup3(gAnFens, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel, winnerSide, evalPcts) {
   var out = [];
   function pushForSide(sideChar, label) {
-    var ks = _deepG3_kingSafety(gAnFens, gMoveInfo, sideChar, label);
+    var ks = _deepG3_kingSafety(gAnFens, gMoveInfo, sideChar, label, winnerSide, evalPcts);
     if (ks) out.push(ks);
     var cc = _deepG3_centerControl(gAnFens, sideChar, label);
     if (cc) out.push(cc);
@@ -7659,6 +7911,14 @@ function _g4_findBackward(board, profile, sideChar) {
       }
     }
     if (supported) continue;
+    /* Gốc chuỗi Tốt (VD a2 bảo vệ b3): Tốt này đang BẢO VỆ 1 Tốt cùng màu ở chéo phía trước -> có vai trò rõ,
+       không phải Tốt lùi yếu — bỏ qua. */
+    var _protectsAhead = false;
+    [f - 1, f + 1].forEach(function(nf){
+      if (nf < 0 || nf > 7) return;
+      for (var pi = 0; pi < files[nf].length; pi++) { if (files[nf][pi] === r + dir) _protectsAhead = true; }
+    });
+    if (_protectsAhead) continue;
     var stopR = r + dir;
     if (stopR < 0 || stopR > 7) continue;
     if (!_g4_pawnControls(board, stopR, f, oppCol)) continue;
@@ -8036,7 +8296,7 @@ function _g6_findStableStart(gAnFens, endIdx) {
   return start;
 }
 
-function _deepG6_materialImbalance(gAnFens, gMoveTexts, sideChar, sideLabel, oppLabel) {
+function _deepG6_materialImbalance(gAnFens, gMoveTexts, sideChar, sideLabel, oppLabel, winnerSide, playerView) {
   if (!gAnFens || !gAnFens.length) return null;
   var endIdx = gAnFens.length - 1;
   var board = boardArrayFromFen(gAnFens[endIdx]).board;
@@ -8063,9 +8323,19 @@ function _deepG6_materialImbalance(gAnFens, gMoveTexts, sideChar, sideLabel, opp
   var behindProfile = (aheadChar === sideChar) ? opp : mine;
   var isPositive = (aheadChar === sideChar);
 
+  /* winnerSide thực tế là 'w' | 'b' | 'draw' (xem _winnerSideForDeep) — TRƯỚC ĐÂY so với 'white'/'black'
+     nên luôn lệch -> ván bên hơn chất THẮNG vẫn bị ghi nhầm "vẫn để thua". Chuẩn hoá cả 2 kiểu viết. */
+  var _wNorm = (winnerSide === 'white') ? 'w' : (winnerSide === 'black') ? 'b' : winnerSide;
+  var _aheadWord = aheadChar; /* 'w' | 'b' */
+  /* Viết trung tính theo MÀU QUÂN (Trắng/Đen), không dùng tên người chơi: "Trắng có lợi thế hơn chất ... nên có ưu thế lớn và đã chiến thắng" */
+  var _aheadColor = (aheadChar === 'w') ? 'Trắng' : 'Đen';
   var text = 'Từ nước <b>' + startMoveNum + startSideCh + (gMoveTexts[startIdx] || '') + '</b>, '
-      + aheadLabel + ' thi đấu với lợi thế hơn chất: ' + _g6_describeProfile(aheadProfile)
-      + ' đối đầu ' + _g6_describeProfile(behindProfile) + ' (chênh khoảng ' + Math.abs(diff) + ' điểm chất).';
+    + _aheadColor + ' có lợi thế hơn chất: ' + _g6_describeProfile(aheadProfile)
+    + ' đối đầu ' + _g6_describeProfile(behindProfile) + ' (chênh khoảng ' + Math.abs(diff) + ' điểm chất)';
+  if (_wNorm === _aheadWord) text += ' nên có ưu thế ' + (Math.abs(diff) >= 4 ? 'lớn ' : '') + 'và đã chiến thắng';
+  else if (_wNorm === 'draw') text += ', nhưng không chuyển hoá được lợi thế này và ván kết thúc hoà';
+  else if (_wNorm && _wNorm !== _aheadWord) text += ', nhưng cuối cùng vẫn để thua';
+  text += '.';
 
   return {
     id: 'g6-material-' + sideChar, group: 6, score: 58, sev: (Math.abs(diff) >= 4) ? 'high' : 'medium',
@@ -8073,10 +8343,10 @@ function _deepG6_materialImbalance(gAnFens, gMoveTexts, sideChar, sideLabel, opp
   };
 }
 
-function buildDeepInsightsGroup6(gAnFens, gMoveTexts, detectedSide, whiteLabel, blackLabel) {
+function buildDeepInsightsGroup6(gAnFens, gMoveTexts, detectedSide, whiteLabel, blackLabel, winnerSide) {
   var out = [];
   function pushForSide(sideChar, label, oppLabel) {
-    var mi = _deepG6_materialImbalance(gAnFens, gMoveTexts, sideChar, label, oppLabel);
+    var mi = _deepG6_materialImbalance(gAnFens, gMoveTexts, sideChar, label, oppLabel, winnerSide, detectedSide === 'white' || detectedSide === 'black');
     if (mi) out.push(mi);
   }
   if (detectedSide === 'white') pushForSide('w', whiteLabel + ' — Trắng', blackLabel + ' — Đen');
@@ -8231,10 +8501,10 @@ function buildDeepInsightsAll(cls, evalPcts, cpLosses, gAnScores, gAnFens, gMove
   if (opn) all.push(opn);
   all = all.concat(buildDeepInsightsGroup1(cls, evalPcts, cpLosses, gAnFens, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel));
   all = all.concat(buildDeepInsightsGroup2(cls, cpLosses, gAnScores, gAnFens, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel));
-  all = all.concat(buildDeepInsightsGroup3(gAnFens, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel));
+  all = all.concat(buildDeepInsightsGroup3(gAnFens, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel, winnerSide, evalPcts));
   all = all.concat(buildDeepInsightsGroup4(gAnFens, detectedSide, whiteLabel, blackLabel));
   all = all.concat(buildDeepInsightsGroup5(cls, cpLosses, gMoveInfo, gAnFens, gMoveTexts, winnerSide, detectedSide, whiteLabel, blackLabel, evalPcts));
-  all = all.concat(buildDeepInsightsGroup6(gAnFens, gMoveTexts, detectedSide, whiteLabel, blackLabel));
+  all = all.concat(buildDeepInsightsGroup6(gAnFens, gMoveTexts, detectedSide, whiteLabel, blackLabel, winnerSide));
   /* Nhóm 6 (Quản lý thời gian): bỏ qua theo yêu cầu — tái dùng logic
      có sẵn ở "Gợi ý từ pattern lỗi" cũ khi ghép vào HTML, không có
      ở đây. */
@@ -8464,7 +8734,7 @@ function _narrG3_postOpeningState(cls, evalPcts, gAnFens, gMoveTexts, gMoveInfo,
   if (aheadChar) {
     var _scHere = (typeof gAnScores !== 'undefined' && gAnScores) ? gAnScores[boundary] : null;
     if (_scMateFor(_scHere, gAnFens[boundary], aheadChar)) {
-      return 'Tính tới nước <b>' + moveNum + (sideChar === 'w' ? '.' : '...') + (gMoveTexts[boundary] || '')
+      return 'Tính tới nước <b>' + moveNum + (boundary % 2 === 0 ? '.' : '...') + (gMoveTexts[boundary] || '')
            + '</b> (thời điểm ra khỏi khai cuộc): ' + leadTxt + ' nhờ đòn phối hợp chiếu hết' + _deficitClause + '.';
     }
   }
@@ -8515,7 +8785,7 @@ function _narrG3_postOpeningState(cls, evalPcts, gAnFens, gMoveTexts, gMoveInfo,
     var _recentSwing = (_aheadPctNow !== null && _pBack !== null) ? (_aheadPctNow - _pBack) : 0;
     if (_aheadPctNow !== null && _aheadPctNow > 70 && _recentForcing
         && (aheadMat <= -100 || (reasons.length === 0 && _recentSwing >= 15))) {
-      return 'Tính tới nước <b>' + moveNum + (sideChar === 'w' ? '.' : '...') + (gMoveTexts[boundary] || '')
+      return 'Tính tới nước <b>' + moveNum + (boundary % 2 === 0 ? '.' : '...') + (gMoveTexts[boundary] || '')
            + '</b> (thời điểm ra khỏi khai cuộc): ' + leadTxt + ' nhờ đòn chiến thuật đang diễn ra' + _deficitClause + '.';
     }
   }
@@ -8529,7 +8799,7 @@ function _narrG3_postOpeningState(cls, evalPcts, gAnFens, gMoveTexts, gMoveInfo,
     if (sameSideExtra.length) reasonTxt += ' và ' + sameSideExtra.join(' và ');
   }
 
-  return 'Tính tới nước <b>' + moveNum + (sideChar === 'w' ? '.' : '...') + (gMoveTexts[boundary] || '')
+  return 'Tính tới nước <b>' + moveNum + (boundary % 2 === 0 ? '.' : '...') + (gMoveTexts[boundary] || '')
        + '</b> (thời điểm ra khỏi khai cuộc): ' + leadTxt + reasonTxt + '.';
 }
 
@@ -8540,10 +8810,25 @@ function _narrG3_postOpeningState(cls, evalPcts, gAnFens, gMoveTexts, gMoveInfo,
 /* ĐỔI: trả về OBJECT {text, idx, moveNum, mvSide, gainerLabel} thay vì chỉ
    trả string — để #14 Kết luận TẬN DỤNG LẠI được đúng nước/bên đã tìm ra
    ở đây, không phải quét lại evalPcts lần nữa (refactor dùng chung index). */
-function _narrG5_firstTurningMove(cls, evalPcts, gMoveTexts, sideChar, sideLabel, oppLabel) {
-  var SWING_MIN = 25;
+function _narrG5_firstTurningMove(cls, evalPcts, gMoveTexts, sideChar, sideLabel, oppLabel, swingMinOverride) {
+  var SWING_MIN = (typeof swingMinOverride === 'number') ? swingMinOverride : 25;
   for (var i = 0; i < cls.length; i++) {
-    if (cls[i] === 'book') continue;
+    /* SỬA (phát hiện qua case 17...h5?? ván Olympiad 2026, Gorshtein-Banh
+       Gia Huy): TRƯỚC ĐÂY bỏ qua thẳng mọi nước cls[i]==='book', với lý do
+       "đã trong sách thì không tính là bước ngoặt". Nhưng 'book' ở đây chỉ
+       có nghĩa là "chuỗi nước này TỪNG khớp với 1 dòng có sẵn trong CSDL
+       (OPENING_BOOK)" — tức "đã từng được chơi/ghi nhận", KHÔNG đồng nghĩa
+       "engine chấm là ổn". 1 nước hoàn toàn có thể vừa khớp 1 dòng lý
+       thuyết cũ (có thể đã lỗi thời hoặc hiếm khi đúng) vừa là 1 sai lầm
+       khách quan rất lớn ở chính ván này. Việc bỏ qua vô điều kiện khiến
+       "Bước ngoặt đầu tiên" bị nhảy cóc qua đúng sai lầm lớn nhất, đầu
+       tiên của ván (17...h5??, +0.08→+2.31) để báo nhầm 1 bước ngoặt XA
+       HƠN, KÉM QUAN TRỌNG HƠN về mặt "đầu tiên" (dù có thể vẫn đúng về
+       mặt "quyết định cuối cùng" — xem _narrG5_decisiveTurningMove).
+       Giữ lại việc bỏ qua 'book' CHỈ khi swing KHÔNG đủ lớn để tự nó đã
+       là 1 bước ngoặt đáng nói (dưới ngưỡng) — tránh nhiễu với các dao
+       động nhỏ tự nhiên trong khai cuộc lý thuyết. Với swing ≥ SWING_MIN,
+       luôn tính, bất kể có bị gắn 'book' hay không. */
     var beforeSidePct = _deepPct(evalPcts, i, sideChar);
     var afterSidePct = _deepPct(evalPcts, i + 1, sideChar);
     if (beforeSidePct === null || afterSidePct === null) continue;
@@ -8567,6 +8852,47 @@ function _narrG5_firstTurningMove(cls, evalPcts, gMoveTexts, sideChar, sideLabel
     var text = 'Bước ngoặt xuất hiện ở nước <b>' + moveNum + (mvSide === 'w' ? '.' : '...')
         + (gMoveTexts[i] || '') + '</b> khiến khả năng thắng bên ' + colorWord + ' ' + verbPhrase + '.';
     return {text: text, idx: i, moveNum: moveNum, mvSide: mvSide, gainerLabel: gainerLabel, favorable: (afterSidePct > beforeSidePct)};
+  }
+  return null;
+}
+
+/* ── "Bước ngoặt QUYẾT ĐỊNH" (MỚI, theo đề xuất dev) ──
+   Khác _narrG5_firstTurningMove (tìm bước ngoặt ĐẦU TIÊN theo thứ tự thời
+   gian, dù swing đó có bị đảo ngược sau đó hay không — VD 17...h5?? cho
+   Trắng ưu thế nhưng rồi Trắng lại đánh mất), hàm này quét NGƯỢC từ cuối
+   ván để tìm swing lớn (≥25%) GẦN NHẤT mà bên hưởng lợi TRÙNG với bên
+   thắng chung cuộc (winnerSide) — tức đây mới là bước ngoặt THỰC SỰ định
+   đoạt kết quả, không phải chỉ là dao động giữa chừng rồi bị san bằng.
+   Nếu trùng ĐÚNG 1 nước với bước ngoặt "đầu tiên" (ván chỉ có 1 bước
+   ngoặt lớn duy nhất, vừa đầu vừa cuối) thì trả về null để tránh lặp lại
+   y hệt 1 câu 2 lần trong "Phân tích ván đấu". */
+function _narrG5_decisiveTurningMove(cls, evalPcts, gMoveTexts, sideChar, sideLabel, oppLabel, winnerSide, firstTurnIdx, swingMinOverride) {
+  var SWING_MIN = (typeof swingMinOverride === 'number') ? swingMinOverride : 25;
+  var winnerChar = (winnerSide === 'white' || winnerSide === 'w') ? 'w' : (winnerSide === 'black' || winnerSide === 'b') ? 'b' : null;
+  if (!winnerChar) return null; /* hoà thì không có "bên thắng" để đối chiếu */
+  for (var i = cls.length - 1; i >= 0; i--) {
+    var beforeSidePct = _deepPct(evalPcts, i, sideChar);
+    var afterSidePct = _deepPct(evalPcts, i + 1, sideChar);
+    if (beforeSidePct === null || afterSidePct === null) continue;
+    var swing = afterSidePct - beforeSidePct;
+    if (Math.abs(swing) < SWING_MIN) continue;
+    /* Bên hưởng lợi từ swing này (win% của họ tăng) phải TRÙNG winnerChar */
+    var gainerChar = (swing > 0) ? sideChar : ((sideChar === 'w') ? 'b' : 'w');
+    if (gainerChar !== winnerChar) continue;
+    if (i === firstTurnIdx) return null; /* trùng hệt bước ngoặt đầu tiên -> khỏi lặp lại */
+    var moveNum = Math.floor(i / 2) + 1;
+    var mvSide = (i % 2 === 0) ? 'w' : 'b';
+    var colorWord = (sideChar === 'w') ? 'Trắng' : 'Đen';
+    var verbPhrase = (afterSidePct > beforeSidePct)
+      ? 'tăng vọt từ <b>' + Math.round(beforeSidePct) + '%</b> lên <b>' + Math.round(afterSidePct) + '%</b>'
+      : 'sụp đổ từ <b>' + Math.round(beforeSidePct) + '%</b> xuống <b>' + Math.round(afterSidePct) + '%</b>';
+    var text = 'Bước ngoặt quyết định: nước <b>' + moveNum + (mvSide === 'w' ? '.' : '...')
+        + (gMoveTexts[i] || '') + '</b> khiến khả năng thắng bên ' + colorWord + ' ' + verbPhrase
+        + ' — đây chính là thời điểm định đoạt kết quả chung cuộc của cả ván.';
+    return {
+      id: 'g1-decisive-turn-' + sideChar, group: 1, score: 66, sev: 'high', icon: '🔴',
+      positive: (winnerChar === sideChar), text: text, idx: i
+    };
   }
   return null;
 }
@@ -9005,6 +9331,36 @@ function _narrOverviewText(cls, evalPcts, sideChar, oppChar, sideLabel, oppLabel
   /* Fallback: kết quả đã ngã ngũ nhưng KHÔNG nhận ra dạng lý do nào (VD
      [Termination] thiếu, hoặc ghi dạng lạ chưa có trong danh sách ở
      trên) — vẫn nói 1 câu ngắn thay vì im lặng, để form luôn ổn định. */
+  /* Dạng 3 (MỚI, theo đề xuất dev) — "Thế trận chiếu hết" (Checkmate Net):
+     trước đây nếu nước cuối KHÔNG có '#' và không đọc được [Termination]
+     phù hợp, tool bó tay nói "chưa xác định được lý do kết thúc cụ thể" —
+     dù rất có thể ván thực ra đã KẾT THÚC (đầu hàng) vì bên thua nhìn thấy
+     trước 1 lưới chiếu hết không thể tránh khỏi (mate in N) sắp xảy ra.
+     Ưu tiên 1: annotation [%eval #-N]/[%eval #N] THẬT từ PGN gốc (do 1
+     engine mạnh của nguồn phát hành broadcast tự chèn, đáng tin hơn hẳn
+     engine nông của chính tool) — xem gPgnFinalMateEval, gán ở
+     _analyzeTabRunWithText(). Quy ước dấu LUÔN theo góc nhìn Trắng.
+     Ưu tiên 2 (fallback khi PGN không có annotation): tự tra CHÍNH thế cờ
+     cuối cùng bằng engine đã phân tích sẵn của tool (gAnScores) — nếu tại
+     đó bên sắp đi (chính là bên đã thua/đầu hàng) đã bị dính mate theo
+     PV1 của HỌ (m1 âm, tức ngay cả nước phòng thủ tốt nhất cũng thua) thì
+     coi là đủ căn cứ. */
+  if (!endReason && winnerSide && winnerSide !== 'draw') {
+    var _mateNFromPgn = null;
+    if (typeof gPgnFinalMateEval === 'number' && gPgnFinalMateEval !== 0) {
+      var _mateSideIsWhite = gPgnFinalMateEval > 0;
+      var _mateSideMatchesWinner = ((winnerSide === 'white' || winnerSide === 'w') && _mateSideIsWhite) || ((winnerSide === 'black' || winnerSide === 'b') && !_mateSideIsWhite);
+      if (_mateSideMatchesWinner) _mateNFromPgn = Math.abs(gPgnFinalMateEval);
+    }
+    if (_mateNFromPgn !== null) {
+      endReason = 'rơi vào thế chiếu hết không thể tránh khỏi (mate in ' + _mateNFromPgn + ' theo đánh giá gốc của nguồn ván đấu)';
+    } else if (typeof gAnScores !== 'undefined' && gAnScores && gAnScores.length) {
+      var _lastScFinal = gAnScores[gAnScores.length - 1];
+      if (_lastScFinal && typeof _lastScFinal.m1 === 'number' && _lastScFinal.m1 !== null && _lastScFinal.m1 < 0) {
+        endReason = 'rơi vào thế chiếu hết không thể tránh khỏi (mate in ' + Math.abs(_lastScFinal.m1) + ')';
+      }
+    }
+  }
   var endReasonUnknownTxt = (!endReason && winnerSide && winnerSide !== 'draw') ? ' (chưa xác định được lý do kết thúc cụ thể)' : '';
 
   /* "đáng tiếc" CHỈ thêm đúng 1 trường hợp cụ thể theo yêu cầu: thua vì
@@ -9100,13 +9456,39 @@ function _narrOverviewText(cls, evalPcts, sideChar, oppChar, sideLabel, oppLabel
        "đổi chiều N lần, cuối trận nghiêng về bên nào" thay vì lấy trung
        bình; chỉ khi HOÀN TOÀN không có lần đổi chiều nào mới xét tới
        trung bình để phân biệt "một chiều" hay "cân bằng" thật sự. */
-    var _flipCount = 0;
-    for (var _fi = 0; _fi < cls.length; _fi++) {
-      if (cls[_fi] === 'book') continue;
-      var _fBefore = evalPcts[_fi], _fAfter = evalPcts[_fi + 1];
-      if (_fBefore === undefined || _fAfter === undefined) continue;
-      if (Math.abs(_fAfter - _fBefore) < 25) continue;
-      if ((_fBefore - 50) * (_fAfter - 50) < 0) _flipCount++;
+    /* SỬA (theo góp ý người dùng) — cách đếm cũ chỉ kiểm tra "trước và sau
+       nằm khác phía mốc 50%" (VD 51%→27%: trước 51 vẫn tính là "Trắng
+       nhỉnh hơn" dù chỉ hơn 1 điểm, đã đủ để tính là 1 lần đổi chiều khi
+       sau đó xuống dưới 50). Nhưng nhỉnh hơn 1 điểm quanh 50% thực chất là
+       CÂN BẰNG/GIẰNG CO, không phải "đang dẫn trước" theo nghĩa có ý
+       nghĩa — đếm kiểu đó dễ báo "đổi chiều" cho những dao động nhỏ quanh
+       5x-4x không đáng kể.
+       Đổi sang đếm kiểu "vùng đệm" (hysteresis): chỉ công nhận 1 bên đang
+       THỰC SỰ dẫn trước khi % của họ vượt hẳn qua 1 mốc XÁC NHẬN (không
+       phải chỉ 50%), và chỉ tính là "đổi chiều" khi bên dẫn trước được
+       xác nhận đổi từ bên này sang bên kia (khoảng giữa 2 mốc xác nhận —
+       vùng giằng co — không tính, giữ nguyên trạng thái xác nhận gần nhất).
+       Mốc xác nhận TỰ ĐIỀU CHỈNH theo mức biến động của cả ván: nếu ván
+       từng có lúc cực đoan (chạm ≥85% hoặc ≤15% ở đâu đó) — chọn mốc chặt
+       70/30; nếu ván chỉ giằng co vừa phải (chưa từng cực đoan) — dùng mốc
+       nhẹ hơn 60/40 để vẫn nhận ra được các lần đổi chiều thật của 1 ván
+       tương đối cân bằng. */
+    var _everExtreme = false;
+    for (var _exi = 0; _exi < evalPcts.length; _exi++) {
+      if (evalPcts[_exi] >= 85 || evalPcts[_exi] <= 15) { _everExtreme = true; break; }
+    }
+    var _confirmHi = _everExtreme ? 70 : 60, _confirmLo = 100 - _confirmHi;
+    var _flipCount = 0, _lastConfirmedSide = null; /* 'w' | 'b' | null */
+    for (var _fi = 0; _fi < evalPcts.length; _fi++) {
+      var _fW = evalPcts[_fi];
+      if (_fW === undefined || _fW === null) continue;
+      if (_fW >= _confirmHi) {
+        if (_lastConfirmedSide === 'b') _flipCount++;
+        _lastConfirmedSide = 'w';
+      } else if (_fW <= _confirmLo) {
+        if (_lastConfirmedSide === 'w') _flipCount++;
+        _lastConfirmedSide = 'b';
+      } /* else: nằm giữa 2 mốc (vùng giằng co) -> giữ nguyên _lastConfirmedSide, không tính gì */
     }
     /* ĐÃ THÊM (theo yêu cầu "câu Tổng quan cần dài hơn để dễ hình dung diễn biến"): tính thêm % thắng
        THẤP NHẤT và CAO NHẤT mà bên đang phân tích (sideChar) từng đạt được trong SUỐT ván (từ evalPcts đã
@@ -9124,19 +9506,64 @@ function _narrOverviewText(cls, evalPcts, sideChar, oppChar, sideLabel, oppLabel
       var _finalWhitePct = evalPcts[evalPcts.length - 1];
       var _finalLeanColor = (_finalWhitePct === undefined) ? null : (_finalWhitePct >= 50 ? 'Trắng' : 'Đen');
       var _rangeTxt = '';
-      if (_sideMinPct !== null && _sideMaxPct !== null && (_sideMaxPct - _sideMinPct) >= 30) {
+      /* SỬA (theo góp ý bên ngoài, đã xác nhận đúng): thuật ngữ "đổi chiều
+         N lần" đếm theo kiểu VƯỢT QUA mốc 50% — bỏ sót đúng những swing
+         LỚN mà cả trước/sau đều nằm CÙNG PHÍA mốc 50% (VD 1 bên từ "hơi
+         nhỉnh hơn" tăng vọt lên "áp đảo hẳn" — vẫn cùng 1 bên dẫn trước,
+         không "đổi chiều", nhưng rõ ràng là 1 biến động lớn đáng nhắc).
+         Ngoài ra câu lắp cũ LUÔN chèn tiền tố "Thế trận đổi chiều N lần"
+         phía trước dù _rangeTxt đã là câu 3-giai-đoạn hoàn chỉnh — khiến
+         câu bị lặp/rối khi 3-giai-đoạn kích hoạt, và khi 3-giai-đoạn KHÔNG
+         kích hoạt (do ngưỡng 25 mặc định của _narrG5_firstTurningMove quá
+         chặt so với swing thật) thì lại lộ ra đúng cụm gây hiểu lầm đó.
+         Sửa 2 việc:
+         (a) Dùng ngưỡng THẤP HƠN (18 thay vì 25) CHỈ riêng cho việc tìm
+             "2 bước ngoặt" ở câu Tổng quan này — bullet "Bước ngoặt" độc
+             lập (icon 📈/🔴) vẫn giữ ngưỡng chặt 25 như cũ, không đổi.
+         (b) Bỏ hẳn tiền tố "Thế trận đổi chiều N lần" — không dùng thuật
+             ngữ đếm theo mốc 50% trong câu Tổng quan nữa. */
+      var OVERVIEW_SWING_MIN = 18;
+      /* MỚI (theo yêu cầu người dùng) — GIỮ LẠI cách nói "đổi chiều N lần"
+         nhưng CHỈ khi _flipCount (đã tính lại bằng hysteresis ở trên, mỗi
+         lần đếm đều đã đạt mốc xác nhận 60/40 hoặc 70/30 tuỳ độ biến động
+         ván) thực sự ≥ 2 — tức ván THỰC SỰ có nhiều pha đổi chủ rõ ràng,
+         không phải chỉ 1 lần chuyển từ "cân bằng" sang "1 bên áp đảo hẳn"
+         (trường hợp đó dùng câu 2-giai-đoạn/dự phòng bên dưới, không cần
+         nói "đổi chiều" vì chỉ có đúng 1 lần). */
+      if (_flipCount >= 2) {
+        var _finalWhitePctMulti = evalPcts[evalPcts.length - 1];
+        var _finalLeanColorMulti = (_finalWhitePctMulti === undefined) ? null : (_finalWhitePctMulti >= 50 ? 'Trắng' : 'Đen');
+        volTxt = ' Thế trận đổi chiều rõ rệt ' + _flipCount + ' lần trong ván'
+          + (_finalLeanColorMulti ? ', cuối cùng ưu thế thắng nghiêng hẳn về bên ' + _finalLeanColorMulti : '') + '.';
+      } else {
+      var _ov_first = _narrG5_firstTurningMove(cls, evalPcts, gMoveTexts, sideChar, sideLabel, oppLabel, OVERVIEW_SWING_MIN);
+      var _ov_decisive = _ov_first
+        ? _narrG5_decisiveTurningMove(cls, evalPcts, gMoveTexts, sideChar, sideLabel, oppLabel, winnerSide, _ov_first.idx, OVERVIEW_SWING_MIN)
+        : null;
+      if (_ov_first && _ov_decisive && _ov_decisive.idx !== _ov_first.idx) {
+        var _ov_firstGainerColor = _ov_first.favorable ? (sideChar === 'w' ? 'Trắng' : 'Đen') : (sideChar === 'w' ? 'Đen' : 'Trắng');
+        var _ov_firstMoveTxt = _ov_first.moveNum + (_ov_first.mvSide === 'w' ? '.' : '...') + (gMoveTexts[_ov_first.idx] || '');
+        var _ov_decisiveMoveNum = Math.floor(_ov_decisive.idx / 2) + 1;
+        var _ov_decisiveMvSide = (_ov_decisive.idx % 2 === 0) ? 'w' : 'b';
+        var _ov_decisiveMoveTxt = _ov_decisiveMoveNum + (_ov_decisiveMvSide === 'w' ? '.' : '...') + (gMoveTexts[_ov_decisive.idx] || '');
+        volTxt = ' Ván đấu có hai bước ngoặt lớn: đến <b>' + _ov_firstMoveTxt
+          + '</b>, bên ' + _ov_firstGainerColor + ' vươn lên ưu thế đáng kể nhưng không chuyển hoá được thành thắng, '
+          + 'rồi tới <b>' + _ov_decisiveMoveTxt + '</b> thì cục diện đảo ngược hoàn toàn và bên '
+          + (_finalLeanColor || '') + ' giành thế thắng quyết định.';
+      } else if (_sideMinPct !== null && _sideMaxPct !== null && (_sideMaxPct - _sideMinPct) >= 30) {
         if (_sideMinPct <= 35 && _sideMaxPct >= 70) {
-          _rangeTxt = ': ' + (sideChar === 'w' ? 'Trắng' : 'Đen') + ' từng chịu sức ép, có lúc chỉ còn ' + Math.round(_sideMinPct)
-            + '% thắng, nhưng dần giành lại thế chủ động và áp đảo hoàn toàn về cuối ván (lên tới ' + Math.round(_sideMaxPct) + '% thắng)';
+          volTxt = ' ' + (sideChar === 'w' ? 'Trắng' : 'Đen') + ' từng chịu sức ép, có lúc chỉ còn ' + Math.round(_sideMinPct)
+            + '% thắng, nhưng dần giành lại thế chủ động và áp đảo hoàn toàn về cuối ván (lên tới ' + Math.round(_sideMaxPct) + '% thắng).';
         } else if (_sideMaxPct >= 70 && _sideMinPct > 35) {
-          _rangeTxt = ', ' + (sideChar === 'w' ? 'Trắng' : 'Đen') + ' từng chiếm ưu thế lớn (cao nhất ' + Math.round(_sideMaxPct) + '% thắng) trước khi cục diện thay đổi';
+          volTxt = ' ' + (sideChar === 'w' ? 'Trắng' : 'Đen') + ' từng chiếm ưu thế lớn (cao nhất ' + Math.round(_sideMaxPct)
+            + '% thắng) trước khi cục diện thay đổi' + (_finalLeanColor ? ', cuối trận nghiêng về bên ' + _finalLeanColor : '') + '.';
+        } else {
+          volTxt = _finalLeanColor ? ' Cuối trận ưu thế thắng nghiêng về bên ' + _finalLeanColor + '.' : '';
         }
+      } else {
+        volTxt = _finalLeanColor ? ' Cuối trận ưu thế thắng nghiêng về bên ' + _finalLeanColor + '.' : '';
       }
-      volTxt = _rangeTxt
-        ? ' Thế trận đổi chiều ' + _flipCount + ' lần' + _rangeTxt + '.'
-        : (_finalLeanColor
-            ? ' Thế trận đổi chiều ' + _flipCount + ' lần, cuối trận ưu thế thắng nghiêng về bên ' + _finalLeanColor + '.'
-            : ' Thế trận đổi chiều ' + _flipCount + ' lần trong ván.');
+      }
     } else {
       var _pctSum = 0, _pctCount = 0;
       for (var _pi = 0; _pi < cls.length; _pi++) {
@@ -9224,9 +9651,13 @@ var LEFTOVER_ID_MAP = {
   'meta-opening-state':  45,
   'meta-turning-point':  46,
   'meta-missed-chances': 47,
-  'g1-brilliant':        48
+  'g1-brilliant':        48,
+  'g1-decisive-turn':    49,
+  'g1-missedchance':     50,
+  'g1-comeback':         52,
+  'g1-selfmissedwin':    53
 };
-var NUM_AFTER_MAP = 49; /* candidate lạ chưa có trong bảng -> đánh số nối tiếp từ đây */
+var NUM_AFTER_MAP = 54; /* candidate lạ chưa có trong bảng -> đánh số nối tiếp từ đây */
 
 /* ── Tiêu đề hiển thị cho từng loại candidate khi lọt vào top 3-5 ý
    chính (xem buildGameNarrative, phần "POOL HỢP NHẤT"). Không cần phủ
@@ -9239,6 +9670,10 @@ var _NARR_BULLET_TITLE_MAP = {
   'g2-hanging':          'Sai lầm quan trọng nhất',
   'meta-missed-chances': 'Cơ hội quan trọng bị bỏ lỡ',
   'meta-turning-point':  'Bước ngoặt đầu tiên',
+  'g1-decisive-turn':    'Bước ngoặt quyết định',
+  'g1-missedchance':     'Cơ hội bị bỏ lỡ của đối thủ',
+  'g1-comeback':         'Lội ngược dòng',
+  'g1-selfmissedwin':    'Bỏ lỡ cơ hội thắng',
   'meta-opening-state':  'Trạng thái sau khai cuộc',
   'g1-soundsac':         'Quyết định hay nhất',
   'g1-brilliant':        'Nước cờ Brilliant',
@@ -9288,10 +9723,10 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
 
   var g1All = buildDeepInsightsGroup1(cls, evalPcts, cpLosses, gAnFens, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel);
   var g2All = buildDeepInsightsGroup2(cls, cpLosses, gAnScores, gAnFens, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel);
-  var g3All = buildDeepInsightsGroup3(gAnFens, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel);
+  var g3All = buildDeepInsightsGroup3(gAnFens, gMoveInfo, gMoveTexts, detectedSide, whiteLabel, blackLabel, winnerSide, evalPcts);
   var g4All = buildDeepInsightsGroup4(gAnFens, detectedSide, whiteLabel, blackLabel);
   var g5All = buildDeepInsightsGroup5(cls, cpLosses, gMoveInfo, gAnFens, gMoveTexts, winnerSide, detectedSide, whiteLabel, blackLabel, evalPcts);
-  var g6All = buildDeepInsightsGroup6(gAnFens, gMoveTexts, detectedSide, whiteLabel, blackLabel);
+  var g6All = buildDeepInsightsGroup6(gAnFens, gMoveTexts, detectedSide, whiteLabel, blackLabel, winnerSide);
 
   function byPrefix(arr, prefix){ return arr.filter(function(c){ return c.id.indexOf(prefix) === 0; }); }
   /* ĐÃ SỬA — LỖI NGHIÊM TRỌNG: indexOf('-' + sideChar) tìm chuỗi con ở
@@ -9501,6 +9936,52 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
   mistakeCandidates.forEach(function(c){ pool.push(c); });
   if (missedText) pool.push({id: 'meta-missed-chances', score: missedScore || 50, text: missedText, moveIdx: missedFirstIdx, positive: false, icon: '🤦'});
   if (turningText) pool.push({id: 'meta-turning-point', score: 68, text: turningText, moveIdx: g5Result.idx, positive: g5Result.favorable, icon: (g5Result.favorable ? '📈' : '📉')});
+  /* MỚI (theo đề xuất dev) — "Bước ngoặt QUYẾT ĐỊNH": bổ sung riêng, KHÔNG
+     thay thế "Bước ngoặt đầu tiên" ở trên — 2 cái có thể là 2 nước KHÁC
+     NHAU trong cùng 1 ván (VD 17...h5?? là bước ngoặt đầu tiên cho Trắng,
+     nhưng 40.Rxf5?? mới là bước ngoặt quyết định thật sự cho Đen). Hàm tự
+     trả về null nếu trùng ĐÚNG 1 nước với bước ngoặt đầu tiên, nên không
+     lo lặp lại. */
+  var decisiveTurn = _narrG5_decisiveTurningMove(cls, evalPcts, gMoveTexts, sideChar, sideLabel,
+      (oppChar === 'w') ? whiteLabel : blackLabel, winnerSide, g5Result ? g5Result.idx : -1);
+  if (decisiveTurn) pool.push({id: decisiveTurn.id, score: decisiveTurn.score, text: decisiveTurn.text, moveIdx: decisiveTurn.idx, positive: decisiveTurn.positive, icon: decisiveTurn.icon});
+  /* MỚI (theo đề xuất dev) — "Cơ hội bị bỏ lỡ của đối thủ": đã tính sẵn
+     trong g1All (_deepG1_missedChance), chỉ cần lọc ra và đưa vào pool. */
+  var missedChanceCand = null;
+  bySideSuffix(g1All).forEach(function(c){ if (c.id.indexOf('g1-missedchance') === 0) missedChanceCand = c; });
+  var _playerKnown = (detectedSide === 'white' || detectedSide === 'black');
+  var oppPool = []; /* ý về ĐỐI THỦ: khi đã biết người chơi chỉ giữ 1 ý điểm cao nhất (xem cuối khối) */
+  if (missedChanceCand && _playerKnown) {
+    oppPool.push({id: missedChanceCand.id, score: missedChanceCand.score, text: missedChanceCand.text, moveIdx: _extractMoveIdxFromCandText(missedChanceCand.text, sideChar), positive: missedChanceCand.positive, icon: missedChanceCand.icon});
+  } else if (missedChanceCand) pool.push({id: missedChanceCand.id, score: missedChanceCand.score, text: missedChanceCand.text, moveIdx: _extractMoveIdxFromCandText(missedChanceCand.text, sideChar), positive: missedChanceCand.positive, icon: missedChanceCand.icon});
+  /* MỚI (theo đề xuất dev) — "Comeback/Recovery": đã tính sẵn trong g1All
+     (_deepG1_comeback), chỉ cần lọc ra và đưa vào pool. */
+  var comebackCand = null;
+  bySideSuffix(g1All).forEach(function(c){ if (c.id.indexOf('g1-comeback') === 0) comebackCand = c; });
+  if (comebackCand) pool.push({id: comebackCand.id, score: comebackCand.score, text: comebackCand.text, moveIdx: _extractMoveIdxFromCandText(comebackCand.text, sideChar), positive: comebackCand.positive, icon: comebackCand.icon});
+  /* MỚI — "Bỏ lỡ cơ hội thắng lớn" của CẢ 2 BÊN (không lọc theo
+     detectedSide — xem comment ở buildDeepInsightsGroup1): mỗi candidate
+     tự mang sideChar trong hậu tố id (-w/-b), lấy đúng bên đó để suy
+     moveIdx từ text. */
+  g1All.forEach(function(c){
+    if (c.id.indexOf('g1-selfmissedwin-') === 0) {
+      var _cSide = c.id.slice(-1);
+      var _cItem = {id: c.id, score: c.score, text: c.text, moveIdx: _extractMoveIdxFromCandText(c.text, _cSide), positive: c.positive, icon: c.icon};
+      if (_playerKnown && _cSide !== sideChar) oppPool.push(_cItem); else pool.push(_cItem);
+    }
+  });
+  /* Sai lầm lớn nhất của ĐỐI THỦ (g1-worstmove của bên kia) cũng cạnh tranh trong oppPool */
+  if (_playerKnown) {
+    byPrefix(g1All, 'g1-worstmove').forEach(function(c){
+      if (c.id.slice(-2) !== ('-' + oppChar)) return;
+      var _oLbl = (oppChar === 'w') ? whiteLabel : blackLabel;
+      var _oDesc = c.text.replace(/^[^:]+:\s*/, '').replace(/^nước tệ nhất ván là /, '');
+      oppPool.push({id: c.id, score: c.score, moveIdx: _extractMoveIdxFromCandText(c.text, oppChar), positive: false, icon: c.icon,
+        text: 'Sai lầm lớn nhất của đối thủ' + (_oLbl ? ' (' + _oLbl + ')' : '') + ' là ' + _oDesc.replace(/,?\s*đáng để xem lại kỹ\.?$/, '.')});
+    });
+    oppPool.sort(function(a, b){ return b.score - a.score; });
+    if (oppPool[0]) pool.push(oppPool[0]); /* CHỈ 1 ý về đối thủ */
+  }
   if (brilCand) pool.push({id: brilCand.id, score: brilCand.score, text: brilCand.text, moveIdx: brilCand.brilliantIdxs ? brilCand.brilliantIdxs[0] : _extractMoveIdxFromCandText(brilCand.text, sideChar), positive: true, icon: brilCand.icon});
   if (g6Pool[0]) pool.push({id: g6Pool[0].id, score: g6Pool[0].score, text: g6Pool[0].text, moveIdx: _extractMoveIdxFromCandText(g6Pool[0].text, sideChar), positive: true, icon: g6Pool[0].icon});
   if (chkCand) {
@@ -9518,7 +9999,19 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
 
   /* Chọn 3-5 ý ĐIỂM CAO NHẤT (ván nào ít dữ liệu thì lấy hết những gì có,
      không ép đủ 3 nếu thực sự không có đủ candidate). */
-  var poolSorted = pool.slice().sort(function(a, b){ return b.score - a.score; });
+  /* CHỐT CHẶN CHỐNG LẶP (phản hồi người dùng: câu "Cơ hội bị bỏ lỡ" vẫn
+     hiện 2 lần dù đã sửa usedIds — leftover đang bị ẨN nên nguyên nhân thật
+     nằm ở CHÍNH pool: cùng 1 candidate có thể được đăng ký vào pool qua
+     nhiều đường khác nhau). Lọc trùng theo id VÀ theo text (giữ bản điểm
+     cao nhất) ngay trước khi chọn top-6 — an toàn cho mọi mục hiện tại và
+     tương lai, bất kể được đăng ký qua đường nào. */
+  var _poolSeenId = {}, _poolSeenText = {};
+  var poolSorted = pool.slice().sort(function(a, b){ return b.score - a.score; }).filter(function(c){
+    var t = String(c.text || '').replace(/<[^>]+>/g, '').trim();
+    if (_poolSeenId[c.id] || (t && _poolSeenText[t])) return false;
+    _poolSeenId[c.id] = true; if (t) _poolSeenText[t] = true;
+    return true;
+  });
   var selected = poolSorted.slice(0, Math.min(6, poolSorted.length)); /* hạ từ 7 xuống 6 theo yêu cầu Dan */
   var selectedIds = {};
   selected.forEach(function(c){ selectedIds[c.id] = true; });
@@ -9601,6 +10094,18 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
   [volCand, opnForOverview].concat(g6Pool[0] ? [g6Pool[0]] : [], chkCand ? [chkCand] : [], onlyCand ? [onlyCand] : [], underCand ? [underCand] : [], tenCand ? [tenCand] : [], simCand ? [simCand] : [], reversalCand ? [reversalCand] : [], drawThrowCand ? [drawThrowCand] : [], drawSaveCand ? [drawSaveCand] : [], brilCand ? [brilCand] : [], g7Pool, g8Pool, g11Pool, g12Pool)
     .forEach(function(c){ if (c) usedIds[c.id] = true; });
   _dupMistakeIds.forEach(function(id){ usedIds[id] = true; }); /* xem comment ở chỗ tạo _dupMistakeIds */
+  /* SỬA BUG LẶP BULLET (phát hiện qua case "Cơ hội bị bỏ lỡ của đối thủ"
+     hiện 2 lần ở ván Samackhat–MUHLUFFY): usedIds ở trên được liệt kê THỦ
+     CÔNG từng nguồn, không tự động bao gồm những candidate MỚI chỉ được
+     đăng ký thẳng vào `pool` (VD missedChanceCand/comebackCand/decisiveTurn
+     — pool.push() trực tiếp, không thuộc bất kỳ g*Pool nào ở danh sách
+     trên) — nên dù đã lọt top-6 qua `pool`/`selected` (đánh dấu ở
+     selectedIds), nó vẫn bị coi là "chưa dùng" khi lọc leftoverFromG1G5
+     (lọc theo usedIds, KHÁC selectedIds), khiến hiện lại lần 2 ở leftover.
+     Gộp thẳng mọi id đã lọt top-6 (selectedIds) vào usedIds — đảm bảo BẤT
+     KỲ candidate nào, dù đăng ký qua đường nào, hễ đã là 1 trong 6 bullet
+     chính thì chắc chắn không bao giờ hiện lại ở leftover nữa. */
+  Object.keys(selectedIds).forEach(function(id){ usedIds[id] = true; });
   var leftoverFromPool = pool.filter(function(c){ return !selectedIds[c.id]; });
   var leftoverFromG1G5 = g1All.concat(g2All, g3All, g4All, g5All, g6All).filter(function(c){ return !usedIds[c.id]; });
   var leftover = leftoverFromPool.concat(leftoverFromG1G5);
@@ -9640,6 +10145,14 @@ function buildGameNarrative(cls, evalPcts, cpLosses, gAnScores, gAnFens,
     var leftoverStart = sections.length;
     for (var _li = 0; _li < sections.length; _li++) { if (sections[_li].title && sections[_li].title.indexOf('(chưa xếp') === 0) { leftoverStart = _li; break; } }
     var main = sections.slice(0, leftoverStart), rest = sections.slice(leftoverStart);
+    /* Chốt chặn cuối chống lặp: bỏ section có text (sau khi bỏ thẻ HTML) trùng hệt 1 section đứng trước. */
+    var _secSeen = {};
+    main = main.filter(function(s){
+      var t = String(s.text || '').replace(/<[^>]+>/g, '').trim();
+      if (!t) return true;
+      if (_secSeen[t]) return false;
+      _secSeen[t] = true; return true;
+    });
     main.forEach(function(s){ s._ord = _secOrdIdx(s.text); });
     main.sort(function(a, b){ return a._ord - b._ord; }); /* stable: giữ nguyên thứ tự cũ khi trùng số nước */
     sections = head.concat(main, rest);
@@ -9990,6 +10503,77 @@ function buildMoveReport(cls, cpLosses, evalPcts) {
           + 's trong khi bình thường ~' + median.toFixed(1) + 's) — lỗi đi ẩu, thiếu tính toán. '
           + 'Nên dành thêm vài giây kiểm tra chiếu, ăn quân và các đòn dọa của đối thủ trước mỗi nước.'});
       }
+    });
+  })();
+
+  /* ═══════════════════════════════════════════════════════════════════
+     [FIRE] 2 NHẬN XÉT LỖI MỚI — quản lý thời gian / tàn cuộc mất Tốt cuối.
+     Trước đây 3 lỗi này chỉ xuất hiện khi 1 AI khác phân tích tay; CC11 không có mục nào
+     nêu thẳng. Cả 3 đều dựa trên dữ liệu SẴN CÓ (evalPcts, gAnFens, gMoveInfo, %clk) và CHỈ hiện
+     khi thật sự phát hiện vấn đề (im lặng nếu ván ổn). Chỉ xét bên người chơi nếu xác định được.
+     ═══════════════════════════════════════════════════════════════════ */
+  var _ccSides = (_detectedSide === 'white') ? ['w'] : (_detectedSide === 'black') ? ['b'] : ['w', 'b'];
+  var _ccResult = (_pgnNamesForReport && _pgnNamesForReport.result) ? _pgnNamesForReport.result : null;
+  function _ccPrefix(sc){ return (_ccSides.length === 2) ? ('<b>' + (sc === 'w' ? _whiteLabel : _blackLabel) + '</b>: ') : ''; }
+  function _ccMv(idx){ return '<b>' + (Math.floor(idx / 2) + 1) + (idx % 2 === 0 ? '.' : '...') + (gMoveTexts[idx] || '') + '</b>'; }
+  function _ccSideOf(idx){ return (gMoveInfo[idx] && gMoveInfo[idx].side === W) ? 'w' : 'b'; }
+  function _ccCount(fen, chars){
+    var p = String(fen || '').split(' ')[0], n = 0;
+    for (var k = 0; k < p.length; k++) if (chars.indexOf(p.charAt(k)) >= 0) n++;
+    return n;
+  }
+
+  /* ── (B) QUẢN LÝ THỜI GIAN: >65% thời gian dồn cho trung cuộc và/hoặc vào tàn cuộc khi còn dưới ~60s ── */
+  (function(){
+    var clocks = extractPgnClockSeconds(gLastRawPgnText);
+    if (!clocks.length || clocks.length !== cls.length) return;
+    var tcM = gLastRawPgnText.match(/\[TimeControl\s+"(\d+)(?:\+(\d+))?"\]/);
+    var baseT = tcM ? parseInt(tcM[1], 10) : null, incT = (tcM && tcM[2]) ? parseInt(tcM[2], 10) : 0;
+    if (!baseT) return;
+    var lowThr = 60; /* đồng hồ khi chạm mốc tàn cuộc (vạch trên đồ thị eval) phải < 60s */
+    _ccSides.forEach(function(sc){
+      var total = 0, midSpent = 0, egBefore = null, n = 0;
+      for (var ti = 0; ti < cls.length; ti++) {
+        if (_ccSideOf(ti) !== sc || clocks[ti] == null) continue;
+        var bef = (ti >= 2 && clocks[ti - 2] != null) ? clocks[ti - 2] : baseT;
+        var sp = Math.max(0, bef + incT - clocks[ti]);
+        var ph = _phaseForPly(ti);
+        total += sp; n++;
+        if (ph === 'middlegame') midSpent += sp;
+        if (ph === 'endgame' && egBefore === null) egBefore = bef;
+      }
+      if (n < 10 || total <= 0) return;
+      var midPct = Math.round(midSpent / total * 100);
+      var parts = [];
+      if (midPct > 65) parts.push('dùng đến ' + midPct + '% thời gian cho trung cuộc');
+      if (egBefore !== null && egBefore < lowThr) parts.push('bước vào tàn cuộc khi chỉ còn dưới 60 giây');
+      if (!parts.length) return;
+      insights.push({icon: '⏱', sev: 'high', text: _ccPrefix(sc) + '<b>Quản lý thời gian chưa tốt</b> khi ' + parts.join(' và ') + '.'});
+    });
+  })();
+
+  /* ── (C) TÀN CUỘC: tự đổi Tốt cuối cùng khi đang hơn → còn Vua + 1 quân nhẹ, không chiếu hết được ── */
+  (function(){
+    _ccSides.forEach(function(sc){
+      var pCh = (sc === 'w') ? 'P' : 'p', heavyCh = (sc === 'w') ? 'RQ' : 'rq', minorCh = (sc === 'w') ? 'NB' : 'nb';
+      var lostAt = -1;
+      for (var k = 1; k < gAnFens.length; k++) {
+        if (_ccCount(gAnFens[k - 1], pCh) >= 1 && _ccCount(gAnFens[k], pCh) === 0) { lostAt = k; break; }
+      }
+      if (lostAt < 0) return;
+      var mvIdx = lostAt - 1;
+      if (_ccSideOf(mvIdx) !== sc) mvIdx--;
+      if (mvIdx < 0 || _phaseForPly(mvIdx) !== 'endgame') return;
+      if (_ccCount(gAnFens[lostAt], heavyCh) > 0) return;
+      var minors = _ccCount(gAnFens[lostAt], minorCh);
+      if (minors > 1) return;
+      var before = _deepPct(evalPcts, mvIdx, sc);
+      var after = _deepPct(evalPcts, Math.min(lostAt + 1, evalPcts.length - 1), sc);
+      if (before === null || after === null || before < 60 || before - after < 8) return;
+      var isB = _ccCount(gAnFens[lostAt], (sc === 'w') ? 'B' : 'b') === 1;
+      var left = (minors === 0) ? 'chỉ còn Vua' : ('chỉ còn Vua + ' + (isB ? 'Tượng' : 'Mã'));
+      insights.push({icon: '♟', sev: 'high', text: _ccPrefix(sc) + '<b>Xử lý tàn cuộc không tốt</b> do tự đổi quân Tốt cuối cùng của mình, dẫn đến ' + left
+        + (_ccResult === '1/2-1/2' ? ' nên hòa đáng tiếc.' : ' nên không đủ lực lượng chiếu hết.')});
     });
   })();
 
@@ -11425,17 +12009,27 @@ function reviewJumpTo(idx, noScroll, instant){
 
   if(idx>0 && !instant){
     /* Bước 1: hiện ngay thế cờ TRƯỚC nước idx (tức là sau nước idx-1) */
-    _reviewJumpToCore(idx-1, true);
+    /* SỬA (phản hồi người dùng: bảng bị cuộn 2 lần gần nhau — 1 lần tới nước
+       idx-1 rồi 1 giây sau lại cuộn tới nước idx): giờ CUỘN ĐÚNG 1 LẦN, ngay
+       ở bước 1, thẳng tới nước ĐÍCH idx (scrollIdx=idx, theo đúng noScroll
+       người gọi truyền vào); bước 1 vẫn tô sáng + hiện thế cờ nước idx-1,
+       bước 2 (sau 1 giây) vẫn tô sáng + hiện thế cờ nước idx như cũ nhưng
+       scrollIdx=-1 nên KHÔNG cuộn lại. */
+    _reviewJumpToCore(idx-1, noScroll, idx);
     setTimeout(function(){
       if(myToken !== gReviewJumpToken) return; /* đã có click khác đè lên, huỷ bước nhảy này */
-      _reviewJumpToCore(idx, noScroll);
+      _reviewJumpToCore(idx, noScroll, -1);
     }, 1000);
     return;
   }
   _reviewJumpToCore(idx, noScroll);
 }
 
-function _reviewJumpToCore(idx, noScroll){
+/* scrollIdx (tham số MỚI, tuỳ chọn): chỉ số nước mà BẢNG/TRANG sẽ cuộn tới.
+   undefined = cuộn tới chính idx (như cũ); số >= 0 = cuộn tới dòng của nước
+   đó (dùng để bước 1 của reviewJumpTo vừa tô sáng nước idx-1 vừa cuộn thẳng
+   tới nước đích idx); -1 = KHÔNG cuộn gì (bước 2 dùng, tránh cuộn lần 2). */
+function _reviewJumpToCore(idx, noScroll, scrollIdx){
   if(!gAnFens||idx<0||idx>=gAnFens.length) return;
 
   /* Xoá badge/vùng nguy hiểm quanh vua (king-danger) của thế cờ TRƯỚC ĐÓ —
@@ -11455,9 +12049,21 @@ function _reviewJumpToCore(idx, noScroll){
   for(var ti=0; ti<targetRows.length; ti++){
     targetRows[ti].classList.add('an-row-active');
   }
-  if(targetRow){
+  var _sIdx = (typeof scrollIdx === 'number') ? scrollIdx : idx;
+  if(targetRow && _sIdx >= 0){
     if(!noScroll){
       var _container = document.getElementById('an-moves');
+      /* SỬA (phản hồi người dùng: bấm "50 f6" — dòng được highlight đúng nhưng
+         bảng không cuộn chút nào): querySelectorAll('[data-idx]') trả phần tử
+         ĐẦU TIÊN theo thứ tự tài liệu, mà bảng "Highlight ván đấu" (.an-hl-row,
+         cũng mang data-idx) nằm TRƯỚC bảng "Chi tiết từng nước". Nước quan
+         trọng như 50.f6 có mặt ở cả 2 bảng nên targetRow rơi vào dòng của
+         bảng Highlight (nằm ngoài #an-moves) -> _relTop tính sai/âm -> không
+         cuộn. Dòng giữa bảng không nằm trong Highlight nên trước giờ chạy
+         đúng. Cuộn phải dựa vào dòng NẰM TRONG #an-moves. */
+      var _scrollRow = _container ? _container.querySelector('[data-idx="'+_sIdx+'"]') : null;
+      if (_scrollRow) targetRow = _scrollRow;
+      else if (_sIdx !== idx) { var _fr0 = document.querySelector('[data-idx="'+_sIdx+'"]'); if (_fr0) targetRow = _fr0; }
       if(_container){
         var _rowH = targetRow.offsetHeight || 28;
         /* getBoundingClientRect cho vị trí chính xác trong viewport */
@@ -11467,8 +12073,50 @@ function _reviewJumpToCore(idx, noScroll){
         var _relTop = _rRect.top - _cRect.top + _container.scrollTop;
         /* Cuộn để row nằm ở dòng thứ 3 (cách top 2 dòng) */
         _container.scrollTop = Math.max(0, _relTop - _rowH * 2);
+        /* SỬA (phản hồi người dùng): với dòng gần CUỐI bảng, scrollTop bị kẹt ở
+           mức tối đa của #an-moves, nhưng nếu #an-moves cao hơn phần thực sự
+           nhìn thấy (bị cha cắt/che: cột báo cáo, màn hình nhỏ...) thì dòng
+           đích vẫn nằm ngoài màn hình ("lửng lửng ở giữa bảng"). Sau khi cuộn
+           nội bộ, kiểm tra dòng có nằm trong vùng THẤY ĐƯỢC (giao của viewport
+           và mọi tổ tiên có overflow cuộn/cắt) không; nếu không, gọi
+           scrollIntoView để mọi tổ tiên cuộn theo. Không đụng tới trường hợp
+           dòng giữa bảng (đã ổn) vì lúc đó dòng đã nhìn thấy nên không gọi. */
+        try {
+          var _rr = targetRow.getBoundingClientRect();
+          var _visTop = 0, _visBottom = window.innerHeight, _anc = _container;
+          while (_anc && _anc !== document.body && _anc !== document.documentElement) {
+            var _cs = window.getComputedStyle(_anc);
+            if (/(auto|scroll|hidden)/.test(_cs.overflowY)) {
+              var _ar = _anc.getBoundingClientRect();
+              _visTop = Math.max(_visTop, _ar.top);
+              _visBottom = Math.min(_visBottom, _ar.bottom);
+            }
+            _anc = _anc.parentElement;
+          }
+          if (_rr.top < _visTop - 1 || _rr.bottom > _visBottom + 1) {
+            targetRow.scrollIntoView({block: 'nearest'});
+          }
+        } catch (_scrErr) { targetRow.scrollIntoView({block: 'nearest'}); }
       } else {
         targetRow.scrollIntoView({block:'nearest'});
+      }
+    } else {
+      /* MỚI (phản hồi người dùng: bấm link nước đi trong phần "Phân tích ván
+         đấu" — vd "14 O-O", "50 f6" — bảng Chi tiết từng nước không cuộn tí
+         nào): các link đó (và bảng Highlight) gọi reviewJumpTo(idx, true) —
+         noScroll=true, nghĩa là CỐ Ý không cuộn TRANG để người đọc khỏi bị
+         giật khỏi chỗ đang đọc. Nhưng nhánh cũ cũng bỏ luôn việc cuộn BẢNG.
+         Giờ: noScroll chỉ chặn cuộn TRANG (scrollIntoView), còn nếu
+         #an-moves tự nó là khung cuộn được (scrollHeight > clientHeight) thì
+         vẫn cuộn NỘI BỘ bảng đó tới dòng đích (dòng thứ 3) — không ảnh
+         hưởng vị trí đang đọc của trang. Nếu #an-moves không tự cuộn (giao
+         diện điện thoại: cả trang cuộn 1 lần) thì giữ nguyên hành vi cũ. */
+      var _c2 = document.getElementById('an-moves');
+      var _r2 = _c2 ? _c2.querySelector('[data-idx="'+_sIdx+'"]') : null;
+      if (_c2 && _r2 && _c2.scrollHeight > _c2.clientHeight + 2) {
+        var _cR2 = _c2.getBoundingClientRect(), _rR2 = _r2.getBoundingClientRect();
+        var _rel2 = _rR2.top - _cR2.top + _c2.scrollTop;
+        _c2.scrollTop = Math.max(0, _rel2 - (_r2.offsetHeight || 28) * 2);
       }
     }
   }
@@ -13161,6 +13809,25 @@ function _analyzeTabRunWithText(raw) {
   var _hdrEco = raw.match(/\[ECO\s+"([^"]*)"\]/);
   gPgnOpeningTag = _hdrOpn ? _hdrOpn[1].trim() : null;
   gPgnEcoTag = _hdrEco ? _hdrEco[1].trim() : null;
+  /* MỚI (Dạng 3, theo đề xuất dev) — quét [%eval #-N] / [%eval #N] cuối
+     cùng trong PGN gốc (comment kiểu lichess/chess.com broadcast, do 1
+     engine mạnh của nguồn phát hành tự chèn vào sau mỗi nước). Nếu ván
+     kết thúc mà nước cuối KHÔNG có ký hiệu '#' trên bàn cờ (thường do đầu
+     hàng trước khi bị chiếu hết thật), annotation "#-N"/"#N" ở khúc cuối
+     là bằng chứng khách quan cho biết đối phương đã rơi vào lưới chiếu
+     hết không thể cản phá — dùng để giải thích lý do kết thúc thay vì
+     bó tay nói "chưa xác định được lý do kết thúc cụ thể" (xem
+     _narrOverviewText, chỗ dùng gPgnFinalMateEval). Quy ước %eval của
+     lichess/chess.com: dấu LUÔN theo góc nhìn TRẮNG (không phải theo bên
+     sắp đi), nên "#-17" nghĩa là Đen chiếu hết Trắng trong 17 nước, dù ở
+     vị trí đó bên nào đang sắp đi. */
+  gPgnFinalMateEval = null;
+  var _mateEvalMatches = raw.match(/%eval\s+#-?\d+/g);
+  if (_mateEvalMatches && _mateEvalMatches.length) {
+    var _lastMateStr = _mateEvalMatches[_mateEvalMatches.length - 1];
+    var _mateNumM = /#(-?\d+)/.exec(_lastMateStr);
+    if (_mateNumM) gPgnFinalMateEval = parseInt(_mateNumM[1], 10);
+  }
   var ucis = parsePgnToUcis(raw);
   if (ucis && ucis.length) {
     /* Nếu quá trình đọc PGN dừng giữa chừng (gặp nước không nhận dạng được),
@@ -13681,6 +14348,7 @@ function extractPgnResultToken(pgn){
 var gLastRawPgnText = ''; /* PGN thô gần nhất (giữ nguyên %clk...) — dùng cho phân tích quản lý thời gian trong báo cáo */
 var gPgnOpeningTag = null; /* Tag [Opening "..."] đọc thẳng từ PGN gốc (nếu có) — ưu tiên hơn detector tự suy luận từ nước đi, xem _lookupOpeningFull() */
 var gPgnEcoTag = null;     /* Tag [ECO "..."] đọc thẳng từ PGN gốc (nếu có), đi kèm gPgnOpeningTag */
+var gPgnFinalMateEval = null; /* [%eval #-N]/[%eval #N] CUỐI CÙNG trong PGN gốc (nếu có, dạng broadcast lichess/chess.com) — dùng phát hiện "thế chiếu hết không thể tránh khỏi" khi ván kết thúc không rõ lý do, xem Dạng 3 trong _narrOverviewText() */
 
 function stripPgnCommentsAndVariations(s) {
   var out = '';
