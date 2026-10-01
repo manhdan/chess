@@ -4121,6 +4121,48 @@ function _needsMultiPVBackfill(prevIdx){
 /* Đếm số nước đi hợp lệ tại 1 FEN — dùng chung cho isForced (nước i) và
    cho chuỗi "gán cp bắt buộc" (xem chỗ dùng trong _buildClassifyInput).
    Trả về null nếu FEN lỗi/không parse được (an toàn, không throw). */
+/* ── Bộ tìm chiếu hết ngắn (mate in 1 / mate in 2) bằng luật cờ sẵn có (legalMoves/applyMv/inCheck) — dùng khi dữ liệu engine của CC11
+   không lưu mate (m1 = null). Không đụng engine. Chỉ bỏ qua bắt tốt qua đường (en passant) khi tìm nước đáp. ── */
+function _ccFenState(fen){
+  var fp = String(fen || '').split(' ');
+  var fb = boardArrayFromFen(fen);
+  var cas = { WK: (fp[2]||'').indexOf('K')>=0, WQ: (fp[2]||'').indexOf('Q')>=0, BK: (fp[2]||'').indexOf('k')>=0, BQ: (fp[2]||'').indexOf('q')>=0 };
+  return {board: fb.board, turn: fb.turn, cas: cas};
+}
+function _ccMate1(board, turn, cas){
+  var ms = legalMoves(board, turn, -1, cas);
+  for (var a = 0; a < ms.length; a++) {
+    var nb = applyMv(board, ms[a]);
+    if (!inCheck(nb, -turn)) continue;
+    if (legalMoves(nb, -turn, -1, newCas(cas, board, ms[a], turn)).length === 0) return true;
+  }
+  return false;
+}
+function _ccMate2(board, turn, cas){
+  var ms = legalMoves(board, turn, -1, cas);
+  for (var a = 0; a < ms.length; a++) {
+    var nb = applyMv(board, ms[a]), nc = newCas(cas, board, ms[a], turn);
+    var replies = legalMoves(nb, -turn, -1, nc);
+    if (replies.length === 0) { if (inCheck(nb, -turn)) return true; continue; }
+    var all = true;
+    for (var r = 0; r < replies.length; r++) {
+      var nb2 = applyMv(nb, replies[r]);
+      if (!_ccMate1(nb2, turn, newCas(nc, nb, replies[r], -turn))) { all = false; break; }
+    }
+    if (all) return true;
+  }
+  return false;
+}
+/* Trả về 1 / 2 nếu BÊN SẮP ĐI ở fen ép chiếu hết trong 1 / 2 nước, ngược lại 0. */
+function _ccMateDepthAtFen(fen){
+  try {
+    var st = _ccFenState(fen);
+    if (_ccMate1(st.board, st.turn, st.cas)) return 1;
+    if (_ccMate2(st.board, st.turn, st.cas)) return 2;
+  } catch (e) {}
+  return 0;
+}
+
 function _legalCountAtFen(fen){
   if (!fen) return null;
   try {
@@ -7181,20 +7223,53 @@ function _g2_squareAttacksFrom(board, fromSq) {
   return out;
 }
 
+/* ---- Helper: giá trị quân RẺ NHẤT của màu byCol đang tấn công/bảo vệ ô targetSq
+   (bỏ qua quân đứng tại ignoreSq). Trả về -1 nếu không có quân nào. ---- */
+function _g2_cheapestAttacker(board, targetSq, byCol, ignoreSq) {
+  var best = -1;
+  for (var s = 0; s < 64; s++) {
+    if (s === ignoreSq) continue;
+    var p = board[s];
+    if (!p || col(p) !== byCol) continue;
+    var att = _g2_squareAttacksFrom(board, s);
+    if (att.indexOf(targetSq) < 0) continue;
+    var v = (typ(p) === 6) ? 20000 : PVAL[typ(p)];
+    if (best < 0 || v < best) best = v;
+  }
+  return best;
+}
+
 /* ---- Helper: có quân ĐỐI PHƯƠNG nào trên board đang chĩa đôi
    (tấn công đồng thời ≥2 mục tiêu đáng giá của sideChar) không ---- */
-function _g2_forkOnBoard(board, sideChar, oppCol) {
+function _g2_forkOnBoard(board, sideChar, oppCol, onlySq) {
   var KING_VAL = 20000;
   for (var s = 0; s < 64; s++) {
+    if (onlySq !== undefined && onlySq !== null && s !== onlySq) continue; /* chỉ xét quân vừa đi (fork ở nước đáp trả) */
     var p = board[s];
     if (!p || col(p) !== oppCol) continue;
+    if (typ(p) === 6) continue; /* Vua không tính là quân chĩa đôi (mục tiêu thường chỉ chạy đi, hay đáp bằng nước chiếu) */
     var targets = _g2_squareAttacksFrom(board, s);
     var count = 0;
+    var attVal = (typ(p) === 6) ? KING_VAL : PVAL[typ(p)];
+    /* Quân chĩa đôi mà chính nó bị ăn không mất gì thì không phải fork thực sự:
+       bị quân rẻ hơn bắt được, hoặc bị bắt mà không được bảo vệ. */
+    var _capt = _g2_cheapestAttacker(board, s, col(p) * -1);
+    if (_capt >= 0) {
+      var _prot = _g2_cheapestAttacker(board, s, col(p), s) >= 0;
+      if (_capt <= attVal + 50 || !_prot) continue; /* bị quân rẻ hơn/ngang giá bắt được -> đổi quân hóa giải, không phải fork thực sự */
+    }
     for (var t = 0; t < targets.length; t++) {
       var tv = board[targets[t]];
       if (!tv || col(tv) === oppCol) continue; /* ô trống hoặc quân của chính đối phương -> bỏ qua */
       var val = (typ(tv) === 6) ? KING_VAL : PVAL[typ(tv)];
-      if (val >= MIN_FORK_TARGET_VALUE) count++;
+      if (val < MIN_FORK_TARGET_VALUE) continue;
+      /* Mục tiêu chỉ tính khi THỰC SỰ bị đe dọa: Vua (chiếu), hoặc quân không được bảo vệ,
+         hoặc quân được bảo vệ nhưng có giá trị cao hơn quân đang tấn công (đổi lỗ). */
+      if (typ(tv) !== 6) {
+        var _defended = _g2_cheapestAttacker(board, targets[t], col(tv), targets[t]) >= 0;
+        if (_defended && val < attVal + 50) continue; /* được bảo vệ và không đắt hơn quân tấn công >= 50cp -> chỉ là đổi quân */
+      }
+      count++;
     }
     if (count >= 2) return {count: count};
   }
@@ -10286,8 +10361,15 @@ function buildMoveReport(cls, cpLosses, evalPcts, forceSide) {
         isCapture = (info.capVal || 0) > 0;
         isCheck   = !!info.givesCheck;
       }
+      /* MỚI: nước đáp trả của đối thủ khai thác lỗi bằng bắt quân nặng (>=Mã/Tượng, lời >=200cp) hoặc bằng nước chiếu
+         gây thiệt hại >=300cp (VD 57.g4? Nf3+ chĩa đôi) -> lỗi mang tính CHIẾN THUẬT dù nước mình đi là nước yên tĩnh. */
+      var _replyTactic = false, _nx = gMoveInfo[i + 1];
+      if (_nx && info && _nx.side !== info.side) {
+        if ((_nx.capVal || 0) >= 300 && (_nx.capVal || 0) - (info.capVal || 0) >= 200) _replyTactic = true;
+        else if (_nx.givesCheck && loss !== null && loss >= 300) _replyTactic = true;
+      }
       var tacticalType;
-      if (isCapture || isCheck) tacticalType = 'tactical';
+      if (isCapture || isCheck || _replyTactic) tacticalType = 'tactical';
       else tacticalType = 'positional';
 
       if (tacticalType === 'tactical') tacticalMisses++;
@@ -10445,6 +10527,31 @@ function buildMoveReport(cls, cpLosses, evalPcts, forceSide) {
   }
 
   /* ── (1) TỰ BIẾU QUÂN — giữ nguyên toàn bộ quy tắc nhận diện cũ ── */
+  /* Sau nước i, ĐỐI THỦ có đòn chiếu hết ép buộc? (m1 của vị trí sau nước i, góc nhìn bên sắp đi = đối thủ; m1=0 <=> mate in 1).
+     Bỏ qua khi CHÍNH bên đi đã bị mate sẵn từ trước nước i (lỗi khi đó thuộc nước trước). Trả về số nước mate (1,2,...) hoặc 0. */
+  var _ccMateCache = {};
+  function _ccAllowsMate(i) {
+    if (_ccMateCache[i] !== undefined) return _ccMateCache[i];
+    var res = 0;
+    var si = gAnScores[i], sn = gAnScores[i + 1];
+    if (cls[i] === 'forced' || cls[i] === 'book') { _ccMateCache[i] = 0; return 0; }
+    if (si && si.m1 !== null && si.m1 !== undefined && si.m1 < 0) { _ccMateCache[i] = 0; return 0; } /* đã bị mate sẵn từ trước */
+    if (sn && sn.m1 !== null && sn.m1 !== undefined) {
+      res = (sn.m1 >= 0) ? sn.m1 + 1 : 0;
+    } else if (cls[i] === 'blunder' && gAnFens[i + 1]) {
+      /* Dữ liệu engine không có mate (m1 null): tự tìm mate in 1-2 của đối thủ sau nước blunder (chỉ chạy cho nước blunder, có cache) */
+      res = _ccMateDepthAtFen(gAnFens[i + 1]);
+    }
+    /* Chỉ tính khi nước đi THỰC SỰ làm hỏng thế cờ: % thắng của bên đi phải tụt >= 30 điểm.
+       Loại các nước ép buộc/đã thua sẵn (VD Đen đi Ka8 bắt buộc rồi bị Ra6#) và nước của bên đang chiếu hết đối thủ. */
+    if (res) {
+      var _scM = (gMoveInfo[i] && gMoveInfo[i].side === W) ? 'w' : 'b';
+      var _pbM = _deepPct(evalPcts, i, _scM), _paM = _deepPct(evalPcts, i + 1, _scM);
+      if (_pbM !== null && _paM !== null && (_pbM - _paM) < 30) res = 0;
+    }
+    _ccMateCache[i] = res;
+    return res;
+  }
   var _giveaway = null, _giveawayList = [];
   (function(){
     var scG = (_detectedSide === 'white') ? 'w' : (_detectedSide === 'black') ? 'b' : null;
@@ -10459,12 +10566,16 @@ function buildMoveReport(cls, cpLosses, evalPcts, forceSide) {
     }
     var pieceNm = {320: 'Mã', 330: 'Tượng', 500: 'Xe', 900: 'Hậu'};
     var WINDOW = 6;
+    var GV_DROP_MIN = 30; /* % thắng sụt >= 30 điểm là đủ đáng nói (trước đây 60) */
     for (var gi = 0; gi < cls.length; gi++) {
       var gside = (gMoveInfo[gi] && gMoveInfo[gi].side === W) ? 'w' : 'b';
       if (scG && gside !== scG) continue;
       var gopp = (gside === 'w') ? 'b' : 'w';
       var pb = _deepPct(evalPcts, gi, gside), pa = _deepPct(evalPcts, gi + 1, gside);
-      if (pb === null || pa === null || pb - pa < 60) continue;
+      if (pb === null || pa === null) continue;
+      if (cls[gi] === 'missed_mate' || _ccAllowsMate(gi)) continue; /* bỏ lỡ chiếu hết / để bị chiếu hết đã có mục riêng — không để 'tự biếu quân' chiếm nước này */
+      var _gvBad = !!BAD_TYPES_G2[cls[gi]]; /* nước bị gắn nhãn xấu thì hạ ngưỡng sụt % thắng */
+      if (pb - pa < GV_DROP_MIN && !_gvBad) continue;
       var myToSq = gMoveInfo[gi].toSq;
       var best = null;
       for (var d = 1; d <= WINDOW && gi + d < cls.length; d++) {
@@ -10472,22 +10583,114 @@ function buildMoveReport(cls, cpLosses, evalPcts, forceSide) {
         var rInfo = gMoveInfo[ri];
         if (!rInfo || rInfo.side === gMoveInfo[gi].side) continue;
         if (rInfo.toSq === myToSq && pieceNm[rInfo.capVal]) {
-          var loss = (matOf(gAnFens[gi], gside) - matOf(gAnFens[gi], gopp)) - (matOf(gAnFens[ri + 1], gside) - matOf(gAnFens[ri + 1], gopp));
-          if (loss >= 3) { best = {capVal: rInfo.capVal}; break; }
+          var _mat0 = matOf(gAnFens[gi], gside) - matOf(gAnFens[gi], gopp);
+          var loss = _mat0 - (matOf(gAnFens[ri + 1], gside) - matOf(gAnFens[ri + 1], gopp));
+          /* Tính cả nước đáp NGAY SAU của mình (ăn lại / thắng quân khác): đổi quân hoặc có bù đắp thì không phải biếu quân */
+          if (gAnFens[ri + 2] && gMoveInfo[ri + 1] && gMoveInfo[ri + 1].side === gMoveInfo[gi].side) {
+            loss = Math.min(loss, _mat0 - (matOf(gAnFens[ri + 2], gside) - matOf(gAnFens[ri + 2], gopp)));
+          }
+          if (loss >= (_gvBad ? 2 : 3)) { best = {capVal: rInfo.capVal, ri: ri}; break; } /* VD Tượng đổi lấy 1 Tốt = lỗ 2 điểm */
         }
       }
       if (!best) continue;
-      var item = {idx: gi, drop: pb - pa, piece: pieceNm[best.capVal], side: gside};
+      var item = {idx: gi, drop: pb - pa, piece: pieceNm[best.capVal], side: gside, capPly: best.ri};
       _giveawayList.push(item);
       if (!_giveaway || item.drop > _giveaway.drop) _giveaway = item;
     }
+    /* MỞ RỘNG: "để hở quân" — nước đi KHÔNG phải là quân vừa đi bị ăn, mà là bỏ mặc 1 quân khác đang bị treo
+       (VD 28...h5 để Xe h8 bị Bxh8 ăn ngay). Cùng tiêu chí với "Phân tích ván đấu" (_deepG2_hangingPiece):
+       nước bị gắn nhãn xấu, không phải hy sinh có chủ đích, thiệt hại ròng >= HANGING_MIN_CP,
+       và không phải đổi quân (ta ăn lại ngay trên ô đó với giá trị tương đương). */
+    var _gvHas = {};
+    _giveawayList.forEach(function(it){ _gvHas[it.idx] = true; });
+    for (var hi = 0; hi < cls.length; hi++) {
+      if (_gvHas[hi] || cls[hi] === 'missed_mate' || _ccAllowsMate(hi)) continue;
+      var hside = (gMoveInfo[hi] && gMoveInfo[hi].side === W) ? 'w' : 'b';
+      if (scG && hside !== scG) continue;
+      var hpb = _deepPct(evalPcts, hi, hside), hpa = _deepPct(evalPcts, hi + 1, hside);
+      var hdrop = (hpb !== null && hpa !== null) ? Math.max(0, hpb - hpa) : 0;
+      /* cổng chung: nước bị gắn nhãn xấu HOẶC % thắng sụt >= GV_DROP_MIN */
+      if (!BAD_TYPES_G2[cls[hi]] && hdrop < GV_DROP_MIN) continue;
+      var hci = _buildClassifyInput(hi);
+      /* (không loại isSacrifice: nước đã bị gắn nhãn xấu/sụt % thắng thì dù là 'hy sinh' vẫn là lỗi — VD 3.Qh5?? đặt Hậu vào ô bị Mã ăn) */
+      var hPiece = null, hCapPly;
+      /* (a) bị ăn thật ngay nước sau (như cũ) */
+      var hcap = hci ? ((hci.nextOpponentCaptureCp || 0) - (hci.ownCaptureCp || 0)) : 0;
+      var hNext = gMoveInfo[hi + 1];
+      if (hcap >= HANGING_MIN_CP && hNext && pieceNm[hNext.capVal]) {
+        hPiece = pieceNm[hNext.capVal]; hCapPly = hi + 1;
+        /* Quân bị ăn có được bảo vệ và giá trị KHÔNG hơn quân ăn >= 50cp -> chỉ là đổi quân (không ăn lại là lỗi khác, không tính là biếu quân) */
+        if (gAnFens[hi + 1] && hNext.movedVal) {
+          var _bdA = boardArrayFromFen(gAnFens[hi + 1]).board;
+          var _myCa = (hside === 'w') ? W : B;
+          if (_g2_cheapestAttacker(_bdA, hNext.toSq, _myCa, hNext.toSq) >= 0 && hNext.capVal < hNext.movedVal + 50) hPiece = null;
+        }
+        if (typeof gUciHist !== 'undefined' && gUciHist && gUciHist[hi + 1] && gMoveInfo[hi + 2] && gUciHist[hi + 2]) {
+          var _hd = gUciHist[hi + 1].substring(2, 4);
+          if (_hd && _hd === gUciHist[hi + 2].substring(2, 4) && gMoveInfo[hi + 2].capVal > 0 && gMoveInfo[hi + 2].capVal >= hcap - 60) hPiece = null; /* chỉ là đổi quân */
+        }
+      }
+      /* (a2) MỚI: mất quân qua CHUỖI ÉP — đối thủ đáp bằng nước CHIẾU (i+1), ta buộc phải đáp (i+2), rồi đối thủ ăn
+         quân nặng ở i+3 (VD 22.e5?? Qg4+ 23.Qg3 fxg3 mất Hậu). Chỉ xét khi nước i đã bị gắn nhãn xấu/sụt % thắng. */
+      if (!hPiece && gMoveInfo[hi + 1] && gMoveInfo[hi + 1].givesCheck && gMoveInfo[hi + 3]
+          && gMoveInfo[hi + 3].side !== gMoveInfo[hi].side && pieceNm[gMoveInfo[hi + 3].capVal] && gAnFens[hi + 4]) {
+        var _hopp = (hside === 'w') ? 'b' : 'w', _ri3 = hi + 3;
+        var _loss3 = (matOf(gAnFens[hi], hside) - matOf(gAnFens[hi], _hopp)) - (matOf(gAnFens[_ri3 + 1], hside) - matOf(gAnFens[_ri3 + 1], _hopp));
+        if (_loss3 >= 3) { hPiece = pieceNm[gMoveInfo[_ri3].capVal]; hCapPly = _ri3; }
+      }
+      /* (b) MỚI: quân nặng của mình đang bị treo trên bàn sau nước đi, DÙ đối thủ không ăn
+         (đối thủ có thể không để ý — vẫn là lỗi thật). Bỏ qua nếu nước đi này là nước chiếu. */
+      if (!hPiece && gAnFens[hi + 1] && !(gMoveInfo[hi] && gMoveInfo[hi].givesCheck)) {
+        var _bd = boardArrayFromFen(gAnFens[hi + 1]).board;
+        var _myC = (hside === 'w') ? W : B, _opC = -_myC, _bestV = 0;
+        for (var _q = 0; _q < 64; _q++) {
+          var _pp = _bd[_q];
+          if (!_pp || col(_pp) !== _myC || typ(_pp) < 2 || typ(_pp) > 5) continue;
+          var _val = PVAL[typ(_pp)];
+          var _att = _g2_cheapestAttacker(_bd, _q, _opC);
+          if (_att < 0) continue;
+          var _def = _g2_cheapestAttacker(_bd, _q, _myC, _q) >= 0;
+          if (!(!_def || _att + 50 <= _val)) continue; /* không treo (Mã/Tượng ngang nhau coi như đổi quân) */
+          /* Chỉ tính khi CHÍNH NƯỚC NÀY tạo ra chỗ treo (quân vừa đi tới ô nguy hiểm, hoặc quân khác vừa bị bỏ hở).
+             Nếu quân đó ĐÃ treo sẵn từ trước nước này thì lỗi thuộc về nước trước, không tính lại. */
+          if (_q !== gMoveInfo[hi].toSq && gAnFens[hi]) {
+            var _bdB = boardArrayFromFen(gAnFens[hi]).board;
+            if (_bdB[_q] === _pp) {
+              var _attB = _g2_cheapestAttacker(_bdB, _q, _opC);
+              if (_attB >= 0 && (_g2_cheapestAttacker(_bdB, _q, _myC, _q) < 0 || _attB + 50 <= _val)) continue; /* đã treo từ trước */
+            }
+          }
+          /* Thiệt hại ròng ước tính (có trừ quân mà chính nước này vừa ăn): quá nhỏ (<200cp) thì chỉ là đổi quân/hy sinh, không phải biếu quân */
+          var _netLoss = ((!_def) ? _val : (_val - _att)) - ((gMoveInfo[hi] && gMoveInfo[hi].capVal) || 0);
+          if (_netLoss < 200) continue;
+          if (_val > _bestV) { _bestV = _val; hPiece = pieceNm[_val]; }
+        }
+      }
+      if (!hPiece) continue;
+      var hitem = {idx: hi, drop: hdrop, piece: hPiece, side: hside, capPly: hCapPly};
+      _giveawayList.push(hitem);
+      if (!_giveaway || hitem.drop > _giveaway.drop) _giveaway = hitem;
+    }
+    /* Gộp các nước dẫn tới CÙNG MỘT lần mất quân (cùng nước ăn của đối thủ): giữ nước đầu tiên */
+    var _byCap = {};
+    _giveawayList.forEach(function(it){
+      if (it.capPly === undefined || it.capPly === null) return;
+      var k = it.side + ':' + it.capPly;
+      if (_byCap[k] === undefined || it.idx < _byCap[k]) _byCap[k] = it.idx;
+    });
+    _giveawayList = _giveawayList.filter(function(it){
+      if (it.capPly === undefined || it.capPly === null) return true;
+      return _byCap[it.side + ':' + it.capPly] === it.idx;
+    });
+    _giveaway = null;
+    _giveawayList.forEach(function(it){ if (!_giveaway || it.drop > _giveaway.drop) _giveaway = it; });
     _giveawayList.sort(function(a, b){ return b.drop - a.drop; });
   })();
-  if (_giveawayList.length >= 3) {
-    var _top3 = _giveawayList.slice(0, 3);
+  if (_giveawayList.length >= 2) { /* từ 2 lần trở lên -> liệt kê (trước đây phải >=3, khiến lần thứ 2 bị ẩn) */
+    var _top3 = _giveawayList.slice(0, 3).sort(function(a, b){ return a.idx - b.idx; }); /* chọn 3 nước nặng nhất, hiện theo thứ tự nước đi */
     var _partsGv = _top3.map(function(it){ return it.piece + ' (' + _ccMvLink(it.idx) + ')'; });
     _pushCand({id: 'giveaway', category: 'other', maxDrop: _giveaway.drop, count: _giveawayList.length,
-      sev: 'high', icon: '❌', keyMoveIdx: _giveaway.idx,
+      sev: 'high', icon: '❌', must: true, keyMoveIdx: _giveaway.idx,
       text: 'Lỗi nhiều lần tự biếu quân cho đối thủ: ' + _partsGv.join(', ') + '.'});
   } else if (_giveaway) {
     var _gvPh = _phaseForPly(_giveaway.idx);
@@ -10495,7 +10698,7 @@ function buildMoveReport(cls, cpLosses, evalPcts, forceSide) {
       + ((phaseLabelMap && phaseLabelMap[_gvPh]) ? phaseLabelMap[_gvPh].toLowerCase() : 'trung cuộc');
     if (!(_detectedSide === 'white' || _detectedSide === 'black')) _gvTxt = (_giveaway.side === 'w' ? 'Trắng: ' : 'Đen: ') + _gvTxt;
     _pushCand({id: 'giveaway', category: 'other', maxDrop: _giveaway.drop, count: 1,
-      sev: 'high', icon: '❌', keyMoveIdx: _giveaway.idx, text: _gvTxt + '.'});
+      sev: 'high', icon: '❌', must: true, keyMoveIdx: _giveaway.idx, text: _gvTxt + '.'});
   }
 
   /* ── (2) TỶ LỆ CHIẾN THUẬT vs VỊ TRÍ — giờ là 2 ỨNG VIÊN ĐỘC LẬP, không
@@ -10524,6 +10727,10 @@ function buildMoveReport(cls, cpLosses, evalPcts, forceSide) {
       if (_detectedSide === 'white' && i % 2 !== 0) continue;
       if (_detectedSide === 'black' && i % 2 !== 1) continue;
       if (cls[i] !== 'missed_win') continue; /* missed_mate đã tách thành mục riêng bên dưới */
+      /* Nước đã được nêu ở mục 💰 (nước tốt nhất là ăn quân, cpLoss>=200) thì không lặp lại ở 🎯 */
+      var _si3 = gAnScores[i];
+      if (_si3 && _si3.bestUci && gAnFens[i] && _g2_isCaptureUci(gAnFens[i], _si3.bestUci)
+          && cpLosses[i] !== null && cpLosses[i] !== undefined && cpLosses[i] >= 200) continue;
       var side = (i % 2 === 0) ? 'w' : 'b';
       var pb = _deepPct(evalPcts, i, side), pa = _deepPct(evalPcts, i + 1, side);
       var drop = (pb !== null && pa !== null) ? (pb - pa) : 0;
@@ -10775,9 +10982,31 @@ function buildMoveReport(cls, cpLosses, evalPcts, forceSide) {
         var reachedMiddle = false, lastOwnIdx = -1;
         for (var m = 0; m < cls.length; m++) { if (_ccSideOf(m) === sc) { lastOwnIdx = m; if (_phaseForPly(m) === 'middlegame') { reachedMiddle = true; break; } } }
         if (!reachedMiddle || lastOwnIdx < 0) return;
+        /* Tìm nước làm MẤT QUYỀN NHẬP THÀNH (đọc trường quyền nhập thành trong FEN) để ghi rõ lý do */
+        var _rl = -1;
+        for (var _k = 0; _k < gAnFens.length; _k++) {
+          var _cf = String(gAnFens[_k] || '').split(' ')[2] || '';
+          if (!(sc === 'w' ? /[KQ]/.test(_cf) : /[kq]/.test(_cf))) { _rl = _k; break; }
+        }
+        var _reason = '';
+        if (_rl > 0) {
+          var _mv = _rl - 1, _mt = gMoveTexts[_mv] || '';
+          if (_ccSideOf(_mv) === sc) {
+            if (_mt.charAt(0) === 'K') {
+              var _inChk = !!(gMoveInfo[_mv - 1] && gMoveInfo[_mv - 1].givesCheck);
+              _reason = _inChk ? ((_mt.indexOf('x') >= 0) ? ('Vua buộc phải ăn lại ở nước ' + _ccMvLink(_mv)) : ('Vua buộc phải di chuyển để thoát chiếu ở nước ' + _ccMvLink(_mv)))
+                               : ('Vua đã di chuyển ở nước ' + _ccMvLink(_mv));
+            } else {
+              _reason = 'các Xe đã di chuyển (đến nước ' + _ccMvLink(_mv) + ')';
+            }
+          } else {
+            _reason = 'Xe bị ăn ở nước ' + _ccMvLink(_mv);
+          }
+        }
         _pushCand({id: 'king_safety_' + sc, category: 'other', maxDrop: 0, count: 1,
           sev: 'medium', icon: '🏰', keyMoveIdx: null,
-          text: _ccPrefix(sc) + '<b>Chưa nhập thành</b> dù ván đã sang trung cuộc — Vua kẹt ở giữa bàn dễ bị tấn công.'});
+          text: _ccPrefix(sc) + '<b>Chưa nhập thành</b> dù ván đã sang trung cuộc' + (_reason ? (' do <b>mất quyền nhập thành</b> (' + _reason + ')') : '')
+            + ' — Vua kẹt ở giữa bàn dễ bị tấn công.'});
         return;
       }
       var shieldFiles = (castleSide === 'k') ? 'fgh' : 'abc';
@@ -10789,6 +11018,40 @@ function buildMoveReport(cls, cpLosses, evalPcts, forceSide) {
         if (_phaseForPly(j) === 'endgame') continue; /* Tàn cuộc: Vua cần ra trung tâm, Tốt cần đẩy lên -> không tính */
         var toFile = String.fromCharCode(97 + (info.toSq % 8));
         if (shieldFiles.indexOf(toFile) < 0) continue;
+        /* Loại trừ các nước đẩy Tốt hợp lý (không tính là tự làm yếu thành Vua): */
+        var _myC = (sc === 'w') ? W : B, _oppC = -_myC;
+        var _bBef = gAnFens[j] ? boardArrayFromFen(gAnFens[j]).board : null;
+        var _bAft = gAnFens[j + 1] ? boardArrayFromFen(gAnFens[j + 1]).board : null;
+        /* (1) Tốt biên (a/h) đẩy 1 ô: vẫn liền mạch với Tốt b/g, còn tạo ô thoát ("luft") cho Vua */
+        if ((toFile === 'a' || toFile === 'h') && _bBef) {
+          var _behind = sq(rk(info.toSq) - _myC, fl(info.toSq));
+          if (ob(rk(info.toSq) - _myC, fl(info.toSq)) && _bBef[_behind] && typ(_bBef[_behind]) === 1 && col(_bBef[_behind]) === _myC) continue;
+        }
+        /* (2) Nước đẩy Tốt để tấn công/đuổi 1 quân đối phương (Mã/Tượng/Xe/Hậu) */
+        if (_bAft) {
+          var _atk = _g2_squareAttacksFrom(_bAft, info.toSq), _kick = false;
+          for (var _ai = 0; _ai < _atk.length; _ai++) {
+            var _tv = _bAft[_atk[_ai]];
+            if (_tv && col(_tv) === _oppC && typ(_tv) >= 2 && typ(_tv) <= 5) { _kick = true; break; }
+          }
+          if (_kick) continue;
+        }
+        /* (3) Nước đẩy Tốt để GIẢI QUYẾT một đe dọa vào quân của mình (chắn đường tấn công, hoặc bảo vệ quân đang bị tấn công) -> bị ép buộc, không tính */
+        if (_bBef && _bAft) {
+          var _thrFn = function(bd, q, val){
+            var a = _g2_cheapestAttacker(bd, q, _oppC); if (a < 0) return false;
+            var d = _g2_cheapestAttacker(bd, q, _myC, q) >= 0;
+            return (!d) || (a + 50 <= val);
+          };
+          var _resolved = false;
+          for (var _tq = 0; _tq < 64 && !_resolved; _tq++) {
+            var _tp = _bBef[_tq];
+            if (!_tp || col(_tp) !== _myC || typ(_tp) < 2 || typ(_tp) > 5) continue;
+            var _tv2 = PVAL[typ(_tp)];
+            if (_thrFn(_bBef, _tq, _tv2) && _bAft[_tq] === _tp && !_thrFn(_bAft, _tq, _tv2)) _resolved = true;
+          }
+          if (_resolved) continue;
+        }
         var pb2 = _deepPct(evalPcts, j, sc), pa2 = _deepPct(evalPcts, j + 1, sc);
         var d2 = (pb2 !== null && pa2 !== null) ? (pb2 - pa2) : 0;
         pushes.push(j);
@@ -10855,16 +11118,25 @@ function buildMoveReport(cls, cpLosses, evalPcts, forceSide) {
       var wantMinor = (sc === 'w') ? 'NB' : 'nb';
       var minorHome = 0;
       for (var q = 0; q < expand.length; q++) { if (wantMinor.indexOf(expand.charAt(q)) >= 0) minorHome++; }
-      var ownMoves = 0, pawnMoves = 0;
+      /* Nước lý thuyết (Book) không bị coi là 'chậm' — chỉ tính các nước NGOÀI sách khai cuộc */
+      var bookPlies = 0;
+      for (var _bp = 0; _bp < openEndApprox; _bp++) { if (_isBookMove(_bp)) bookPlies++; else break; }
+      var ownMoves = 0, pawnMoves = 0, ownNB = 0, pawnNB = 0, ownCaps = 0;
+      /* đếm nước ăn quân/ăn lại của mình trong 10 nước đầu (20 nửa nước) hoặc hết khai cuộc, lấy mốc dài hơn: tempo dành cho trao đổi */
+      for (var _ci = 0; _ci < Math.max(openEndApprox, 20) && _ci < cls.length; _ci++) {
+        if (_ccSideOf(_ci) === sc && gMoveInfo[_ci] && (gMoveInfo[_ci].capVal || 0) > 0) ownCaps++;
+      }
       for (var i = 0; i < openEndApprox; i++) {
         if (_ccSideOf(i) !== sc) continue;
         ownMoves++;
+
         if (gMoveInfo[i] && gMoveInfo[i].movedVal === 100) pawnMoves++;
+        if (i >= bookPlies) { ownNB++; if (gMoveInfo[i] && gMoveInfo[i].movedVal === 100) pawnNB++; }
       }
       if (ownMoves < 5) return;
-      var pawnRatio = pawnMoves / ownMoves;
+      var pawnRatio = (ownNB >= 4) ? (pawnNB / ownNB) : 0; /* cần >= 4 nước ngoài sách mới đánh giá tỷ lệ Tốt */
       var parts = [];
-      if (minorHome >= 2) parts.push('còn ' + minorHome + ' quân nhẹ (Mã/Tượng) chưa rời vị trí gốc');
+      if (minorHome >= 2 && bookPlies < 8 && ownCaps < 3) parts.push('còn ' + minorHome + ' quân nhẹ (Mã/Tượng) chưa rời vị trí gốc');
       if (pawnRatio >= 0.5) parts.push('quá nhiều nước Tốt (' + Math.round(pawnRatio*100) + '% số nước khai cuộc)');
       if (!parts.length) return;
       _pushCand({id: 'opening_dev_' + sc, category: 'other', maxDrop: 0, count: minorHome + (pawnRatio >= 0.5 ? 1 : 0),
@@ -10912,13 +11184,21 @@ function buildMoveReport(cls, cpLosses, evalPcts, forceSide) {
     _ccSides.forEach(function(sc){
       var cnt = 0, worstIdx = -1, worstLoss = -1, _missList = [];
       for (var i = 0; i < cls.length; i++) {
-        if (cls[i] !== 'missed_win') continue;
+        var _isMW = (cls[i] === 'missed_win');
+        if (!_isMW && cls[i] !== 'mistake' && cls[i] !== 'blunder') continue;
         if (_ccSideOf(i) !== sc) continue;
         var si = gAnScores[i];
         if (!si || !si.bestUci || !gAnFens[i]) continue;
         if (!_g2_isCaptureUci(gAnFens[i], si.bestUci)) continue;
         var loss = cpLosses[i];
         if (loss === null || loss === undefined || loss < 200) continue;
+        if (!_isMW) {
+          /* mistake/blunder: chỉ tính khi quân bị bỏ lại là quân nặng KHÔNG được bảo vệ (quân treo thật) */
+          var _bd0 = boardArrayFromFen(gAnFens[i]).board, _u0 = si.bestUci;
+          var _to0 = sq(parseInt(_u0.charAt(3), 10) - 1, _u0.charCodeAt(2) - 97), _v0 = _bd0[_to0];
+          if (!_v0 || typ(_v0) < 1 || typ(_v0) > 5) continue; /* gồm cả Tốt (VD 26...a4? bỏ Nxe5 ăn Tốt kèm đòn tấn công) */
+          if (_g2_cheapestAttacker(_bd0, _to0, col(_v0), _to0) >= 0) continue;
+        }
         cnt++;
         _missList.push({idx: i, loss: loss});
         if (loss > worstLoss) { worstLoss = loss; worstIdx = i; }
@@ -10950,6 +11230,96 @@ function buildMoveReport(cls, cpLosses, evalPcts, forceSide) {
     });
   })();
 
+  /* ── (11b) BỎ LỠ ĂN QUÂN CÓ LỢI (MỚI) — nước tốt nhất là 1 nước ĂN quân lời (quân bị ăn có bảo vệ nhưng ĐẮT HƠN
+     quân ăn, hoặc không được bảo vệ), nước đã đi bị gắn nhãn mistake/blunder. (missed_win đã thuộc mục 💰 ở trên.) ── */
+  (function(){
+    var nmMap = {1: 'Tốt', 2: 'Mã', 3: 'Tượng', 4: 'Xe', 5: 'Hậu'};
+    _ccSides.forEach(function(sc){
+      var list = [];
+      for (var i = 0; i < cls.length; i++) {
+        if (cls[i] !== 'mistake' && cls[i] !== 'blunder') continue;
+        if (_ccSideOf(i) !== sc) continue;
+        var si = gAnScores[i];
+        if (!si || !si.bestUci || !gAnFens[i]) continue;
+        if (!_g2_isCaptureUci(gAnFens[i], si.bestUci)) continue;
+        var loss = cpLosses[i];
+        if (loss === null || loss === undefined || loss < 200) continue;
+        var u = si.bestUci, bd = boardArrayFromFen(gAnFens[i]).board;
+        var fromSq = sq(parseInt(u.charAt(1), 10) - 1, u.charCodeAt(0) - 97);
+        var toSq = sq(parseInt(u.charAt(3), 10) - 1, u.charCodeAt(2) - 97);
+        var victim = bd[toSq], capr = bd[fromSq];
+        if (!victim || !capr || typ(victim) < 1 || typ(victim) > 5) continue;
+        var BIG_LOSS = 300; /* thiệt >= 300cp: nước ăn quân chắc chắn mang theo đòn chiến thuật đi kèm (VD Nxe5 kèm tấn công Xe) */
+        if (typ(victim) === 1 && loss < BIG_LOSS) continue; /* ăn Tốt chỉ tính khi thiệt lớn */
+        var vVal = PVAL[typ(victim)] || 100, cVal = (typ(capr) === 6) ? 20000 : PVAL[typ(capr)];
+        var defended = _g2_cheapestAttacker(bd, toSq, col(victim), toSq) >= 0;
+        if (!defended) continue; /* quân treo (không bảo vệ), kể cả Tốt, đã thuộc mục 💰 */
+        if (loss < BIG_LOSS && vVal <= cVal) continue; /* thiệt nhỏ mà ăn xong bị ăn lại ngang giá -> không lời */
+        list.push({idx: i, loss: loss, victim: nmMap[typ(victim)], san: _g2_uciToSanLike(gAnFens[i], u),
+                   sqName: FLS.charAt(u.charCodeAt(2) - 97) + u.charAt(3)});
+      }
+      var cnt = list.length;
+      if (cnt < 1) return;
+      list.sort(function(a, b){ return b.loss - a.loss; });
+      var w = list[0];
+      var oth = list.slice(1, 3).sort(function(a, b){ return a.idx - b.idx; }).map(function(m){ return _ccMvLink(m.idx); });
+      var othTxt = (oth.length === 1) ? ('nước ' + oth[0] + ', và ') : (oth.length === 2) ? ('nước ' + oth[0] + ', ' + oth[1] + ', và ') : '';
+      var oppWord = (sc === 'w') ? 'đen' : 'trắng';
+      var pbw = _deepPct(evalPcts, w.idx, sc), paw = _deepPct(evalPcts, w.idx + 1, sc);
+      var txt = (cnt === 1)
+        ? _ccPrefix(sc) + '<b>Bỏ lỡ nước ăn quân có lợi</b> ở nước ' + _ccMvLink(w.idx) + ': đáng lẽ ăn ' + w.victim + ' ' + oppWord + ' ở ô ' + w.sqName + '.'
+        : _ccPrefix(sc) + cnt + ' lần <b>bỏ lỡ nước ăn quân có lợi</b>: ' + othTxt + 'tiêu biểu ở nước ' + _ccMvLink(w.idx) + ' đáng lẽ ăn ' + w.victim + ' ' + oppWord + ' ở ô ' + w.sqName + '.';
+      _pushCand({id: 'missed_capture_' + sc, category: 'other', maxDrop: (pbw !== null && paw !== null) ? (pbw - paw) : 0, count: cnt,
+        sev: 'high', icon: '🍗', keyMoveIdx: w.idx, text: txt});
+    });
+  })();
+
+  /* ── (11c) KẾT THÚC BẰNG HẾT GIỜ (MỚI) — đọc [Termination]: bên hết giờ dù thế cờ tốt, hoặc bên thắng nhờ hết giờ dù thế cờ kém ── */
+  (function(){
+    var term = (_pgnNamesForReport && _pgnNamesForReport.termination) ? String(_pgnNamesForReport.termination) : '';
+    if (!/(thời gian|hết giờ|on time|timeout|time forfeit)/i.test(term)) return;
+    var lastIdx = evalPcts.length - 1;
+    _ccSides.forEach(function(sc){
+      var oc = _ccOutcome(sc);
+      var pct = _deepPct(evalPcts, lastIdx, sc);
+      var txt = null, flagIcon = '⏳';
+      if (oc === 'loss') {
+        txt = _ccPrefix(sc) + '<b>Thua vì hết giờ</b>' + ((pct !== null && pct >= 60) ? ' khi đang có thế cờ tốt (khả năng thắng ' + Math.round(pct) + '%)' : '')
+            + ', hãy kiểm soát thời gian đấu tốt hơn.';
+      } else if (oc === 'win' && pct !== null && pct < 40) {
+        flagIcon = '🕒';
+        txt = _ccPrefix(sc) + 'Thắng may mắn nhờ <b>đối thủ hết giờ</b> dù thế cờ đang thua (khả năng thắng ' + Math.round(pct) + '%).';
+      }
+      if (txt) _pushCand({id: 'flag_' + sc, category: 'time', maxDrop: 100, count: 99, sev: 'high', icon: flagIcon, keyMoveIdx: null, text: txt});
+    });
+  })();
+
+  /* ── (11d) ĐỂ ĐỐI THỦ CHIẾU HẾT (MỚI) — sau nước của mình, đối thủ có đòn chiếu hết ép buộc (VD 32.Bb4?? Rxh2+ Kg1 Rbg2#).
+     Tiêu biểu = mate ngắn nhất (mate in 1 trước), cùng độ dài thì nước đến trước. ── */
+  (function(){
+    _ccSides.forEach(function(sc){
+      var list = [];
+      for (var i = 0; i < cls.length; i++) {
+        if (_ccSideOf(i) !== sc) continue;
+        var n = _ccAllowsMate(i);
+        if (!n) continue;
+        var pb = _deepPct(evalPcts, i, sc), pa = _deepPct(evalPcts, i + 1, sc);
+        list.push({idx: i, n: n, drop: (pb !== null && pa !== null) ? (pb - pa) : 0});
+      }
+      var cnt = list.length;
+      if (cnt < 1) return;
+      list.sort(function(a, b){ return (a.n - b.n) || (a.idx - b.idx); });
+      var rep = list[0];
+      var oth = list.slice(1, 3).map(function(m){ return _ccMvLink(m.idx); });
+      var othTxt = (oth.length === 1) ? ('nước ' + oth[0] + ', và ') : (oth.length === 2) ? ('nước ' + oth[0] + ', ' + oth[1] + ', và ') : '';
+      var txt = (cnt === 1)
+        ? _ccPrefix(sc) + '<b>Để đối thủ chiếu hết</b>: sau nước ' + _ccMvLink(rep.idx) + ', đối thủ có đòn chiếu hết trong ' + rep.n + ' nước.'
+        : _ccPrefix(sc) + 'Có ' + cnt + ' lần <b>để đối thủ chiếu hết</b>: ' + othTxt + 'tiêu biểu là nước ' + _ccMvLink(rep.idx) + ' (đối thủ chiếu hết trong ' + rep.n + ' nước).';
+      _pushCand({id: 'allow_mate_' + sc, category: 'other', maxDrop: rep.drop, count: cnt,
+        sev: 'high', icon: '🪦', keyMoveIdx: null, text: txt});
+    });
+  })();
+
   /* ── (12) SẬP BẪY FORK / PIN ĐƠN GIẢN (MỚI) — TÁI DÙNG _g2_forkOnBoard
      và _g2_findPin (đã có sẵn, dùng cho "Phân tích ván đấu"), chỉ viết lại
      phần vòng lặp để lấy thêm chỉ số nước (idx) phục vụ khử trùng + tính
@@ -10958,7 +11328,7 @@ function buildMoveReport(cls, cpLosses, evalPcts, forceSide) {
     var FORK_MIN_CP = 150, PIN_MIN_CP = 150;
     _ccSides.forEach(function(sc){
       var oppCol = (sc === 'w') ? B : W;
-      var bestFork = null, bestForkLoss = -1;
+      var bestFork = null, bestForkLoss = -1, bestForkNext = false;
       var bestPin = null, bestPinLoss = -1, bestPinSq = -1, bestPinTyp = 0;
       for (var i = 0; i < cls.length; i++) {
         if (!BAD_TYPES_G2[cls[i]]) continue;
@@ -10968,7 +11338,16 @@ function buildMoveReport(cls, cpLosses, evalPcts, forceSide) {
         if (!fenAfter) continue;
         if (loss0 >= FORK_MIN_CP) {
           var found = _g2_forkOnBoard(boardArrayFromFen(fenAfter).board, sc, oppCol);
-          if (found && loss0 > bestForkLoss) { bestForkLoss = loss0; bestFork = i; }
+          var foundNext = false;
+          if (!found) {
+            /* MỚI: fork "đi thêm một nước" — nước đáp trả THỰC TẾ của đối thủ (i+1) là nước chĩa đôi
+               (VD 57.g4? Nf3+ chiếu Vua và chĩa Xe g5). Chỉ xét quân vừa đi ở nước đáp trả. */
+            var _rep = gMoveInfo[i + 1], _fenRep = gAnFens[i + 2];
+            if (_rep && _fenRep && _rep.side !== gMoveInfo[i].side) {
+              foundNext = !!_g2_forkOnBoard(boardArrayFromFen(_fenRep).board, sc, oppCol, _rep.toSq);
+            }
+          }
+          if ((found || foundNext) && loss0 > bestForkLoss) { bestForkLoss = loss0; bestFork = i; bestForkNext = (!found && foundNext); }
         }
         if (loss0 >= PIN_MIN_CP) {
           var fenBefore = gAnFens[i];
@@ -10990,7 +11369,7 @@ function buildMoveReport(cls, cpLosses, evalPcts, forceSide) {
         var fMv = _ccMvLink(bestFork);
         _pushCand({id: 'fork_' + sc, category: 'other', maxDrop: fDrop, count: 1,
           sev: 'high', icon: '🔱', keyMoveIdx: bestFork,
-          text: _ccPrefix(sc) + '<b>Sập bẫy chĩa đôi (fork)</b>: sau ' + fMv + ', 1 quân đối phương cùng lúc uy hiếp nhiều hơn 1 quân của ' + _ccYou(sc) + '.'});
+          text: _ccPrefix(sc) + '<b>Sập bẫy chĩa đôi (fork)</b>: sau ' + fMv + ', ' + (bestForkNext ? 'đối thủ có nước đi chĩa đôi, cùng lúc uy hiếp' : '1 quân đối phương cùng lúc uy hiếp') + ' nhiều hơn 1 quân của ' + _ccYou(sc) + '.'});
       }
       if (bestPin !== null) {
         var pDrop = (function(){ var pb=_deepPct(evalPcts, bestPin, sc), pa=_deepPct(evalPcts, bestPin+1, sc); return (pb!==null&&pa!==null)?(pb-pa):0; })();
@@ -11134,7 +11513,9 @@ function buildMoveReport(cls, cpLosses, evalPcts, forceSide) {
       if (c.keyMoveIdx != null) usedKeyIdx[c.keyMoveIdx] = true;
       return true;
     }
-    var timeCands = _pool.filter(function(c){ return c.category === 'time'; })
+    /* Dạng BẮT BUỘC (must:true, VD tự biếu quân nặng): luôn được chọn trước tiên, dù chỉ 1 lần */
+    _pool.filter(function(c){ return c.must; }).forEach(function(c){ tryAdd(c); });
+    var timeCands = _pool.filter(function(c){ return c.category === 'time' && chosen.indexOf(c) < 0; })
       .sort(function(a,b){ return (b.maxDrop||0)-(a.maxDrop||0) || (b.count||0)-(a.count||0); });
     for (var t = 0; t < timeCands.length; t++) { if (tryAdd(timeCands[t])) break; }
     var bigDrop = _pool.filter(function(c){ return !c.low && c.category !== 'time' && chosen.indexOf(c) < 0 && (c.maxDrop||0) >= 30; })
