@@ -3651,6 +3651,10 @@ var BRILLIANT_SHALLOW_MIN_CP = 55; /* REVERT về 55 sau khi phát hiện fix t�
    luận tiếp theo trong lịch sử chat/comment ở nhánh brilliantBase/brilliantIndirect.
    Lịch sử ngưỡng trước đó (65→55, dao động đo được 45-74 qua nhiều cấu hình
    worker/Hash) vẫn giữ nguyên như comment gốc — xem bản backup nếu cần đối chiếu. */
+/* [CC12-K1] Quy tắc "leo thang Blunder ở thế đang thua" chỉ áp dụng khi % thắng thực sự tụt >= N điểm (0 = tắt, như cũ) */
+var CC_ESC_MIN_WINDROP = 8;
+/* [CC12-K2] Brilliant chỉ khi thế cờ TRƯỚC nước đó không tệ hơn mức này (cp, góc nhìn bên đi); null = tắt, như cũ */
+var CC_BRILLIANT_MIN_BEFORE = null;
 function classifyMoveCore(data) {
   var evalBefore = data.evalBefore;
   var evalBest   = data.evalBest;
@@ -3907,7 +3911,8 @@ function classifyMoveCore(data) {
       bestGap: bestGap, bestGapOk: bestGapOk
     });
   }
-  if ((brilliantBase || brilliantIndirect || brilliantAllowsCapture) && bestGapOk) return "Brilliant";
+  if ((brilliantBase || brilliantIndirect || brilliantAllowsCapture) && bestGapOk
+      && (CC_BRILLIANT_MIN_BEFORE === null || evalBefore >= CC_BRILLIANT_MIN_BEFORE)) return "Brilliant";   /* [CC12-K2] */
 
   /* isUniqueGoodMove — dùng cho Great Defense và Great Move
      170→220: Great hiện ra hơi nhiều (4/3 so với chess.com 1/4) — siết nhẹ lại.
@@ -4040,7 +4045,8 @@ function classifyMoveCore(data) {
      ngưỡng lúc đó=200, 400>=200 vẫn Blunder). */
   var _escalationExtra     = Math.max(0, Math.abs(evalBefore) - 600);
   var _escalationCpLossMin = 100 + 0.5 * _escalationExtra;
-  if (!isBest && evalBefore < -100 && cpLoss >= _escalationCpLossMin && evalActual < -400) {
+  if (!isBest && evalBefore < -100 && cpLoss >= _escalationCpLossMin && evalActual < -400
+      && (CC_ESC_MIN_WINDROP <= 0 || (cpToWinPct(evalBefore) - cpToWinPct(evalActual)) >= CC_ESC_MIN_WINDROP)) {   /* [CC12-K1] */
     return "Blunder";
   }
 
@@ -4231,6 +4237,43 @@ function _ccMateChk(board, turn, cas, n){
     if (all) return true;
   }
   return false;
+}
+/* [CC12-MG-CARD] Dựng 1 đường chiếu hết cụ thể (bên tấn công chỉ dùng nước chiếu; bên thủ chọn nước cầm cự LÂU NHẤT) */
+function _ccMvUci(mv){ return FLS.charAt(fl(mv[0])) + (rk(mv[0]) + 1) + FLS.charAt(fl(mv[1])) + (rk(mv[1]) + 1); }
+function _ccMateLine(board, turn, cas, n){
+  var ms = legalMoves(board, turn, -1, cas);
+  for (var a = 0; a < ms.length; a++) {
+    var nb = applyMv(board, ms[a]);
+    if (!inCheck(nb, -turn)) continue;
+    var nc = newCas(cas, board, ms[a], turn);
+    var replies = legalMoves(nb, -turn, -1, nc);
+    if (replies.length === 0) return [_ccMvUci(ms[a])];
+    if (n <= 1) continue;
+    var all = true, longest = null;
+    for (var r = 0; r < replies.length; r++) {
+      var nb2 = applyMv(nb, replies[r]);
+      var sub = _ccMateLine(nb2, turn, newCas(nc, nb, replies[r], -turn), n - 1);
+      if (!sub) { all = false; break; }
+      if (!longest || sub.length > longest.sub.length) longest = {r: replies[r], sub: sub};
+    }
+    if (all) return [_ccMvUci(ms[a]), _ccMvUci(longest.r)].concat(longest.sub);
+  }
+  return null;
+}
+function _ccShortestMateLine(fen){
+  try {
+    var st = _ccFenState(fen);
+    for (var n = 1; n <= CC_MATE_GUARD_N; n++) { var l = _ccMateLine(st.board, st.turn, st.cas, n); if (l) return l; }
+  } catch (e) {}
+  return null;
+}
+function _ccMoveAllowsMate(fen, uci){
+  try {
+    var st = _xpParseFen(fen), mv = _xpFindMove(st, uci);
+    if (!mv) return true;
+    var ns = _xpApply(st, mv);
+    return _ccMateChk(ns.board, ns.turn, ns.cas, CC_MATE_GUARD_N);
+  } catch (e) { return true; }
 }
 function _ccMateGuardProve(fen){
   if (_mgCache.hasOwnProperty(fen)) return _mgCache[fen];
@@ -6440,6 +6483,15 @@ function _deepG1_soundSacrifice(cls, evalPcts, gAnFens, gMoveInfo, gMoveTexts, s
     var afterDiff = _g_materialDiff(boardArrayFromFen(gAnFens[endFenIdx]).board, sideChar);
     var netDrop = baseDiff - afterDiff;
     if (netDrop < MIN_SAC_CP) continue; /* trao đổi ngang giá hoặc có lợi -> KHÔNG phải hy sinh */
+    /* [CC12-T2] Lấy lại được quân trong 4 nửa nước kế tiếp (VD 15...Nc5 16.Nxc5 Qd4+ 17.Rf2 Qxc5 — chiếu xen giữa
+       rồi ăn lại) thì đây là ĐỔI QUÂN có nước xen giữa, không phải thí quân. */
+    var _recov = false, _la;
+    for (_la = 1; _la <= 4 && !_recov; _la++) {
+      var _fi = endFenIdx + _la;
+      if (!gAnFens[_fi]) break;
+      if (baseDiff - _g_materialDiff(boardArrayFromFen(gAnFens[_fi]).board, sideChar) < MIN_SAC_CP) _recov = true;
+    }
+    if (_recov) continue;
 
     var pctBefore = _deepPct(evalPcts, i, sideChar);
     var pctAfter = _deepPct(evalPcts, endFenIdx, sideChar);
@@ -6481,6 +6533,7 @@ function _deepG1_soundSacrifice(cls, evalPcts, gAnFens, gMoveInfo, gMoveTexts, s
        được xác nhận là xuất sắc — thì ưu tiên điểm CAO HƠN hẳn mức mặc
        định 55, để dễ lọt vào top 3-5 hiển thị thay vì rơi xuống "chưa
        xếp" như trước. */
+    if (pctBefore < 15) continue;   /* [CC12-X2] đã thua sẵn: % thắng không thể tụt thêm, không chứng minh được "đủ bù đắp" */
     var _GREAT_CLS_SAC = {best:1, brilliant:1, great:1, great_defense:1, excellent:1};
     var _sacScore = _GREAT_CLS_SAC[cls[i]] ? 75 : 55;
     return {
@@ -7130,7 +7183,7 @@ function _deepG1_missedChance(cls, evalPcts, gMoveInfo, gMoveTexts, sideChar, si
   }).join(', ');
   var startMoveNum = Math.floor(startIdx / 2) + 1, startSideCh = (startIdx % 2 === 0) ? '.' : '...';
   var text = 'Sau nước <b>' + startMoveNum + startSideCh + (gMoveTexts[startIdx] || '') + '</b>, '
-      + oppLabel + ' có thể duy trì ưu thế lớn (lên tới ' + Math.round(peakOppPct) + '% thắng), nhưng các nước <b>'
+      + oppLabel + ' có thể duy trì ' + _ccHoldPhrase(peakOppPct) + ' (lên tới ' + Math.round(peakOppPct) + '% thắng), nhưng các nước <b>'
       + movesTxt + '</b> đã dần trả lại cơ hội cho ' + sideLabel + ', đưa ván đấu trở lại cân bằng.';
   return {
     id: 'g1-missedchance-' + sideChar, group: 1, score: 64, sev: 'medium', icon: '🔄', positive: true,
@@ -8729,8 +8782,13 @@ function _deepG6_materialImbalance(gAnFens, gMoveTexts, sideChar, sideLabel, opp
   if (Math.abs(diff) < 2) return null;
 
   var startIdx = _g6_findStableStart(gAnFens, endIdx);
-  var startMoveNum = Math.floor(startIdx / 2) + 1;
-  var startSideCh = (startIdx % 2 === 0) ? '.' : '...';
+  /* [CC12-T3] Tình trạng này phải kéo dài ít nhất 6 nửa nước trước khi hết ván — nếu không, đó chỉ là
+     vật chất "trên giấy" trong một đòn chiếu hết (VD Opera Game: Đen "hơn chất" đúng ở nước bị chiếu hết). */
+  if (endIdx - startIdx < 6) return null;
+  /* gAnFens[startIdx] là thế cờ SAU nước tạo ra tình trạng → nước đó là startIdx-1 (trước đây ghi nhầm nước kế tiếp) */
+  var mkIdx = Math.max(0, startIdx - 1);
+  var startMoveNum = Math.floor(mkIdx / 2) + 1;
+  var startSideCh = (mkIdx % 2 === 0) ? '.' : '...';
 
   var aheadChar = (diff > 0) ? sideChar : oppChar;
   var aheadLabel = (aheadChar === sideChar) ? sideLabel : oppLabel;
@@ -8744,7 +8802,7 @@ function _deepG6_materialImbalance(gAnFens, gMoveTexts, sideChar, sideLabel, opp
   var _aheadWord = aheadChar; /* 'w' | 'b' */
   /* Viết trung tính theo MÀU QUÂN (Trắng/Đen), không dùng tên người chơi: "Trắng có lợi thế hơn chất ... nên có ưu thế lớn và đã chiến thắng" */
   var _aheadColor = (aheadChar === 'w') ? 'Trắng' : 'Đen';
-  var text = 'Từ nước <b>' + startMoveNum + startSideCh + (gMoveTexts[startIdx] || '') + '</b>, '
+  var text = 'Sau nước <b>' + startMoveNum + startSideCh + (gMoveTexts[mkIdx] || '') + '</b>, '
     + _aheadColor + ' có lợi thế hơn chất: ' + _g6_describeProfile(aheadProfile)
     + ' đối đầu ' + _g6_describeProfile(behindProfile) + ' (chênh khoảng ' + Math.abs(diff) + ' điểm chất)';
   if (_wNorm === _aheadWord) text += ' nên có ưu thế ' + (Math.abs(diff) >= 4 ? 'lớn ' : '') + 'và đã chiến thắng';
@@ -8754,7 +8812,7 @@ function _deepG6_materialImbalance(gAnFens, gMoveTexts, sideChar, sideLabel, opp
 
   return {
     id: 'g6-material-' + sideChar, group: 6, score: 58, sev: (Math.abs(diff) >= 4) ? 'high' : 'medium',
-    icon: '⚖️', positive: isPositive, text: text, moveIdx: startIdx
+    icon: '⚖️', positive: isPositive, text: text, moveIdx: mkIdx
   };
 }
 
@@ -9105,10 +9163,19 @@ function _g_majorMobilityReason(board, sideChar, oppChar, ep, cas) {
   return null;
 }
 
+/* [CC12-T4] Cụm từ mô tả mức ưu thế theo đúng % thắng (trước đây 98% vẫn bị gọi là "nhỉnh hơn") */
+function _ccLeadPhrase(p) {
+  return (p >= 95) ? 'gần như đã thắng chắc' : (p >= 80) ? 'đang có ưu thế lớn' : (p >= 65) ? 'đang có ưu thế rõ' : 'đang nhỉnh hơn';
+}
+function _ccHoldPhrase(p) {
+  return (p >= 95) ? 'thế thắng gần như chắc chắn' : (p >= 80) ? 'ưu thế lớn' : (p >= 65) ? 'ưu thế rõ' : 'thế nhỉnh hơn';
+}
+
 function _narrG3_postOpeningState(cls, evalPcts, gAnFens, gMoveTexts, gMoveInfo, sideChar, sideLabel, oppLabel, skipCastleReason) {
   var oppChar = (sideChar === 'w') ? 'b' : 'w';
   var boundary = _evalGraphOpeningEndIdx(gMoveInfo, gAnFens);
   if (boundary < 0 || boundary >= cls.length) boundary = Math.min(19, cls.length); /* không có tín hiệu rõ ràng → ước lượng mốc ~nước 10 mỗi bên */
+  if (boundary >= cls.length - 1) return null;   /* [CC12-T8] ván kết thúc ngay trong khai cuộc — không có "thế cờ sau khai cuộc" */
 
   var pct = _deepPct(evalPcts, boundary, sideChar);
   if (pct === null) return null;
@@ -9134,8 +9201,9 @@ function _narrG3_postOpeningState(cls, evalPcts, gAnFens, gMoveTexts, gMoveInfo,
 
   var whoChar = (pct >= 55) ? sideChar : (pct <= 45) ? oppChar : null;
   var whoGeneric = whoChar ? ((whoChar === 'w') ? 'Bên trắng' : 'Bên đen') : null;
+  var _leadPct = whoChar ? Math.round(whoChar === sideChar ? pct : (100 - pct)) : 50;
   var leadTxt = whoGeneric
-    ? whoGeneric + ' đang nhỉnh hơn (' + Math.round(whoChar === sideChar ? pct : (100 - pct)) + '% thắng)'
+    ? whoGeneric + ' ' + _ccLeadPhrase(_leadPct) + ' (' + _leadPct + '% thắng)'
     : 'thế trận cân bằng, chưa bên nào rõ ưu thế';
 
   /* ĐANG TRONG ĐÒN CHIẾN THUẬT / PHỐI HỢP CHIẾU HẾT: khi thế cờ tại mốc này "nhỉnh hơn" là do 1 đòn đang diễn ra
@@ -9551,7 +9619,7 @@ function _narrG10_opponentResponse(g8Pool, cls, gMoveTexts, sideChar) {
       lines.push('May mắn là sau đó đối thủ đi nước ' + moveRef + ' không tận dụng được cơ hội nên cơ hội trao lại cho ' + colorWord + '.');
       continue;
     }
-    else if (GREAT_CLS[oppCls]) verdict = 'đã khai thác triệt để sai lầm bên ' + colorWord;
+    else if (GREAT_CLS[oppCls]) verdict = 'đã tận dụng ngay sai lầm bên ' + colorWord;
     else verdict = 'nhưng chỉ đáp trả ở mức bình thường, chưa khai thác hết sai lầm vừa xảy ra';
     lines.push('Sau đó đối thủ đi nước ' + moveRef + ' ' + verdict + '.');
   }
@@ -10012,10 +10080,30 @@ function _narrOverviewText(cls, evalPcts, sideChar, oppChar, sideLabel, oppLabel
         var _ov_decisiveMoveNum = Math.floor(_ov_decisive.idx / 2) + 1;
         var _ov_decisiveMvSide = (_ov_decisive.idx % 2 === 0) ? 'w' : 'b';
         var _ov_decisiveMoveTxt = _ov_decisiveMoveNum + (_ov_decisiveMvSide === 'w' ? '.' : '...') + (gMoveTexts[_ov_decisive.idx] || '');
+        /* [CC12-X3] Nước "quyết định" có thể chỉ là đòn DỨT ĐIỂM khi bên thắng đã dẫn sẵn (VD 25...Qd6 khi Trắng
+           đã ~70%): khi đó tìm đúng nước làm ưu thế ĐỔI CHỦ (vượt mốc 50%) để gọi là "đảo ngược". */
+        var _ov_wColor = (_ov_decGainer === 'w' ? 'Trắng' : _ov_decGainer === 'b' ? 'Đen' : (_finalLeanColor || ''));
+        var _ov_decBefore = _deepPct(evalPcts, _ov_decisive.idx, _ov_decGainer);
+        var _ov_revIdx = -1, _ov_revSwing = 0, _ri;
+        for (_ri = _ov_first.idx + 1; _ri < cls.length && _ri + 1 < evalPcts.length; _ri++) {
+          var _rb = _deepPct(evalPcts, _ri, _ov_decGainer), _ra = _deepPct(evalPcts, _ri + 1, _ov_decGainer);
+          if (_rb === null || _ra === null) continue;
+          if (_rb < 50 && _ra >= 50 && (_ra - _rb) > _ov_revSwing) { _ov_revSwing = _ra - _rb; _ov_revIdx = _ri; }
+        }
+        if (_ov_decBefore !== null && _ov_decBefore >= 50) {
+          var _ov_revTxt = (_ov_revIdx >= 0)
+            ? ((Math.floor(_ov_revIdx / 2) + 1) + (_ov_revIdx % 2 === 0 ? '.' : '...') + (gMoveTexts[_ov_revIdx] || '')) : '';
+          volTxt = ' Ván đấu có hai bước ngoặt lớn: đến <b>' + _ov_firstMoveTxt
+            + '</b>, bên ' + _ov_firstGainerColor + ' vươn lên ưu thế đáng kể nhưng không chuyển hoá được thành thắng, '
+            + (_ov_revTxt ? ('rồi tới <b>' + _ov_revTxt + '</b> thì cục diện đảo ngược, bên ' + _ov_wColor + ' giành lại ưu thế; <b>'
+                             + _ov_decisiveMoveTxt + '</b> là đòn dứt điểm.')
+                          : ('rồi bên ' + _ov_wColor + ' dứt điểm ở <b>' + _ov_decisiveMoveTxt + '</b>.'));
+        } else {
         volTxt = ' Ván đấu có hai bước ngoặt lớn: đến <b>' + _ov_firstMoveTxt
           + '</b>, bên ' + _ov_firstGainerColor + ' vươn lên ưu thế đáng kể nhưng không chuyển hoá được thành thắng, '
           + 'rồi tới <b>' + _ov_decisiveMoveTxt + '</b> thì cục diện đảo ngược hoàn toàn và bên '
-          + (_ov_decGainer === 'w' ? 'Trắng' : _ov_decGainer === 'b' ? 'Đen' : (_finalLeanColor || '')) + ' giành thế thắng quyết định.';
+          + _ov_wColor + ' giành thế thắng quyết định.';
+        }
       } else if (_sideMinPct !== null && _sideMaxPct !== null && (_sideMaxPct - _sideMinPct) >= 30) {
         if (_sideMinPct <= 35 && _sideMaxPct >= 70 && _sideMinIdx > _sideMaxIdx) {
           /* [CC12-FIX9] đỉnh TRƯỚC đáy (đang hơn rồi để mất) — câu cũ nói ngược thành "lội ngược dòng" */
@@ -11540,13 +11628,13 @@ function buildMoveReport(cls, cpLosses, evalPcts, forceSide) {
         ownMoves++;
 
         if (gMoveInfo[i] && gMoveInfo[i].movedVal === 100) pawnMoves++;
-        if (i >= bookPlies) { ownNB++; if (gMoveInfo[i] && gMoveInfo[i].movedVal === 100) pawnNB++; }
+        if (i >= bookPlies) { ownNB++; if (gMoveInfo[i] && gMoveInfo[i].movedVal === 100 && !((gMoveInfo[i].capVal || 0) > 0)) pawnNB++; }   /* [CC12-X4] */
       }
       if (ownMoves < 5) return;
       var pawnRatio = (ownNB >= 4) ? (pawnNB / ownNB) : 0; /* cần >= 4 nước ngoài sách mới đánh giá tỷ lệ Tốt */
       var parts = [];
       if (minorHome >= 2 && bookPlies < 8 && ownCaps < 3) parts.push('còn ' + minorHome + ' quân nhẹ (Mã/Tượng) chưa rời vị trí gốc');
-      if (pawnRatio >= 0.5) parts.push('quá nhiều nước Tốt (' + Math.round(pawnRatio*100) + '% số nước khai cuộc)');
+      if (pawnRatio >= 0.5 && minorHome >= 1) parts.push('quá nhiều nước Tốt (' + Math.round(pawnRatio*100) + '% số nước khai cuộc, không tính nước Tốt ăn quân)');
       if (!parts.length) return;
       _pushCand({id: 'opening_dev_' + sc, category: 'other', maxDrop: 0, count: minorHome + (pawnRatio >= 0.5 ? 1 : 0),
         sev: 'medium', icon: '🌱', keyMoveIdx: null,
@@ -12101,6 +12189,11 @@ function buildMoveReport(cls, cpLosses, evalPcts, forceSide) {
       else if (_pgnNamesForReport.result === '0-1') _winnerSideForDeep = 'b';
       else if (_pgnNamesForReport.result === '1/2-1/2') _winnerSideForDeep = 'draw';
     }
+    /* [CC12-X1] PGN không ghi kết quả (VD chỉ dán chuỗi nước đi) nhưng nước cuối là chiếu hết → bên đi nước đó thắng */
+    if (!_winnerSideForDeep && gMoveTexts && gMoveTexts.length && /#$/.test(gMoveTexts[gMoveTexts.length - 1] || '')) {
+      _winnerSideForDeep = ((gMoveTexts.length - 1) % 2 === 0) ? 'w' : 'b';
+      if (_pgnNamesForReport) { if (!_pgnNamesForReport.result) _pgnNamesForReport.result = (_winnerSideForDeep === 'w') ? '1-0' : '0-1'; }
+    }
 
     /* buildDeepInsightsAll (chấm điểm/rank/khử trùng phẳng) VẪN GIỮ NGUYÊN
        ở trên, không xoá — chỉ không dùng để render nữa, thay bằng
@@ -12140,7 +12233,12 @@ function buildMoveReport(cls, cpLosses, evalPcts, forceSide) {
        "Đen:" và "Samackhat — Đen:" trong CÙNG 1 mục. Giờ neo theo
        '(^|<br>)' + flag /g để áp dụng cho MỌI dòng, không chỉ dòng đầu. */
     function _deepStripName(text){
-      return text.replace(/(^|<br>)[^<]*?—\s*(?=(Trắng|Đen):)/g, '$1');
+      text = text.replace(/(^|<br>|\.\s)[^<.]*?—\s*(?=(Trắng|Đen)[:\s])/g, '$1');
+      /* [CC12-T7] Tên đứng giữa câu (sau dấu phẩy, VD "…, Rijkaardx — Trắng có thể…"): bóc theo đúng tên 2 kỳ thủ */
+      [(typeof _whiteLabel !== 'undefined') ? _whiteLabel : '', (typeof _blackLabel !== 'undefined') ? _blackLabel : ''].forEach(function(nm){
+        if (nm && nm !== 'Trắng' && nm !== 'Đen') text = text.split(nm + ' — ').join('');
+      });
+      return text;
     }
     /* ĐÃ THÊM: bỏ tiền tố "Nhãn: " (VD "Trắng: ", "kienhpdb2 (Trắng): ")
        ở ĐẦU MỖI DÒNG — dùng cho các bullet hiển thị "plain" (không còn
@@ -12150,7 +12248,7 @@ function buildMoveReport(cls, cpLosses, evalPcts, forceSide) {
        này, VD #46/#18 đã viết lại trực tiếp không cần bóc gì thêm). */
     function _deepStripLabelColon(text){
       return text.split('<br>').map(function(line){
-        return line.replace(/^([^:<>]+):\s*/, '$1 ');
+        return line.replace(/^([^:<>]+):\s*/, '$1 ').replace(/(\.\s)(Trắng|Đen):\s*/g, '$1$2 ');
       }).join('<br>');
     }
     /* "19...e5"/"19.Nf3" (trong <b>...</b>) → link ngắn gọn "19 e5" tô màu
@@ -12163,7 +12261,7 @@ function buildMoveReport(cls, cpLosses, evalPcts, forceSide) {
         var color = DEEP_CLS_COLOR[cls[mvIdx]] || '#333';
         return '<span onclick="reviewJumpTo(' + mvIdx + ',true)" style="color:' + color
              + ';font-weight:bold;cursor:pointer;text-decoration:underline dotted">'
-             + numStr + ' ' + san + '</span>';
+             + numStr + (sideIsWhite ? '.' : '...') + san + '</span>';
       });
     }
 
@@ -12657,12 +12755,160 @@ function _hideLcWatermark(){
   if (wm) wm.style.display = 'none';
 }
 
+/* ══ [CC12-SV] KIỂM CHỨNG CÓ CHỌN LỌC (chống nhiễu băm) ══
+   Lượt phân tích chính tìm từng thế cờ trong trạng thái băm tích luỹ của worker (giữ nguyên — thường cho kết quả
+   "sâu" hơn). Nhưng khi chấm 1 nước, CC so 2 con số của thế cờ TRƯỚC và SAU nước đó, vốn được tìm trong 2 trạng thái
+   băm khác nhau → có lúc lệch ảo (VD Kasparov–Topalov 35...Kd1: thế trước được +0,70 vì chưa thấy 36.Bf1, thế sau thì
+   đã thấy → Kd1 bị gọi là Blunder dù chính là nước tốt nhất).
+   Ở đây: sau lượt chính, CHỈ với những nước có khả năng được báo cáo nêu tên (lỗi lớn, Brilliant/Great, % thắng dao
+   động mạnh), tìm lại thế cờ trước/sau bằng worker đã XOÁ BĂM. Thế cờ nào lệch > CC_SV_TOL_CP so với lượt chính thì
+   coi là nghi nhiễu và được PHÂN XỬ bằng 1 lượt tìm sạch sâu hơn (CC_SV_JUDGE_EXTRA): nếu lượt sâu hơn lại khớp lượt
+   chính thì giữ nguyên (tìm sạch ở cùng độ sâu đôi khi NÔNG hơn lượt có băm, VD g1 25...Rxf7+); chỉ khi lượt sâu hơn cũng
+   lệch mới coi là vùng nhiễu: lan sang thế cờ liền kề (tối đa CC_SV_MAX_SPREAD bước) cho tới khi khớp, rồi dùng số liệu tìm
+   lại cho CẢ vùng đó (cùng điều kiện tìm → so sánh trong vùng nhất quán). Thế cờ khớp thì giữ nguyên số lượt chính.
+   Tắt: CC_SV = false. */
+var CC_SV = true;
+var CC_SV_MAX_TARGETS = 12;
+var CC_SV_TOL_CP = 100;
+var CC_SV_MAX_SPREAD = 6;
+var CC_SV_JOB_TIMEOUT_MS = 30000;
+var CC_SV_JUDGE_EXTRA = 3;   /* lệch thì tìm sạch lần 2 sâu hơn (độ sâu chính + 3) để phân xử: lượt sâu hơn khớp lượt chính → giữ số lượt chính */
+var gSvLog = [];   /* nhật ký để kiểm tra: [{pos, pipe, fresh, noisy}] */
+
+function _ccSvCp(s1, m1){ return anCP(s1, m1); }
+
+function _ccSvTargets(){
+  var n = gMoveTexts.length, list = [], i;
+  for (i = 0; i < n; i++) {
+    var si = gAnScores[i], sn = gAnScores[i + 1];
+    if (!si || !sn || !gAnFens[i + 1]) continue;
+    if ((si.m1 !== null && si.m1 !== undefined) || (sn.m1 !== null && sn.m1 !== undefined)) continue;   /* thế có mate: tin được, bỏ qua */
+    var inp = null, lab = 'normal';
+    try { inp = _buildClassifyInput(i); lab = inp ? (CLASSIFY_LABEL_MAP[classifyMoveCore(inp)] || 'normal') : 'normal'; } catch (e) { inp = null; }
+    if (!inp || lab === 'book' || lab === 'forced') continue;
+    var loss = Math.max(0, inp.evalBest - inp.evalActual);
+    var swing = Math.abs(cpToWinPct(anCPwhite(si)) - cpToWinPct(anCPwhite(sn)));
+    var pr = 0;
+    if (lab === 'mistake' || lab === 'blunder' || lab === 'missed_win') pr = Math.max(pr, loss);
+    if (lab === 'brilliant' || lab === 'great' || lab === 'great_defense') pr = Math.max(pr, 500);
+    if (swing >= 20) pr = Math.max(pr, swing * 10);
+    if (pr > 0) list.push({i: i, pr: pr});
+  }
+  list.sort(function(a, b){ return b.pr - a.pr; });
+  return list.slice(0, CC_SV_MAX_TARGETS).map(function(x){ return x.i; });
+}
+
+function _ccSvRun(done){
+  gSvLog = [];
+  var targets = [];
+  try { targets = _ccSvTargets(); } catch (e) { targets = []; }
+  if (!targets.length || !gAnPool || !gAnPool.length) { done(); return; }
+  var N = gAnFens.length - 1;   /* chỉ số thế cờ hợp lệ: 0..N */
+  var queued = {}, queue = [], fresh = {}, running = 0, finished = false;
+  function enqueue(p, dist){
+    if (p < 0 || p > N || queued[p] || !gAnScores[p] || !gAnFens[p]) return;
+    if (gAnScores[p].m1 !== null && gAnScores[p].m1 !== undefined) return;
+    if (_fenHasNoLegalMoves(gAnFens[p])) return;
+    /* thế cờ được LAN tới (dist>=1) nằm cạnh 1 vùng đã xác nhận nhiễu: dùng thẳng lượt sâu hơn — ở độ sâu chính,
+       cả lượt có băm lẫn lượt sạch có thể cùng sai như nhau (VD Kasparov–Topalov 34.Qa1+..35.Qb2+) */
+    queued[p] = 1; queue.push({p: p, dist: dist, stage: (dist >= 1 && CC_SV_JUDGE_EXTRA > 0) ? 2 : 1});
+  }
+  targets.forEach(function(i){ enqueue(i, 0); enqueue(i + 1, 0); });
+
+  var btnEl = document.getElementById('clr-toggle');
+  var doneCount = 0;
+  function ui(){ if (btnEl) btnEl.innerHTML = '\uD83D\uDD0D Kiểm chứng ' + doneCount + '/' + (doneCount + queue.length + running) + '...'; }
+  ui();
+
+  var saved = [];
+  for (var k = 0; k < gAnPool.length; k++) saved.push(gAnPool[k].worker ? gAnPool[k].worker.onmessage : null);
+
+  function finish(){
+    if (finished) return;
+    finished = true;
+    for (var k2 = 0; k2 < gAnPool.length; k2++) if (gAnPool[k2].worker) gAnPool[k2].worker.onmessage = saved[k2];
+    /* Áp dụng: thay số liệu ở các thế cờ bị coi là nhiễu */
+    for (var p in fresh) {
+      if (!fresh.hasOwnProperty(p) || !fresh[p].noisy) continue;
+      var sc = gAnScores[p], f = fresh[p];
+      sc.s1 = f.s1; sc.m1 = f.m1;
+      if (f.bestUci) sc.bestUci = f.bestUci;
+      if (f.pv1) sc.pv1 = f.pv1;
+      /* phương án 2..4 cũ tìm trong trạng thái khác: chỉ giữ khi không mâu thuẫn (không tốt hơn phương án 1 mới) */
+      if (sc.s2 !== null && sc.s2 !== undefined && anCP(sc.s2, sc.m2) > anCP(sc.s1, sc.m1)) { sc.s2 = null; sc.m2 = null; sc.uci2 = null; }
+      if (sc.s3 !== null && sc.s3 !== undefined && anCP(sc.s3, sc.m3) > anCP(sc.s1, sc.m1)) { sc.s3 = null; sc.m3 = null; }
+      if (sc.s4 !== null && sc.s4 !== undefined && anCP(sc.s4, sc.m4) > anCP(sc.s1, sc.m1)) { sc.s4 = null; sc.m4 = null; }
+      sc._svFresh = true;
+    }
+    done();
+  }
+
+  var idle = [];
+  function wake(){ while (idle.length && queue.length) runOn(idle.pop()); }
+  function runOn(slot, idx){
+    var job = queue.shift();
+    if (!job) { idle.push(slot); if (!running) finish(); return; }
+    running++;
+    var w = slot.worker, last = null, pv = null, gen = {};
+    slot._svGen = gen;
+    var timer = setTimeout(function(){
+      if (slot._svGen !== gen) return;
+      slot._svGen = null; running--; doneCount++;
+      try { w.postMessage('stop'); } catch (e) {}
+      ui(); runOn(slot, idx);
+    }, CC_SV_JOB_TIMEOUT_MS);
+    w.onmessage = function(e){
+      if (slot._svGen !== gen) return;
+      var msg = String(e.data || '').trim();
+      if (msg.indexOf('info ') === 0) {
+        if (/score\s+(lowerbound|upperbound)/.test(msg)) return;
+        var cpM = msg.match(/score cp (-?\d+)/), mM = msg.match(/score mate (-?\d+)/), pvM = msg.match(/\bpv\s+(.+)$/);
+        if (mM) last = {s1: (+mM[1] >= 0 ? 9999 - Math.abs(+mM[1]) : -(9999 - Math.abs(+mM[1]))), m1: +mM[1]};
+        else if (cpM) last = {s1: +cpM[1], m1: null};
+        if (pvM) pv = pvM[1].trim().split(/\s+/).slice(0, 10).join(' ');
+        return;
+      }
+      if (msg.indexOf('bestmove') === 0) {
+        clearTimeout(timer);
+        slot._svGen = null; running--; doneCount++;
+        var bm = msg.split(/\s+/)[1] || '';
+        if (last) {
+          var pipe = gAnScores[job.p];
+          var a = _ccSvCp(pipe.s1, pipe.m1), b = _ccSvCp(last.s1, last.m1);
+          var sat = (Math.abs(a) >= 1000 && Math.abs(b) >= 1000 && (a > 0) === (b > 0));
+          var noisy = !sat && Math.abs(a - b) > CC_SV_TOL_CP;
+          if (noisy && job.stage === 1 && CC_SV_JUDGE_EXTRA > 0) {
+            queue.unshift({p: job.p, dist: job.dist, stage: 2});   /* phân xử bằng lượt sâu hơn trước khi kết luận */
+            gSvLog.push({pos: job.p, pipe: a, fresh: b, noisy: null, dist: job.dist, stage: 1});
+          } else {
+            fresh[job.p] = {s1: last.s1, m1: last.m1, bestUci: (bm && bm !== '(none)') ? bm : null, pv1: pv, noisy: noisy};
+            gSvLog.push({pos: job.p, pipe: a, fresh: b, noisy: noisy, dist: job.dist, stage: job.stage});
+            if (noisy && job.dist < CC_SV_MAX_SPREAD) { enqueue(job.p - 1, job.dist + 1); enqueue(job.p + 1, job.dist + 1); }
+          }
+        }
+        ui();
+        runOn(slot, idx);
+        wake();
+      }
+    };
+    w.postMessage('stop');
+    w.postMessage('ucinewgame');                       /* XOÁ BĂM: tìm "sạch", không mang thông tin của thế cờ khác */
+    w.postMessage('setoption name MultiPV value 1');
+    w.postMessage('position fen ' + gAnFens[job.p]);
+    w.postMessage('go depth ' + (ANALYSIS_DEPTH + (job.stage === 2 ? CC_SV_JUDGE_EXTRA : 0)));
+  }
+  var started = 0;
+  for (var s = 0; s < gAnPool.length; s++) if (gAnPool[s] && gAnPool[s].worker) { started++; runOn(gAnPool[s], s); }
+  if (!started) finish();
+}
+
 function finishAnalysis(){
   /* [ChessCoach11B] KHÔNG còn lượt Refining riêng nữa — mọi nước đã được
      chạy ĐÚNG 1 LẦN với depth phù hợp ngay từ đầu (xem _anDepthForPos(),
      gAnDeepTargets tính sẵn ở đầu startAnalysis()). _anCollectDeepReverify
      Targets()/_anDeepReverifyPass() vẫn giữ nguyên trong file (không xoá)
      để dễ so sánh/rollback, nhưng không còn được gọi ở đây nữa. */
+  if (CC_SV) { _ccSvRun(_finishAnalysisRender); return; }   /* [CC12-SV] */
   _finishAnalysisRender();
 }
 
@@ -12802,7 +13048,8 @@ function _finishAnalysisRender(){
      tại từng điểm, không phản ánh đúng thế cờ thật. */
   for (var _pi = 0; _pi < evalPcts.length - 1; _pi++) {
     var _pDeep = _pi + 1;
-    while (gAnFens && gAnFens[_pDeep] && gAnScores[_pDeep + 1] && _chainAdvanceOk(_pDeep)) {
+    while (gAnFens && gAnFens[_pDeep] && gAnScores[_pDeep + 1] && _chainAdvanceOk(_pDeep)
+           && !(typeof gMateGuard !== 'undefined' && gMateGuard[_pDeep])) {   /* [CC12-T1] dừng ở nước đã bị chứng minh để chiếu hết */
       _pDeep++;
     }
     if (_pDeep > _pi + 1 && evalPcts[_pDeep] !== undefined) {
@@ -14285,6 +14532,29 @@ function _xpQuiet(c, add){
 }
 
 function _xpBuild(idx){
+  var d = _xpBuildCore(idx);
+  if (!d || !d._mg) return d;
+  var fen = gAnFens[idx], played = d.playedUci, line = d._mgLine;
+  var mSim = line ? _xpSimPV(fen, [played].concat(line).join(' '), 1 + line.length) : [];
+  var nMv = line ? Math.ceil(line.length / 2) : CC_MATE_GUARD_N;
+  var txt = 'Sau ' + _xpB(d.playedSan) + ', đối phương có đòn <b>chiếu hết trong ' + nMv + ' nước</b>'
+          + (mSim.length > 1 ? (': ' + _xpPvArrow(mSim.slice(1), mSim.length - 1)) : '')
+          + ' — mọi cách đỡ đều không thoát (CC12 đã thử hết các nước đáp trả).';
+  var cons = {tag: 'consequence', text: txt, squares: []};
+  d.bestGroup = false;
+  if (d._mgNoAlt) {
+    d.reasons = [cons]; d.contrast = []; d.threats = []; d.alt = null;
+    d.targetSan = null; d.targetUci = null;
+    if (mSim.length) d.sim = mSim;
+  } else {
+    var keep = [], k;
+    for (k = 0; k < d.reasons.length; k++) if (d.reasons[k].tag !== 'consequence') keep.push(d.reasons[k]);
+    d.reasons = [cons].concat(keep);
+  }
+  return d;
+}
+
+function _xpBuildCore(idx){
   if (!gAnScores || !gAnFens) return null;
   var sc = gAnScores[idx];
   if (!sc || !sc.bestUci || sc.bestUci.length < 4) return null;
@@ -14298,6 +14568,19 @@ function _xpBuild(idx){
   var bestGroup = (cls === 'best' || cls === 'brilliant' || cls === 'great' || cls === 'great_defense')
                   || (played !== '' && played === best);
   var target = (bestGroup && played) ? played : best;
+  /* [CC12-MG-CARD] Nước đã bị chứng minh để đối thủ chiếu hết (bộ chặn mate): Lozza lại coi chính nó là nước tốt nhất,
+     nên trước đây thẻ vừa gắn Blunder vừa khuyên "Nên đi" đúng nước đó. Chỉ khuyên nước thay thế khi engine có
+     phương án 2 (uci2) VÀ phương án đó không để bị chiếu hết; nếu không có thì không khuyên nước nào. */
+  var _mg = !!(typeof gMateGuard !== 'undefined' && gMateGuard && gMateGuard[idx]), _mgNoAlt = false, _mgLine = null;
+  if (_mg) {
+    bestGroup = false;
+    _mgLine = _ccShortestMateLine(gAnFens[idx + 1]);
+    if (played === best) {
+      if (sc.uci2 && sc.uci2.length >= 4 && sc.uci2 !== played && !_ccMoveAllowsMate(fen, sc.uci2)) best = sc.uci2;
+      else _mgNoAlt = true;
+    }
+    target = _mgNoAlt ? played : best;
+  }
 
   var st = _xpParseFen(fen);
   var moverC = st.turn, oppC = -st.turn;
@@ -15607,6 +15890,7 @@ function _xpBuild(idx){
   }
 
   return {
+    _mg: _mg, _mgNoAlt: _mgNoAlt, _mgLine: _mgLine,
     idx: idx, fen: fen, cls: cls, bestGroup: bestGroup, side: moverC,
     targetUci: target, targetSan: first.san,
     playedUci: played, playedSan: gMoveTexts[idx] || '',
@@ -16108,11 +16392,13 @@ function xpRender(idx){
     /* Khối 2 — Nên đi (tách riêng, có nút xem trên bàn cờ; k=1 là nước đầu của đường chính) */
     var _noWhy = (!good.length && d.cls !== 'excellent' && d.cls !== 'good' && !d.contrast.length);
     var _lowHint = (!d.lowCoverage && !d.overstated && d.conf === 'low' && (d.reasons.length || d.contrast.length));
+    if (d.targetSan) {   /* [CC12-MG-CARD] không có nước khuyên đáng tin thì không in khối này */
     h += '<div class="xp-blk xp-good"><h4>✓ Nên đi: <b>' + d.targetSan + '</b>' +
          (_noWhy ? (' <span style="font-weight:normal;font-size:0.76rem;color:#555">(nước này hơn nước bạn đi <b>' + d.cpLoss + ' cp</b>)</span>') : '') +
          (_lowHint ? ' <span style="font-weight:normal;font-size:0.76rem;color:#555">(gợi ý hướng khác)</span>' : '') + '</h4>';
     if (good.length) h += '<ul>' + good.join('') + '</ul>';
     h += '</div>';
+    }
   } else {
     /* Nước Best/Great: một khối xanh duy nhất */
     var gl = [];
