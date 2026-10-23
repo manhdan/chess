@@ -1,6 +1,6 @@
 **Chess Coach**
 
-Chess Coach 11 giúp phân tích trận đấu từ chess.com:
+Chess Coach 12 giúp phân tích trận đấu từ chess.com:
 + Tìm và phân tích trận đấu theo user name trên chess.com
 + Phân tích trận đấu dựa trên PGN
 + Đánh giá và chấm điểm từng nước đi
